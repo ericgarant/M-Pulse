@@ -8,13 +8,36 @@
 
 use std::time::Duration;
 
-use esp32_nimble::{BLEAddress, BLEDevice, BLEError, BLEScan};
+use embassy_futures::select::{select, Either};
+use esp32_nimble::utilities::BleUuid;
+use esp32_nimble::{
+    uuid128, BLEAddress, BLEClient, BLEDevice, BLEError, BLERemoteService, BLEScan,
+};
 use esp_idf_svc::timer::EspAsyncTimer;
 use log::{info, warn};
 
 /// The heater advertises as `BougeRV-DHG001`. Matching on the prefix keeps
 /// this working if the model suffix differs between units.
 const NAME_PREFIX: &str = "BougeRV";
+
+/// The heater's vendor service. It holds one write characteristic
+/// (`bf83f3f1-...`, presumably commands) and two notify characteristics
+/// (`bf83f3f2-...` and `bf83f3f3-...`, presumably status).
+const HEATER_SERVICE: BleUuid = uuid128!("43f4b114-ca67-48e8-a46f-9a8ffeb7146a");
+
+/// Give up on a connection attempt after this long. Also guards against the
+/// link dropping in the middle of connection setup, which would otherwise
+/// leave the connect call waiting forever.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+// Connection parameters the heater asks for in its 0x2A04 characteristic:
+// interval 100 to 200 ms, no latency, 10 s supervision timeout.
+const CONN_INTERVAL_MIN: u16 = 80; // units of 1.25 ms
+const CONN_INTERVAL_MAX: u16 = 160; // units of 1.25 ms
+const CONN_LATENCY: u16 = 0;
+const CONN_SUPERVISION_TIMEOUT: u16 = 1000; // units of 10 ms
+const CONN_SCAN_INTERVAL: u16 = 16; // units of 0.625 ms
+const CONN_SCAN_WINDOW: u16 = 16; // units of 0.625 ms
 
 /// Scans for up to `duration_ms` and returns the heater's address as soon as
 /// it is heard, or `None` if it did not advertise in that time.
@@ -40,9 +63,9 @@ pub async fn find(device: &BLEDevice, duration_ms: i32) -> Result<Option<BLEAddr
     .await
 }
 
-/// Connects to the heater, logs its full GATT table, subscribes to every
-/// characteristic that can notify or indicate, and then listens for `listen`
-/// before disconnecting.
+/// Connects to the heater, logs its vendor service first and then the rest
+/// of the GATT table, subscribes to the vendor notifications, and listens for
+/// `listen` before disconnecting.
 pub async fn inspect(
     device: &BLEDevice,
     addr: &BLEAddress,
@@ -50,15 +73,32 @@ pub async fn inspect(
     timer: &mut EspAsyncTimer,
 ) -> anyhow::Result<()> {
     let mut client = device.new_client();
-    client.on_disconnect(|reason| warn!("Heater disconnected (reason {reason})"));
+    client.on_disconnect(|reason| warn!("Heater disconnected (reason {reason:#x})"));
+    client.set_connection_params(
+        CONN_INTERVAL_MIN,
+        CONN_INTERVAL_MAX,
+        CONN_LATENCY,
+        CONN_SUPERVISION_TIMEOUT,
+        CONN_SCAN_INTERVAL,
+        CONN_SCAN_WINDOW,
+    );
 
     info!("Connecting to heater at {addr}");
-    client.connect(addr).await?;
-    info!("Connected. Reading GATT table");
+    match select(client.connect(addr), timer.after(CONNECT_TIMEOUT)).await {
+        Either::First(connected) => connected?,
+        Either::Second(_) => {
+            // Make sure nothing is left half-open before the next attempt.
+            if client.connected() {
+                let _ = client.disconnect();
+            }
+            anyhow::bail!("connection attempt timed out");
+        }
+    }
+    info!("Connected, RSSI {:?} dBm", client.get_rssi().ok());
 
-    let result = dump_and_subscribe(&mut client).await;
-    if let Err(err) = &result {
-        warn!("GATT discovery stopped early: {err}");
+    // The vendor service comes first, in case the link does not last.
+    if let Err(err) = dump_heater_service(&mut client).await {
+        warn!("Heater service discovery stopped early: {err}");
     }
 
     if client.connected() {
@@ -69,6 +109,13 @@ pub async fn inspect(
         timer.after(listen).await?;
     }
 
+    // The standard services are only informational, so they go last.
+    if client.connected() {
+        if let Err(err) = dump_other_services(&mut client).await {
+            warn!("GATT discovery stopped early: {err}");
+        }
+    }
+
     if client.connected() {
         client.disconnect()?;
         info!("Disconnected from heater");
@@ -77,47 +124,72 @@ pub async fn inspect(
     Ok(())
 }
 
-async fn dump_and_subscribe(client: &mut esp32_nimble::BLEClient) -> Result<(), BLEError> {
+async fn dump_heater_service(client: &mut BLEClient) -> Result<(), BLEError> {
+    let service = client.get_service(HEATER_SERVICE).await?;
+    dump_service(service, true).await?;
+    info!("Heater service complete");
+    Ok(())
+}
+
+async fn dump_other_services(client: &mut BLEClient) -> Result<(), BLEError> {
     for service in client.get_services().await? {
-        info!("SERVICE {}", service.uuid());
+        if service.uuid() != HEATER_SERVICE {
+            dump_service(service, false).await?;
+        }
+    }
+    info!("GATT table complete");
+    Ok(())
+}
 
-        for chr in service.get_characteristics().await? {
-            let uuid = chr.uuid();
-            info!("  CHAR {uuid}  props={:?}", chr.properties());
+/// Logs one service. With `subscribe`, also turns on notifications for every
+/// characteristic that offers them and logs what arrives.
+async fn dump_service(service: &mut BLERemoteService, subscribe: bool) -> Result<(), BLEError> {
+    info!("SERVICE {}", service.uuid());
 
-            if chr.can_read() {
-                match chr.read_value().await {
-                    Ok(value) => info!("    value: {}", describe(&value)),
-                    Err(err) => warn!("    read failed: {err}"),
-                }
+    for chr in service.get_characteristics().await? {
+        let uuid = chr.uuid();
+        info!("  CHAR {uuid}  props={:?}", chr.properties());
+
+        if chr.can_read() {
+            match chr.read_value().await {
+                Ok(value) => info!("    value: {}", describe(&value)),
+                Err(err) => warn!("    read failed: {err}"),
             }
+        }
 
-            match chr.get_descriptors().await {
-                Ok(descriptors) => {
-                    for desc in descriptors {
+        match chr.get_descriptors().await {
+            Ok(descriptors) => {
+                for desc in descriptors {
+                    // 0x2902 is the notification switch. Everything else,
+                    // such as the 0x2901 text label, is worth reading.
+                    if desc.uuid() == BleUuid::from_uuid16(0x2902) {
                         info!("    DESC {}", desc.uuid());
+                        continue;
+                    }
+                    match desc.read_value().await {
+                        Ok(value) => info!("    DESC {}: {}", desc.uuid(), describe(&value)),
+                        Err(err) => warn!("    DESC {}: read failed: {err}", desc.uuid()),
                     }
                 }
-                Err(err) => warn!("    descriptor discovery failed: {err}"),
             }
+            Err(err) => warn!("    descriptor discovery failed: {err}"),
+        }
 
-            if chr.can_notify() || chr.can_indicate() {
-                chr.on_notify(move |data| info!("NOTIFY {uuid}: {}", describe(data)));
+        if subscribe && (chr.can_notify() || chr.can_indicate()) {
+            chr.on_notify(move |data| info!("NOTIFY {uuid}: {}", describe(data)));
 
-                let subscribed = if chr.can_notify() {
-                    chr.subscribe_notify(true).await
-                } else {
-                    chr.subscribe_indicate(true).await
-                };
-                match subscribed {
-                    Ok(()) => info!("    subscribed"),
-                    Err(err) => warn!("    subscribe failed: {err}"),
-                }
+            let subscribed = if chr.can_notify() {
+                chr.subscribe_notify(true).await
+            } else {
+                chr.subscribe_indicate(true).await
+            };
+            match subscribed {
+                Ok(()) => info!("    subscribed"),
+                Err(err) => warn!("    subscribe failed: {err}"),
             }
         }
     }
 
-    info!("GATT table complete");
     Ok(())
 }
 
