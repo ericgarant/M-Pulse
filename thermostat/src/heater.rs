@@ -106,7 +106,18 @@ pub async fn inspect(
             "Listening for {} s. Use the heater's own controller now to see what changes",
             listen.as_secs()
         );
-        timer.after(listen).await?;
+        // Wake once a second so a dropped link ends the wait early.
+        let mut remaining = listen.as_secs();
+        while remaining > 0 && client.connected() {
+            timer.after(Duration::from_secs(1)).await?;
+            remaining -= 1;
+        }
+        if !client.connected() {
+            warn!(
+                "Link lost {} s into the listen window",
+                listen.as_secs() - remaining
+            );
+        }
     }
 
     // The standard services are only informational, so they go last.
