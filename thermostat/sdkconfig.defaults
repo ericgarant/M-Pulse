@@ -1,5 +1,5 @@
 # Rust needs more main-task stack than the 3K default for C.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
 
 # Bluetooth: NimBLE host, BLE only (no Bluedroid, no Bluetooth Classic).
 CONFIG_BT_ENABLED=y
