@@ -17,7 +17,6 @@ heater's name, address and service UUIDs.
 
 - Freenove ESP32 WROOM board (ESP32-WROOM-32E module)
 - DHT11, bare 4-pin sensor
-- One 10k resistor (4.7k also works)
 
 ### Wiring
 
@@ -27,11 +26,16 @@ numbered 1 to 4 from left to right.
 | DHT11 pin | Connects to |
 | --- | --- |
 | 1 (VCC) | `3.3V` on the board |
-| 2 (DATA) | `GPIO4`, and through the 10k resistor to `3.3V` |
+| 2 (DATA) | `GPIO21` |
 | 3 | not connected |
 | 4 (GND) | `GND` |
 
-The data pin is set in `src/main.rs` (`peripherals.pins.gpio4`).
+No resistor is needed. The firmware turns on the ESP32's internal pull-up,
+which is enough with short wires (roughly 20 cm or less). If the log shows
+frequent `DHT11: read attempt ... failed` lines, add a 10k resistor between
+DATA and `3.3V`.
+
+The data pin is set in `src/main.rs` (`peripherals.pins.gpio21`).
 
 ## Build and flash
 
