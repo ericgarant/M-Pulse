@@ -33,8 +33,8 @@ fn main() -> anyhow::Result<()> {
 
     let peripherals = Peripherals::take()?;
 
-    // DHT11 DATA is wired to GPIO4. Change the pin here if the wiring changes.
-    let reading = sensor::spawn(peripherals.pins.gpio4)?;
+    // DHT11 DATA is wired to GPIO21. Change the pin here if the wiring changes.
+    let reading = sensor::spawn(peripherals.pins.gpio21)?;
 
     let timers = EspTaskTimerService::new()?;
     let ble_device = BLEDevice::take();
