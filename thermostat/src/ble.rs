@@ -1,8 +1,7 @@
-//! BLE central role.
+//! General BLE scanning.
 //!
-//! For now this only scans and reports what it hears, which is how we find
-//! the heater's advertised name, address and service UUIDs. The heater client
-//! (connect, write commands, read status) will be added here next.
+//! Lists every advertiser in range. Used as a fallback diagnostic when the
+//! heater cannot be found. The heater client itself lives in `heater.rs`.
 
 use std::collections::BTreeMap;
 
