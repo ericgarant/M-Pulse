@@ -1,3 +1,4 @@
 # The default 1 MB app partition is too small once Wi-Fi, BLE and the web
 # server are all linked in. This table gives the app 3 MB (fits 4 MB flash).
+[idf_format_args]
 partition_table = "partitions.csv"
