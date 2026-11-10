@@ -26,6 +26,7 @@ esp32-nimble = "0.13"
 dht-sensor = "0.3"
 embedded-hal = "1"
 embassy-futures = "0.1"
+m-pulse-core = { path = "../core" }
 
 [build-dependencies]
 embuild = "0.33"

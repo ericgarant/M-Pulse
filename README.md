@@ -10,6 +10,10 @@ directly over BLE. There is no Home Assistant and no cloud.
 | --- | --- | --- | --- |
 | [`thermostat/`](thermostat/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) | Reads a DHT11 and starts/stops the BougeRV diesel heater over BLE | Phase 1, in progress |
 
+[`core/`](core/) holds the logic that does not depend on hardware: the
+thermostat state machine, sensor smoothing and the heater's wire format. It
+builds and tests on any computer with `cargo test`.
+
 ## Getting started
 
 See [docs/mac-setup.md](docs/mac-setup.md) to install the Rust ESP32 toolchain

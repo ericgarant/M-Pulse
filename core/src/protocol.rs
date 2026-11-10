@@ -1,7 +1,6 @@
 //! Wire format of the BougeRV DHG001 diesel heater's BLE protocol.
 //!
-//! Taken from the vendor's Android app (v2.6.2). Everything here is pure data
-//! handling with no hardware access.
+//! Taken from the vendor's Android app (v2.6.2).
 //!
 //! Commands are written to the "RX cmd." characteristic as
 //! `[0x00, command, payload.., checksum]`, where the checksum is the low byte
@@ -45,9 +44,6 @@ pub enum RunState {
 }
 
 /// A decoded status report. The heater sends one per second.
-///
-/// The fields are only logged for now. The thermostat logic will read them.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Status {
     pub state: RunState,
@@ -99,5 +95,44 @@ impl Status {
             supply_volts: f32::from(data[14]) * 0.2,
             schedule_enabled: data[11] & (1 << 1) != 0,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A status report captured from a real heater while it was switched off.
+    const IDLE: [u8; 20] = [
+        0x80, 0x41, 0x00, 0xff, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0e, 0x19, 0x00,
+        0x18, 0x00, 0x1c, 0x00, 0x7d,
+    ];
+
+    #[test]
+    fn frames_match_the_vendor_app() {
+        assert_eq!(frame(CMD_VERSION, &[]), [0x00, 0x0e, 0x0e]);
+        // Switch on, switch off, and 1.4 kW, as the app builds them.
+        assert_eq!(frame(0x05, &[1]), [0x00, 0x05, 0x01, 0x06]);
+        assert_eq!(frame(0x05, &[0]), [0x00, 0x05, 0x00, 0x05]);
+        assert_eq!(frame(0x07, &[14]), [0x00, 0x07, 0x0e, 0x15]);
+    }
+
+    #[test]
+    fn parses_a_captured_idle_report() {
+        let status = Status::parse(&IDLE).expect("valid report");
+        assert_eq!(status.state, RunState::Off);
+        assert!(!status.fan && !status.fuel_pump && !status.glow_plug && !status.flame);
+        assert_eq!(status.error, None);
+        assert_eq!(status.set_temp_c, 25);
+        assert!((status.set_power_kw - 1.4).abs() < 0.01);
+        assert!(status.schedule_enabled);
+    }
+
+    #[test]
+    fn rejects_a_corrupt_report() {
+        let mut bad = IDLE;
+        bad[12] ^= 0x01;
+        assert_eq!(Status::parse(&bad), None);
+        assert_eq!(Status::parse(&IDLE[..19]), None);
     }
 }

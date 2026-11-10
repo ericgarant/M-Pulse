@@ -919,6 +919,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "m-pulse-core"
+version = "0.1.0"
+
+[[package]]
 name = "m-pulse-thermostat"
 version = "0.1.0"
 dependencies = [
@@ -930,6 +934,7 @@ dependencies = [
  "esp-idf-svc",
  "esp32-nimble",
  "log",
+ "m-pulse-core",
 ]
 
 [[package]]
