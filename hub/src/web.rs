@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer, Request};
 use esp_idf_svc::http::Method;
-use esp_idf_svc::io::{Read, Write};
+use esp_idf_svc::io::Write;
 use log::info;
 
 use crate::clock;

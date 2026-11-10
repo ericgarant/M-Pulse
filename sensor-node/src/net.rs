@@ -48,7 +48,7 @@ impl Online {
 
 /// Starts Wi-Fi and a background thread that keeps the node connected.
 pub fn start(
-    modem: Modem,
+    modem: Modem<'static>,
     sysloop: EspSystemEventLoop,
     nvs: EspDefaultNvsPartition,
 ) -> anyhow::Result<Online> {

@@ -15,6 +15,9 @@ use m_pulse_core::thermostat::{Config, Decision};
 pub struct Cabin {
     pub temperature_c: f32,
     pub humidity_pct: f32,
+    /// Packet sequence number from the sensor node. Stored for diagnostics;
+    /// nothing reads it yet.
+    #[allow(dead_code)]
     pub seq: u32,
     pub received_at: Instant,
 }
