@@ -30,6 +30,11 @@ const SCAN_DURATION_MS: i32 = 10_000;
 /// Pause between cycles.
 const CYCLE_PAUSE: Duration = Duration::from_secs(20);
 
+/// Turns on debug logging for the BLE stack, to see what happens on the
+/// heater link right before it goes quiet. Very chatty; switch off once the
+/// link is understood.
+const BLE_DEBUG: bool = true;
+
 /// A reading older than this is treated as missing.
 const READING_MAX_AGE: Duration = Duration::from_secs(60);
 
@@ -37,6 +42,9 @@ fn main() -> anyhow::Result<()> {
     // Required once at startup so the ESP-IDF runtime patches are linked in.
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
+    if BLE_DEBUG {
+        enable_ble_debug_logging();
+    }
 
     // Reference point for the build-time clock; see `heater::current_time`.
     heater::mark_boot();
@@ -102,4 +110,18 @@ fn log_cabin(reading: &sensor::SharedReading) {
         Some(_) => warn!("Cabin: last sensor reading is stale"),
         None => warn!("Cabin: no sensor reading yet"),
     }
+}
+
+/// Raises the log level for the BLE client (connection update requests and
+/// unhandled GAP events) and the NimBLE host (L2CAP and GAP procedures).
+/// Everything else stays at info.
+fn enable_ble_debug_logging() {
+    let logger = esp_idf_svc::log::EspLogger;
+    log::set_max_level(log::LevelFilter::Debug);
+    for target in ["esp32_nimble::client::ble_client", "NimBLE"] {
+        if let Err(err) = logger.set_target_level(target, log::LevelFilter::Debug) {
+            warn!("Could not raise log level for {target}: {err}");
+        }
+    }
+    info!("BLE debug logging on");
 }
