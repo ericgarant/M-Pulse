@@ -8,10 +8,12 @@ directly over BLE. There is no Home Assistant and no cloud.
 
 | Folder | Board | Purpose | Status |
 | --- | --- | --- | --- |
-| [`thermostat/`](thermostat/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) | Reads a DHT11 and starts/stops the BougeRV diesel heater over BLE | Phase 1, in progress |
+| [`hub/`](hub/) | Freenove ESP32-S3 media kit | Holds the BLE link to the BougeRV diesel heater, runs the thermostat, serves the dashboard | Phase 1, in progress |
+| [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) | Reads a DHT11 and sends cabin readings to the hub over Wi-Fi | Phase 1, in progress |
 
 [`core/`](core/) holds the logic that does not depend on hardware: the
-thermostat state machine, sensor smoothing and the heater's wire format. It
+thermostat state machine, sensor smoothing, local time, the heater's wire
+format and the sensor node's packet format. It
 builds and tests on any computer with `cargo test`.
 
 ## Getting started

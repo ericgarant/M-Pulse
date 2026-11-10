@@ -54,7 +54,7 @@ source ~/.zshrc
 Plug the board in with a USB-C data cable, then:
 
 ```sh
-cd thermostat
+cd hub            # or sensor-node
 cargo run --release
 ```
 
@@ -67,7 +67,8 @@ leave the monitor.
 ## Troubleshooting
 
 - **No serial port found.** The Freenove ESP32 WROOM board uses a CH340 USB
-  serial chip. Recent macOS versions include the driver. If nothing shows up
+  serial chip, which recent macOS versions support. The ESP32-S3 media kit
+  uses a CH343, which needs WCH's CH34x driver (wch-ic.com). If nothing shows up
   under `ls /dev/cu.*`, try another cable first, because many USB-C cables are
   charge-only.
 - **"Failed to connect" while flashing.** Hold the `BOOT` button on the board

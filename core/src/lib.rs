@@ -7,3 +7,4 @@ pub mod clock;
 pub mod filter;
 pub mod protocol;
 pub mod thermostat;
+pub mod wire;

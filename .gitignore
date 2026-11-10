@@ -5,3 +5,6 @@ sdkconfig.old
 .DS_Store
 .vscode/
 core/Cargo.lock
+
+# Wi-Fi passwords for the firmware builds (see hub/README.md)
+wifi.env
