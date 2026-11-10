@@ -43,12 +43,14 @@ const SUBSCRIBE_GAP: Duration = Duration::from_millis(400);
 /// leave the connect call waiting forever.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
-// Connection parameters the heater asks for in its 0x2A04 characteristic:
-// interval 100 to 200 ms, no latency, 10 s supervision timeout.
-const CONN_INTERVAL_MIN: u16 = 80; // units of 1.25 ms
-const CONN_INTERVAL_MAX: u16 = 160; // units of 1.25 ms
+// Connection parameters the vendor app settles on with this heater, read
+// from the phone's Bluetooth log: 90 ms interval, no latency, 3 s
+// supervision timeout. (The heater's own 0x2A04 asks for 100 to 200 ms and
+// 10 s, but the link dropped with those.)
+const CONN_INTERVAL_MIN: u16 = 72; // units of 1.25 ms
+const CONN_INTERVAL_MAX: u16 = 72; // units of 1.25 ms
 const CONN_LATENCY: u16 = 0;
-const CONN_SUPERVISION_TIMEOUT: u16 = 1000; // units of 10 ms
+const CONN_SUPERVISION_TIMEOUT: u16 = 300; // units of 10 ms
 const CONN_SCAN_INTERVAL: u16 = 16; // units of 0.625 ms
 const CONN_SCAN_WINDOW: u16 = 16; // units of 0.625 ms
 
