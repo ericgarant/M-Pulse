@@ -54,6 +54,32 @@ fn current_time() -> Option<LocalTime> {
     Some(built.add_seconds(since_boot))
 }
 
+/// Largest radio packet we send, in bytes, and its airtime in µs. NimBLE
+/// asks for 251 bytes on every new link; the heater drops the link about
+/// 10 s later, so this test caps it at the Bluetooth 4.0 minimum of 27.
+const DATA_LEN_TX_OCTETS: u16 = 27;
+const DATA_LEN_TX_TIME_US: u16 = 328;
+
+/// Overrides NimBLE's automatic 251-byte data length request.
+fn limit_packet_size(client: &BLEClient) {
+    let handle = match client.desc() {
+        Ok(desc) => desc.conn_handle(),
+        Err(err) => {
+            warn!("No connection handle for the data length request: {err:?}");
+            return;
+        }
+    };
+    // SAFETY: plain NimBLE host call on a live connection handle.
+    let rc = unsafe {
+        esp_idf_svc::sys::ble_gap_set_data_len(handle, DATA_LEN_TX_OCTETS, DATA_LEN_TX_TIME_US)
+    };
+    if rc == 0 {
+        info!("Asked for {DATA_LEN_TX_OCTETS}-byte packets");
+    } else {
+        warn!("Data length request failed (rc {rc})");
+    }
+}
+
 /// How long to wait for the heater's reply to the version request.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -132,6 +158,7 @@ pub async fn inspect(
         }
     }
     info!("Connected, RSSI {:?} dBm", client.get_rssi().ok());
+    limit_packet_size(&client);
 
     if let Err(err) = handshake(&mut client, timer).await {
         warn!("Handshake stopped early: {err}");
