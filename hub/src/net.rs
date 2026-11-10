@@ -27,9 +27,6 @@ use crate::state::Shared;
 /// Name of the hub's own network.
 pub const AP_SSID: &str = "M-Pulse";
 
-/// Address of the hub on its own network.
-pub const AP_IP: &str = "192.168.4.1";
-
 const AP_PASS: &str = match option_env!("M_PULSE_AP_PASS") {
     Some(pass) => pass,
     None => "mpulse-heater",
@@ -92,7 +89,9 @@ pub fn start(
 
     wifi.set_configuration(&config)?;
     wifi.start()?;
-    info!("Hub network \"{AP_SSID}\" is up, dashboard at http://{AP_IP}");
+    // 192.168.71.1 with esp-idf-svc's default access point settings.
+    let ap_ip = wifi.wifi().ap_netif().get_ip_info()?.ip;
+    info!("Hub network \"{AP_SSID}\" is up, dashboard at http://{ap_ip}");
 
     thread::Builder::new()
         .name("wifi".into())
