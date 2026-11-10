@@ -8,7 +8,7 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
 - runs the thermostat on those readings. **Dry run**: it decides but never
   switches the heater. The only commands it writes are the version request
   and the clock sync
-- serves a dashboard at http://192.168.4.1 (hub network) and at its address
+- serves a dashboard at http://192.168.71.1 (hub network) and at its address
   on your Wi-Fi
 - sets the heater's clock from internet time (SNTP), or from your phone's
   time when you open the dashboard without internet
