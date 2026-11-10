@@ -1,0 +1,70 @@
+//! Everything the hub knows, in one place.
+//!
+//! Each part of the firmware (heater link, cabin receiver, thermostat,
+//! dashboard) runs on its own thread and reads or writes this shared state.
+//! Hold the lock only long enough to copy values in or out.
+
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
+
+use m_pulse_core::protocol::Status;
+use m_pulse_core::thermostat::{Config, Decision};
+
+/// The latest cabin reading from the sensor node.
+#[derive(Clone, Copy, Debug)]
+pub struct Cabin {
+    pub temperature_c: f32,
+    pub humidity_pct: f32,
+    pub seq: u32,
+    pub received_at: Instant,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Heater {
+    pub connected: bool,
+    pub status: Option<Status>,
+    pub status_at: Option<Instant>,
+    pub firmware: Option<String>,
+    /// Whether the heater's clock was set during the current connection.
+    pub clock_synced: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Control {
+    pub config: Config,
+    pub decision: Option<Decision>,
+    /// The filtered cabin temperature the thermostat last acted on.
+    pub smoothed_c: Option<f32>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Hub {
+    pub cabin: Option<Cabin>,
+    pub heater: Heater,
+    pub control: Control,
+    /// The hub's address on your Wi-Fi network, once joined.
+    pub sta_ip: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct Shared(Arc<Mutex<Hub>>);
+
+impl Shared {
+    pub fn new(config: Config) -> Self {
+        Self(Arc::new(Mutex::new(Hub {
+            cabin: None,
+            heater: Heater::default(),
+            control: Control {
+                config,
+                decision: None,
+                smoothed_c: None,
+            },
+            sta_ip: None,
+        })))
+    }
+
+    /// Locks the state. A panic on another thread never makes it unusable.
+    pub fn lock(&self) -> MutexGuard<'_, Hub> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}

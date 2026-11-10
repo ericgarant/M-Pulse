@@ -7,13 +7,6 @@ linker = "ldproxy"
 runner = "espflash flash --monitor"
 rustflags = ["--cfg", "espidf_time64"]
 
-# ESP32-S3 (the hub board). Build with:
-#   MCU=esp32s3 cargo build --release --target xtensa-esp32s3-espidf
-[target.xtensa-esp32s3-espidf]
-linker = "ldproxy"
-runner = "espflash flash --monitor"
-rustflags = ["--cfg", "espidf_time64"]
-
 [unstable]
 build-std = ["std", "panic_abort"]
 
