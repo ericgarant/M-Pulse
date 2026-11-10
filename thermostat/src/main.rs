@@ -41,9 +41,10 @@ const READING_MAX_AGE: Duration = Duration::from_secs(60);
 fn main() -> anyhow::Result<()> {
     // Required once at startup so the ESP-IDF runtime patches are linked in.
     esp_idf_svc::sys::link_patches();
-    esp_idf_svc::log::EspLogger::initialize_default();
+    // Installs the logger; this must happen only once.
+    let logger = esp_idf_svc::log::init_from_esp_idf();
     if BLE_DEBUG {
-        enable_ble_debug_logging();
+        enable_ble_debug_logging(logger);
     }
 
     // Reference point for the build-time clock; see `heater::current_time`.
@@ -115,8 +116,7 @@ fn log_cabin(reading: &sensor::SharedReading) {
 /// Raises the log level for the BLE client (connection update requests and
 /// unhandled GAP events) and the NimBLE host (L2CAP and GAP procedures).
 /// Everything else stays at info.
-fn enable_ble_debug_logging() {
-    let logger = esp_idf_svc::log::init_from_esp_idf();
+fn enable_ble_debug_logging(logger: &esp_idf_svc::log::EspLogger) {
     log::set_max_level(log::LevelFilter::Debug);
     for target in ["esp32_nimble::client::ble_client", "NimBLE"] {
         if let Err(err) = logger
