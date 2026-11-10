@@ -46,7 +46,7 @@ const RETRY: Duration = Duration::from_secs(30);
 
 /// Starts Wi-Fi and a background thread that keeps the hub on your network.
 pub fn start(
-    modem: Modem,
+    modem: Modem<'static>,
     sysloop: EspSystemEventLoop,
     nvs: EspDefaultNvsPartition,
     state: Shared,
