@@ -1,29 +1,43 @@
 //! BougeRV diesel heater BLE client.
 //!
-//! For now this is read-only discovery: find the heater, connect, list every
-//! service, characteristic and descriptor, and log whatever the heater sends
-//! on its own. Nothing is ever written to a heater characteristic here, other
-//! than turning notifications on, so the heater cannot be started or stopped
-//! by this code. The output tells us where commands and status live.
+//! Finds the heater, connects, and performs the same opening handshake as
+//! the vendor app: subscribe to replies, ask for the firmware version, then
+//! switch to the status stream. After that it only listens and logs.
+//!
+//! The version request is the only command written to the heater. This code
+//! never sends the on/off or power commands.
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use embassy_futures::select::{select, Either};
 use esp32_nimble::utilities::BleUuid;
-use esp32_nimble::{
-    uuid128, BLEAddress, BLEClient, BLEDevice, BLEError, BLERemoteService, BLEScan,
-};
+use esp32_nimble::{uuid128, BLEAddress, BLEClient, BLEDevice, BLEError, BLEScan};
 use esp_idf_svc::timer::EspAsyncTimer;
 use log::{info, warn};
+
+use crate::protocol::{self, Status};
 
 /// The heater advertises as `BougeRV-DHG001`. Matching on the prefix keeps
 /// this working if the model suffix differs between units.
 const NAME_PREFIX: &str = "BougeRV";
 
-/// The heater's vendor service. It holds one write characteristic
-/// (`bf83f3f1-...`, presumably commands) and two notify characteristics
-/// (`bf83f3f2-...` and `bf83f3f3-...`, presumably status).
+/// The heater's vendor service and its three characteristics. The names in
+/// quotes are the labels the heater gives them in its 0x2901 descriptors.
 const HEATER_SERVICE: BleUuid = uuid128!("43f4b114-ca67-48e8-a46f-9a8ffeb7146a");
+/// "RX cmd.": commands are written here.
+const CHAR_COMMAND: BleUuid = uuid128!("bf83f3f1-399a-414d-9035-ce64ceb3ff67");
+/// "TX ask.": replies to commands arrive here as notifications.
+const CHAR_REPLY: BleUuid = uuid128!("bf83f3f2-399a-414d-9035-ce64ceb3ff67");
+/// "TX dat.": a status report arrives here every second.
+const CHAR_STATUS: BleUuid = uuid128!("bf83f3f3-399a-414d-9035-ce64ceb3ff67");
+
+/// How long to wait for the heater's reply to the version request.
+const REPLY_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// The vendor app pauses this long between dropping the reply subscription
+/// and starting the status subscription.
+const SUBSCRIBE_GAP: Duration = Duration::from_millis(400);
 
 /// Give up on a connection attempt after this long. Also guards against the
 /// link dropping in the middle of connection setup, which would otherwise
@@ -63,9 +77,8 @@ pub async fn find(device: &BLEDevice, duration_ms: i32) -> Result<Option<BLEAddr
     .await
 }
 
-/// Connects to the heater, logs its vendor service first and then the rest
-/// of the GATT table, subscribes to the vendor notifications, and listens for
-/// `listen` before disconnecting.
+/// Connects to the heater, performs the opening handshake, and logs status
+/// reports for `listen` before disconnecting.
 pub async fn inspect(
     device: &BLEDevice,
     addr: &BLEAddress,
@@ -96,34 +109,25 @@ pub async fn inspect(
     }
     info!("Connected, RSSI {:?} dBm", client.get_rssi().ok());
 
-    // The vendor service comes first, in case the link does not last.
-    if let Err(err) = dump_heater_service(&mut client).await {
-        warn!("Heater service discovery stopped early: {err}");
+    if let Err(err) = handshake(&mut client, timer).await {
+        warn!("Handshake stopped early: {err}");
     }
 
     if client.connected() {
-        info!(
-            "Listening for {} s. Use the heater's own controller now to see what changes",
-            listen.as_secs()
-        );
+        info!("Listening for {} s", listen.as_secs());
         // Wake once a second so a dropped link ends the wait early.
         let mut remaining = listen.as_secs();
         while remaining > 0 && client.connected() {
             timer.after(Duration::from_secs(1)).await?;
             remaining -= 1;
         }
-        if !client.connected() {
+        if client.connected() {
+            info!("Link held for the full {} s", listen.as_secs());
+        } else {
             warn!(
                 "Link lost {} s into the listen window",
                 listen.as_secs() - remaining
             );
-        }
-    }
-
-    // The standard services are only informational, so they go last.
-    if client.connected() {
-        if let Err(err) = dump_other_services(&mut client).await {
-            warn!("GATT discovery stopped early: {err}");
         }
     }
 
@@ -135,71 +139,72 @@ pub async fn inspect(
     Ok(())
 }
 
-async fn dump_heater_service(client: &mut BLEClient) -> Result<(), BLEError> {
+/// The vendor app's opening sequence, minus its clock sync:
+///
+/// 1. subscribe to replies
+/// 2. ask for the firmware version and wait for the answer
+/// 3. unsubscribe from replies, pause, subscribe to status
+///
+/// The app then writes the phone's date and time to the heater. That step is
+/// left out on purpose: this board has no real clock, and a wrong time would
+/// upset the heater's built-in schedule.
+async fn handshake(client: &mut BLEClient, timer: &mut EspAsyncTimer) -> anyhow::Result<()> {
     let service = client.get_service(HEATER_SERVICE).await?;
-    dump_service(service, true).await?;
-    info!("Heater service complete");
-    Ok(())
-}
 
-async fn dump_other_services(client: &mut BLEClient) -> Result<(), BLEError> {
-    for service in client.get_services().await? {
-        if service.uuid() != HEATER_SERVICE {
-            dump_service(service, false).await?;
+    // 1. Replies.
+    let reply: Arc<Mutex<Option<Vec<u8>>>> = Arc::new(Mutex::new(None));
+    let reply_slot = reply.clone();
+    let reply_chr = service.get_characteristic(CHAR_REPLY).await?;
+    reply_chr.on_notify(move |data| {
+        info!("REPLY {}", describe(data));
+        *reply_slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(data.to_vec());
+    });
+    reply_chr.subscribe_notify(true).await?;
+    info!("Subscribed to replies");
+
+    // 2. Version request.
+    let request = protocol::frame(protocol::CMD_VERSION, &[]);
+    info!("Writing version request {}", describe(&request));
+    service
+        .get_characteristic(CHAR_COMMAND)
+        .await?
+        .write_value(&request, true)
+        .await?;
+
+    let mut waited = Duration::ZERO;
+    let step = Duration::from_millis(100);
+    loop {
+        if let Some(data) = reply.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            if data.len() >= 8 && data[1] == protocol::CMD_VERSION {
+                info!(
+                    "Heater firmware version {}.{}.{}",
+                    data[5], data[6], data[7]
+                );
+            }
+            break;
         }
+        if waited >= REPLY_TIMEOUT {
+            warn!("No reply to the version request, carrying on");
+            break;
+        }
+        timer.after(step).await?;
+        waited += step;
     }
-    info!("GATT table complete");
-    Ok(())
-}
 
-/// Logs one service. With `subscribe`, also turns on notifications for every
-/// characteristic that offers them and logs what arrives.
-async fn dump_service(service: &mut BLERemoteService, subscribe: bool) -> Result<(), BLEError> {
-    info!("SERVICE {}", service.uuid());
-
-    for chr in service.get_characteristics().await? {
-        let uuid = chr.uuid();
-        info!("  CHAR {uuid}  props={:?}", chr.properties());
-
-        if chr.can_read() {
-            match chr.read_value().await {
-                Ok(value) => info!("    value: {}", describe(&value)),
-                Err(err) => warn!("    read failed: {err}"),
-            }
-        }
-
-        match chr.get_descriptors().await {
-            Ok(descriptors) => {
-                for desc in descriptors {
-                    // 0x2902 is the notification switch. Everything else,
-                    // such as the 0x2901 text label, is worth reading.
-                    if desc.uuid() == BleUuid::from_uuid16(0x2902) {
-                        info!("    DESC {}", desc.uuid());
-                        continue;
-                    }
-                    match desc.read_value().await {
-                        Ok(value) => info!("    DESC {}: {}", desc.uuid(), describe(&value)),
-                        Err(err) => warn!("    DESC {}: read failed: {err}", desc.uuid()),
-                    }
-                }
-            }
-            Err(err) => warn!("    descriptor discovery failed: {err}"),
-        }
-
-        if subscribe && (chr.can_notify() || chr.can_indicate()) {
-            chr.on_notify(move |data| info!("NOTIFY {uuid}: {}", describe(data)));
-
-            let subscribed = if chr.can_notify() {
-                chr.subscribe_notify(true).await
-            } else {
-                chr.subscribe_indicate(true).await
-            };
-            match subscribed {
-                Ok(()) => info!("    subscribed"),
-                Err(err) => warn!("    subscribe failed: {err}"),
-            }
-        }
+    // 3. Swap the reply subscription for the status stream.
+    let reply_chr = service.get_characteristic(CHAR_REPLY).await?;
+    if let Err(err) = reply_chr.unsubscribe(true).await {
+        warn!("Unsubscribing from replies failed: {err}");
     }
+    timer.after(SUBSCRIBE_GAP).await?;
+
+    let status_chr = service.get_characteristic(CHAR_STATUS).await?;
+    status_chr.on_notify(|data| match Status::parse(data) {
+        Some(status) => info!("STATUS {} {status:?}", describe(data)),
+        None => warn!("STATUS (unrecognised) {}", describe(data)),
+    });
+    status_chr.subscribe_notify(true).await?;
+    info!("Subscribed to status. Handshake complete");
 
     Ok(())
 }

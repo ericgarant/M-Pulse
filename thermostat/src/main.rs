@@ -1,11 +1,13 @@
 //! M-Pulse thermostat node.
 //!
-//! Step 2, heater discovery: samples the DHT11 on a background thread, finds
-//! the BougeRV diesel heater over BLE, and logs its GATT table and any
-//! notifications it sends. The thermostat state machine builds on this.
+//! Step 2, heater link: samples the DHT11 on a background thread, finds the
+//! BougeRV diesel heater over BLE, performs the vendor app's opening
+//! handshake and logs the heater's status reports. It does not yet switch the
+//! heater on or off. The thermostat state machine builds on this.
 
 mod ble;
 mod heater;
+mod protocol;
 mod sensor;
 
 use std::time::Duration;
