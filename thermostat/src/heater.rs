@@ -15,8 +15,7 @@ use esp32_nimble::utilities::BleUuid;
 use esp32_nimble::{uuid128, BLEAddress, BLEClient, BLEDevice, BLEError, BLEScan};
 use esp_idf_svc::timer::EspAsyncTimer;
 use log::{info, warn};
-
-use crate::protocol::{self, Status};
+use m_pulse_core::protocol::{self, Status};
 
 /// The heater advertises as `BougeRV-DHG001`. Matching on the prefix keeps
 /// this working if the model suffix differs between units.

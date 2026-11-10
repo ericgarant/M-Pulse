@@ -6,8 +6,8 @@
 //! heater on or off. The thermostat state machine builds on this.
 
 mod ble;
+mod control;
 mod heater;
-mod protocol;
 mod sensor;
 
 use std::time::Duration;
@@ -44,6 +44,10 @@ fn main() -> anyhow::Result<()> {
 
     // DHT11 DATA is wired to GPIO21. Change the pin here if the wiring changes.
     let reading = sensor::spawn(peripherals.pins.gpio21)?;
+
+    // The thermostat decides independently of the BLE link. For now it only
+    // logs what it would do.
+    control::spawn(reading.clone(), m_pulse_core::thermostat::Config::default())?;
 
     let timers = EspTaskTimerService::new()?;
     let ble_device = BLEDevice::take();

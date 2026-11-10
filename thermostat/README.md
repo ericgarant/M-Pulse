@@ -5,15 +5,28 @@ from a DHT11 and will start and stop the BougeRV diesel heater over BLE.
 
 ## Status
 
-Step 2 of 4, heater discovery. The firmware currently:
+Steps 2 to 4 of 4 are in progress. The firmware currently:
 
-- reads the DHT11 every 5 seconds on a background thread and logs the result
-- scans for the heater, which advertises as `BougeRV-DHG001`
-- connects to it and logs every service, characteristic and descriptor
-- subscribes to every notification and logs what the heater sends for 90 seconds
+- reads the DHT11 every 5 seconds on a background thread
+- runs the thermostat logic on the smoothed reading and logs each decision.
+  This is a dry run: it logs "heat ON" or "heat OFF" and sends nothing
+- finds the heater, which advertises as `BougeRV-DHG001`, connects, performs
+  the vendor app's opening handshake and logs the heater's status reports
 
-It is read-only. It never writes a command to the heater, so it cannot start
-or stop it yet.
+It never sends the heater an on, off or power command yet.
+
+### Thermostat defaults
+
+| Setting | Value |
+| --- | --- |
+| Setpoint | 18 °C |
+| Heat on | at or below 17 °C |
+| Heat off | at or above 19 °C |
+| Minimum on time | 10 minutes |
+| Minimum off time | 10 minutes |
+| Sensor timeout | 2 minutes without a reading turns heat off |
+
+They live in `Config::default()` in `../core/src/thermostat.rs`.
 
 ## Hardware
 
@@ -51,12 +64,12 @@ cargo run --release
 
 ```
 I (497) m_pulse_thermostat: M-Pulse thermostat node starting
+I (510) m_pulse_thermostat::control: Thermostat (dry run): setpoint 18.0 °C, on at or below 17.0 °C, off at or above 19.0 °C
 I (2527) m_pulse_thermostat::sensor: DHT11: 21 °C, 30 % RH
+I (5520) m_pulse_thermostat::control: Thermostat (dry run): heat OFF, WarmEnough, cabin 21.0 °C
 I (4310) m_pulse_thermostat::heater: Heater found: BougeRV-DHG001 at 3C:AB:72:C0:5E:B9 (-65 dBm), ...
-I (4900) m_pulse_thermostat::heater: Connected. Reading GATT table
-I (5200) m_pulse_thermostat::heater: SERVICE 0x....
-I (5400) m_pulse_thermostat::heater:   CHAR 0x....  props=...
-I (9000) m_pulse_thermostat::heater: NOTIFY 0x....: [.. .. ..] (n bytes)
+I (6200) m_pulse_thermostat::heater: Heater firmware version ...
+I (7300) m_pulse_thermostat::heater: STATUS [80 41 00 ff ...] (20 bytes) Status { state: Off, ... }
 ```
 
 Close the BougeRV app on your phone first. The heater accepts one BLE
@@ -69,6 +82,7 @@ connection at a time and stops advertising while the app is connected.
 | `src/main.rs` | Startup and the main async loop |
 | `src/sensor.rs` | DHT11 sampling thread and the shared latest reading |
 | `src/ble.rs` | General BLE scan, used when the heater is not found |
-| `src/heater.rs` | Heater BLE client: find, connect, list services, log notifications |
+| `src/heater.rs` | Heater BLE client: find, connect, handshake, log status |
+| `src/control.rs` | Thermostat control thread (dry run) |
 | `sdkconfig.defaults` | ESP-IDF settings, including turning NimBLE on |
 | `.cargo/config.toml` | Build target, flash runner and ESP-IDF version |
