@@ -13,7 +13,8 @@ Steps 2 to 4 of 4 are in progress. The firmware currently:
 - finds the heater, which advertises as `BougeRV-DHG001`, connects, performs
   the vendor app's opening handshake and logs the heater's status reports
 
-It never sends the heater an on, off or power command yet.
+It never sends the heater an on, off or power command yet. Besides the
+version request, the only command it sends is the clock sync.
 
 ### Thermostat defaults
 
@@ -57,8 +58,13 @@ The data pin is set in `src/main.rs` (`peripherals.pins.gpio21`).
 Set up the toolchain first: [../docs/mac-setup.md](../docs/mac-setup.md).
 
 ```sh
-cargo run --release
+M_PULSE_CLOCK=$(date +%y%m%d%H%M%S) cargo run --release
 ```
+
+`M_PULSE_CLOCK` passes your computer's local time into the firmware. The
+board has no clock of its own, so it uses this plus the time since boot to
+set the heater's clock when it connects, as the BougeRV app does. Flash right
+after building so the time is close. Without it, the clock sync is skipped.
 
 ## What you should see
 
