@@ -116,10 +116,13 @@ fn log_cabin(reading: &sensor::SharedReading) {
 /// unhandled GAP events) and the NimBLE host (L2CAP and GAP procedures).
 /// Everything else stays at info.
 fn enable_ble_debug_logging() {
-    let logger = esp_idf_svc::log::EspLogger;
+    let logger = esp_idf_svc::log::init_from_esp_idf();
     log::set_max_level(log::LevelFilter::Debug);
     for target in ["esp32_nimble::client::ble_client", "NimBLE"] {
-        if let Err(err) = logger.set_target_level(target, log::LevelFilter::Debug) {
+        if let Err(err) = logger
+            .filter()
+            .set_target_level(target, log::LevelFilter::Debug)
+        {
             warn!("Could not raise log level for {target}: {err}");
         }
     }
