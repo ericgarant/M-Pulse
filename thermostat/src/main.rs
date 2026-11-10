@@ -38,6 +38,9 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
+    // Reference point for the build-time clock; see `heater::current_time`.
+    heater::mark_boot();
+
     info!("M-Pulse thermostat node starting");
 
     let peripherals = Peripherals::take()?;

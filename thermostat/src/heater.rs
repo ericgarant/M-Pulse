@@ -1,20 +1,22 @@
 //! BougeRV diesel heater BLE client.
 //!
 //! Finds the heater, connects, and performs the same opening handshake as
-//! the vendor app: subscribe to replies, ask for the firmware version, then
-//! switch to the status stream. After that it only listens and logs.
+//! the vendor app: subscribe to replies, ask for the firmware version, switch
+//! to the status stream, and set the heater's clock. After that it only
+//! listens and logs.
 //!
-//! The version request is the only command written to the heater. This code
-//! never sends the on/off or power commands.
+//! The version request and the clock sync are the only commands written to
+//! the heater. This code never sends the on/off or power commands.
 
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use embassy_futures::select::{select, Either};
 use esp32_nimble::utilities::BleUuid;
 use esp32_nimble::{uuid128, BLEAddress, BLEClient, BLEDevice, BLEError, BLEScan};
 use esp_idf_svc::timer::EspAsyncTimer;
 use log::{info, warn};
+use m_pulse_core::clock::LocalTime;
 use m_pulse_core::protocol::{self, Status};
 
 /// The heater advertises as `BougeRV-DHG001`. Matching on the prefix keeps
@@ -30,6 +32,27 @@ const CHAR_COMMAND: BleUuid = uuid128!("bf83f3f1-399a-414d-9035-ce64ceb3ff67");
 const CHAR_REPLY: BleUuid = uuid128!("bf83f3f2-399a-414d-9035-ce64ceb3ff67");
 /// "TX dat.": a status report arrives here every second.
 const CHAR_STATUS: BleUuid = uuid128!("bf83f3f3-399a-414d-9035-ce64ceb3ff67");
+
+/// Local time of the build machine, in `YYMMDDhhmmss` form. Set it when
+/// building: `M_PULSE_CLOCK=$(date +%y%m%d%H%M%S) cargo build --release`.
+/// Without it the clock sync is skipped.
+const BUILD_CLOCK: Option<&str> = option_env!("M_PULSE_CLOCK");
+
+static BOOT: OnceLock<Instant> = OnceLock::new();
+
+/// Records the boot moment. Call once, first thing in `main`.
+pub fn mark_boot() {
+    BOOT.get_or_init(Instant::now);
+}
+
+/// Best guess at the local time: the build time plus time since boot.
+/// Correct right after flashing, and drifts by however long the board took
+/// to be flashed after building, plus every power cycle since.
+fn current_time() -> Option<LocalTime> {
+    let built = LocalTime::parse_compact(BUILD_CLOCK?)?;
+    let since_boot = BOOT.get()?.elapsed().as_secs();
+    Some(built.add_seconds(since_boot))
+}
 
 /// How long to wait for the heater's reply to the version request.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(3);
@@ -140,15 +163,15 @@ pub async fn inspect(
     Ok(())
 }
 
-/// The vendor app's opening sequence, minus its clock sync:
+/// The vendor app's opening sequence:
 ///
 /// 1. subscribe to replies
 /// 2. ask for the firmware version and wait for the answer
 /// 3. unsubscribe from replies, pause, subscribe to status
+/// 4. write the current date and time to the heater
 ///
-/// The app then writes the phone's date and time to the heater. That step is
-/// left out on purpose: this board has no real clock, and a wrong time would
-/// upset the heater's built-in schedule.
+/// Step 4 uses the build machine's clock (see `current_time`) and is skipped
+/// if the firmware was built without one.
 async fn handshake(client: &mut BLEClient, timer: &mut EspAsyncTimer) -> anyhow::Result<()> {
     let service = client.get_service(HEATER_SERVICE).await?;
 
@@ -205,7 +228,22 @@ async fn handshake(client: &mut BLEClient, timer: &mut EspAsyncTimer) -> anyhow:
         None => warn!("STATUS (unrecognised) {}", describe(data)),
     });
     status_chr.subscribe_notify(true).await?;
-    info!("Subscribed to status. Handshake complete");
+    info!("Subscribed to status");
+
+    // 4. Clock sync.
+    match current_time() {
+        Some(now) => {
+            let sync = protocol::clock_frame(&now);
+            info!("Writing clock sync {now:?} as {}", describe(&sync));
+            service
+                .get_characteristic(CHAR_COMMAND)
+                .await?
+                .write_value(&sync, true)
+                .await?;
+        }
+        None => warn!("No build clock set, skipping the clock sync"),
+    }
+    info!("Handshake complete");
 
     Ok(())
 }
