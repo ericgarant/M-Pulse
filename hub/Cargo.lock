@@ -356,15 +356,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dht-sensor"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc206d619f4f078a875fccff279c5e78ec3e00e4557e1dbfda6e488208621e99"
-dependencies = [
- "embedded-hal 1.0.0",
-]
-
-[[package]]
 name = "either"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -919,17 +910,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
-name = "m-pulse-thermostat"
+name = "m-pulse-core"
+version = "0.1.0"
+
+[[package]]
+name = "m-pulse-hub"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dht-sensor",
  "embassy-futures",
- "embedded-hal 1.0.0",
  "embuild",
  "esp-idf-svc",
  "esp32-nimble",
  "log",
+ "m-pulse-core",
 ]
 
 [[package]]

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M-Pulse</title>
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --muted:#667085; --accent:#d9480f; --ok:#2b8a3e; --bad:#c92a2a; }
+@media (prefers-color-scheme: dark) { :root { --bg:#111418; --card:#1b2027; --fg:#e8eaed; --muted:#98a2b3; --accent:#ff8a4c; --ok:#69db7c; --bad:#ff6b6b; } }
+* { box-sizing: border-box; }
+body { margin:0; padding:16px; font:16px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+main { max-width:480px; margin:0 auto; display:grid; gap:12px; }
+h1 { font-size:20px; margin:0 0 4px; }
+section { background:var(--card); border-radius:12px; padding:14px 16px; }
+h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 8px; }
+.big { font-size:40px; font-weight:600; }
+.row { display:flex; justify-content:space-between; gap:8px; padding:2px 0; }
+.row span:first-child { color:var(--muted); }
+.ok { color:var(--ok); } .bad { color:var(--bad); }
+.set { display:flex; align-items:center; justify-content:space-between; }
+button { font:inherit; font-size:22px; width:52px; height:44px; border:0; border-radius:10px; background:var(--accent); color:#fff; }
+#clockbtn { width:auto; font-size:15px; padding:0 14px; }
+.modes { display:flex; gap:8px; margin:10px 0 6px; }
+button.wide { flex:1; width:auto; font-size:16px; background:var(--muted); }
+button.wide.active { background:var(--accent); }
+#h-off { background:var(--fg); color:var(--bg); }
+#h-on { background:var(--accent); }
+.note { font-size:13px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>M-Pulse heater</h1>
+  <section>
+    <h2>Cabin</h2>
+    <div class="big" id="cabin">--</div>
+    <div class="row"><span>Humidity</span><span id="rh">--</span></div>
+    <div class="row"><span>Updated</span><span id="cage">--</span></div>
+  </section>
+  <section>
+    <h2>Thermostat</h2>
+    <div class="set">
+      <button id="down" aria-label="Lower setpoint">−</button>
+      <div class="big" id="sp">--</div>
+      <button id="up" aria-label="Raise setpoint">+</button>
+    </div>
+    <div class="row"><span>Wants heat</span><span id="heat">--</span></div>
+    <div class="row"><span>Reason</span><span id="reason">--</span></div>
+    <div class="modes">
+      <button id="m-monitor" class="wide">Monitor only</button>
+      <button id="m-auto" class="wide">Auto</button>
+    </div>
+    <p class="note" id="modenote">--</p>
+  </section>
+  <section>
+    <h2>Manual</h2>
+    <div class="modes">
+      <button id="h-on" class="wide">Heater ON</button>
+      <button id="h-off" class="wide">Heater OFF</button>
+    </div>
+    <div class="row"><span>Last command</span><span id="last">--</span></div>
+    <p class="note">A manual command switches back to Monitor only.</p>
+  </section>
+  <section>
+    <h2>Heater</h2>
+    <div class="row"><span>Link</span><span id="link">--</span></div>
+    <div class="row"><span>State</span><span id="state">--</span></div>
+    <div class="row"><span>Flame / glow / pump / fan</span><span id="parts">--</span></div>
+    <div class="row"><span>Power (live / set)</span><span id="power">--</span></div>
+    <div class="row"><span>Heater set temperature</span><span id="htemp">--</span></div>
+    <div class="row"><span>Supply</span><span id="volts">--</span></div>
+    <div class="row"><span>Error</span><span id="err">--</span></div>
+    <div class="row"><span>Firmware</span><span id="fw">--</span></div>
+  </section>
+  <section>
+    <h2>Hub</h2>
+    <div class="row"><span>Clock</span><span id="clock">--</span></div>
+    <div class="row"><span>On your Wi-Fi</span><span id="ip">--</span></div>
+    <button id="clockbtn" hidden>Set clock from this phone</button>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const yes = b => b ? "on" : "off";
+let setpoint = null, sentClock = false;
+
+function post(path, body) {
+  return fetch(path, { method: "POST", body: String(body) });
+}
+function sendClock() {
+  sentClock = true;
+  post("/api/time", Math.floor(Date.now() / 1000));
+}
+
+async function refresh() {
+  let s;
+  try { s = await (await fetch("/api/state")).json(); } catch (e) { $("link").textContent = "hub unreachable"; return; }
+
+  if (s.cabin) {
+    $("cabin").textContent = s.cabin.temp_c.toFixed(1) + " °C";
+    $("rh").textContent = s.cabin.rh + " %";
+    $("cage").textContent = s.cabin.age_s + " s ago";
+  } else {
+    $("cabin").textContent = "--";
+    $("cage").textContent = "no reading from the sensor yet";
+  }
+
+  const c = s.control;
+  setpoint = c.setpoint_c;
+  $("sp").textContent = c.setpoint_c.toFixed(1) + " °C";
+  $("heat").textContent = c.reason ? (c.heat ? "yes" : "no") : "--";
+  $("reason").textContent = c.reason || "--";
+  $("m-monitor").className = "wide" + (c.mode === "monitor" ? " active" : "");
+  $("m-auto").className = "wide" + (c.mode === "auto" ? " active" : "");
+  $("modenote").textContent = c.start_failed
+    ? "The heater did not start after 3 tries. Check it, then press Auto again to retry."
+    : c.mode === "auto"
+    ? "Auto: the thermostat switches the heater."
+    : "Monitor only: the thermostat decides but does not switch the heater.";
+
+  const h = s.heater;
+  $("link").textContent = h.connected ? "connected" : "searching";
+  $("link").className = h.connected ? "ok" : "bad";
+  // After the link drops the hub still holds the last status; do not show
+  // it as if it were current.
+  const parts = ["state", "parts", "power", "htemp", "volts", "err"];
+  if (!h.connected || !h.state) {
+    parts.forEach(id => { $(id).textContent = "--"; $(id).className = ""; });
+  } else {
+    // The heater says "On" seconds after a start, minutes before it burns.
+    $("state").textContent = h.state === "On" ? (h.running ? "Running" : "Igniting") : h.state;
+    $("parts").textContent = [h.flame, h.glow, h.pump, h.fan].map(yes).join(" / ");
+    $("power").textContent = h.power_kw.toFixed(1) + " / " + h.set_power_kw.toFixed(1) + " kW";
+    $("htemp").textContent = h.set_temp_c + " °C";
+    $("volts").textContent = h.volts.toFixed(1) + " V";
+    $("err").textContent = h.error === null ? "none" : "code " + h.error;
+    $("err").className = h.error === null ? "" : "bad";
+  }
+  $("fw").textContent = h.firmware || "--";
+  $("last").textContent = h.last_command || "none";
+
+  $("clock").textContent = s.clock || "not set";
+  $("ip").textContent = s.sta_ip || "not joined";
+  $("clockbtn").hidden = !!s.clock;
+  if (!s.clock && !sentClock) sendClock();
+}
+
+function nudge(delta) {
+  if (setpoint === null) return;
+  const v = Math.min(30, Math.max(5, setpoint + delta));
+  post("/api/setpoint", v.toFixed(1)).then(refresh);
+}
+$("down").onclick = () => nudge(-0.5);
+$("up").onclick = () => nudge(0.5);
+$("clockbtn").onclick = sendClock;
+$("m-monitor").onclick = () => post("/api/mode", "monitor").then(refresh);
+$("m-auto").onclick = () => {
+  if (confirm("Let the thermostat switch the heater on and off?")) post("/api/mode", "auto").then(refresh);
+};
+async function heater(cmd) {
+  const r = await post("/api/heater", cmd);
+  if (!r.ok) alert(await r.text());
+  refresh();
+}
+$("h-on").onclick = () => { if (confirm("Switch the heater ON now?")) heater("on"); };
+$("h-off").onclick = () => heater("off");
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
