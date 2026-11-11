@@ -3,7 +3,7 @@ name = "m-pulse-hub"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.82"
-description = "M-Pulse hub (ESP32-S3): heater BLE link, thermostat and dashboard"
+description = "M-Pulse hub (ESP32-S3): heater, fridge and Bluetti BLE links, thermostat and dashboard"
 license = "MIT"
 publish = false
 
