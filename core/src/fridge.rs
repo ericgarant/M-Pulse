@@ -10,7 +10,9 @@
 //! checksum is the 16-bit sum of every byte before it.
 //!
 //! The fridge never reports on its own: it answers each status query with
-//! one status frame. The app asks every couple of seconds.
+//! one status frame. The app asks every couple of seconds. It also answers a
+//! settings write with a status frame (command `02` instead of `01`) and
+//! echoes a target change back unchanged.
 
 /// Ask for the status frame.
 pub const CMD_QUERY: u8 = 0x01;
@@ -101,7 +103,7 @@ impl Status {
         if data.len() != STATUS_LEN
             || data[..2] != HEADER
             || usize::from(data[2]) != STATUS_LEN - 3
-            || data[3] != CMD_QUERY
+            || !matches!(data[3], CMD_QUERY | CMD_SETTINGS)
         {
             return None;
         }
@@ -274,6 +276,19 @@ mod tests {
         assert_eq!((s.min_temp, s.max_temp), (-20, 20));
         assert_eq!(s.battery_pct, 100);
         assert!((s.input_volts - 14.4).abs() < 0.01);
+    }
+
+    #[test]
+    fn parses_the_reply_to_a_settings_write() {
+        // Captured after switching to Eco: same layout, command 02.
+        let reply = [
+            0xfe, 0xfe, 0x21, 0x02, 0x00, 0x01, 0x01, 0x02, 0x04, 0x14, 0xec, 0x02, 0x00, 0x00,
+            0xfd, 0xfd, 0xff, 0x00, 0xfe, 0x64, 0x0e, 0x06, 0x04, 0x00, 0x00, 0x02, 0xfd, 0xfd,
+            0x00, 0x00, 0xfe, 0x01, 0x00, 0x00, 0x0a, 0x97,
+        ];
+        let s = Status::parse(&reply).expect("valid frame");
+        assert_eq!(s.mode, RunMode::Eco);
+        assert_eq!(s.temp, -2);
     }
 
     #[test]

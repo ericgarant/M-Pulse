@@ -204,7 +204,12 @@ async function fridgeCmd(cmd) {
 function fridgeNudge(delta) {
   if (!fridge) return;
   const t = Math.min(fridge.max_temp, Math.max(fridge.min_temp, fridge.set_temp + delta));
-  if (t !== fridge.set_temp) fridgeCmd("temp:" + t);
+  if (t === fridge.set_temp) return;
+  // Show the new target at once, so quick taps count from it rather than
+  // from the last reading.
+  fridge.set_temp = t;
+  $("f-set").textContent = "target " + t + " °" + fridge.unit;
+  fridgeCmd("temp:" + t);
 }
 $("f-down").onclick = () => fridgeNudge(-1);
 $("f-up").onclick = () => fridgeNudge(1);

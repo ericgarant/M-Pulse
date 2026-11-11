@@ -159,7 +159,12 @@ async fn stay_connected(
             return;
         };
         let Some(status) = Status::parse(&frame) else {
-            warn!("FRIDGE (unrecognised) {frame:02x?}");
+            if frame.get(3) == Some(&fridge::CMD_SET_LEFT) {
+                // The fridge echoes a target change to acknowledge it.
+                info!("Fridge acknowledged {frame:02x?}");
+            } else {
+                warn!("FRIDGE (unrecognised) {frame:02x?}");
+            }
             return;
         };
         if last != Some(status) {

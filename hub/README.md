@@ -133,6 +133,12 @@ Tested on the BougeRV DHG001 heater:
   held the heater on until the 10 minute minimum on time, then switched it
   off. Only those two commands were sent, and the link did not drop.
 
+Tested on the BougeRV Rocky 50 fridge, alongside the heater link:
+
+- The hub reads the fridge every 2 s, and both links held together.
+- From the dashboard: target up to 7 °C and back to 4 °C, Eco then Max, and
+  Off then On. The fridge applied each change within about a second.
+
 ## Thermostat defaults
 
 | Setting | Value |
