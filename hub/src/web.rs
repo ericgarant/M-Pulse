@@ -10,6 +10,8 @@
 //!   which also drops back to Monitor mode so the thermostat does not undo it
 //! - change the fridge (`POST /api/fridge`, body `on`, `off`, `eco`, `max`
 //!   or `temp:<degrees>`)
+//! - set the fridge saver (`POST /api/saver`, body `on`, `off` or
+//!   `levels:<low>-<high>`, in percent of the Bluetti's charge)
 //! - set the hub's clock from the phone when the hub has no internet time
 //!   (`POST /api/time`, body is Unix seconds)
 
@@ -20,6 +22,7 @@ use esp_idf_svc::http::Method;
 use esp_idf_svc::io::Write;
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
+use m_pulse_core::eco_guard;
 use m_pulse_core::fridge::RunMode;
 use m_pulse_core::protocol::RunState;
 
@@ -151,6 +154,50 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         } else {
             req.into_status_response(409)?
                 .write_all(b"The fridge is not connected.")?;
+        }
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/saver", Method::Post, move |mut req| {
+        let text = read_body(&mut req)?;
+        let changed = {
+            let mut hub = s.lock();
+            let config = hub.saver.config;
+            let new = match text.trim() {
+                "on" => Some(eco_guard::Config {
+                    enabled: true,
+                    ..config
+                }),
+                "off" => Some(eco_guard::Config {
+                    enabled: false,
+                    ..config
+                }),
+                other => other
+                    .strip_prefix("levels:")
+                    .and_then(|l| l.split_once('-'))
+                    .and_then(|(lo, hi)| Some((lo.parse().ok()?, hi.parse().ok()?)))
+                    .and_then(|(lo, hi)| config.with_levels(lo, hi)),
+            };
+            if let Some(c) = new {
+                hub.saver.config = c;
+            }
+            new
+        };
+        match changed {
+            Some(c) => {
+                warn!("Dashboard set the fridge saver: {c:?}");
+                req.into_ok_response()?.write_all(b"ok")?;
+            }
+            None => {
+                let msg = format!(
+                    "Send on, off, or levels:<low>-<high>, with low between {} and {} %, high up to 100 % and at least {} above low.",
+                    eco_guard::MIN_PCT,
+                    eco_guard::MAX_PCT,
+                    eco_guard::MIN_GAP
+                );
+                req.into_status_response(400)?.write_all(msg.as_bytes())?;
+            }
         }
         Ok(())
     })?;
@@ -324,7 +371,7 @@ fn state_json(hub: &Hub) -> String {
         (Some(st), Some(at)) => {
             let _ = write!(
                 out,
-                ",\"age_s\":{},\"model\":{},\"soc\":{},\"volts\":{:.1},\"amps\":{:.1},\"pv_w\":{},\"grid_w\":{},\
+                ",\"age_s\":{},\"model\":{},\"soc\":{},\"volts\":{:.2},\"amps\":{:.1},\"pv_w\":{},\"grid_w\":{},\
                  \"ac_w\":{},\"dc_w\":{},\"ac_on\":{},\"dc_on\":{},\"to_full_min\":{},\"to_empty_min\":{},\"charging\":{}",
                 at.elapsed().as_secs(),
                 opt_str(Some(&st.model)),
@@ -345,6 +392,22 @@ fn state_json(hub: &Hub) -> String {
         _ => out.push_str(",\"soc\":null"),
     }
     out.push_str("},");
+
+    let sv = &hub.saver;
+    let _ = write!(
+        out,
+        "\"saver\":{{\"enabled\":{},\"low\":{},\"high\":{},\"battery_low\":{},\"holding_eco\":{},\"last_action\":{}}},",
+        sv.config.enabled,
+        sv.config.low_pct,
+        sv.config.high_pct,
+        sv.guard.low,
+        sv.guard.switched,
+        opt_str(
+            sv.last_action
+                .map(|(mode, when)| format!("{mode:?} {} min ago", when.elapsed().as_secs() / 60))
+                .as_deref()
+        )
+    );
 
     let c = &hub.control;
     let _ = write!(

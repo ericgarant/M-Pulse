@@ -440,9 +440,9 @@ pub struct Status {
     pub soc_pct: u8,
     /// Battery pack voltage.
     pub pack_volts: f32,
-    /// Battery pack current (as reported; sign convention unconfirmed).
+    /// Battery pack current; positive while discharging.
     pub pack_amps: f32,
-    /// Raw charging-status code (meaning to be confirmed live).
+    /// Raw charging-status code: 0 idle, 2 discharging (others unconfirmed).
     pub charging_status: u16,
     /// Minutes to full while charging, as reported.
     pub minutes_to_full: u16,
@@ -484,7 +484,9 @@ impl Status {
         Some(Self {
             model,
             soc_pct: u16_at(4).min(100) as u8,
-            pack_volts: f32::from(u16_at(0)) / 10.0,
+            // The app divides by 10, but the Elite 200 V2 reports hundredths:
+            // 3966 with 2.2 A out matched the 83 W the AC outlet was drawing.
+            pack_volts: f32::from(u16_at(0)) / 100.0,
             pack_amps: f32::from(u16_at(2)) / 10.0,
             charging_status: u16_at(6),
             minutes_to_full: u16_at(8),
@@ -705,7 +707,7 @@ mod tests {
     fn parses_home_block() {
         let mut regs = vec![0u8; usize::from(HOME_COUNT) * 2];
         let put = |r: &mut Vec<u8>, b: usize, v: u16| r[b..b + 2].copy_from_slice(&v.to_be_bytes());
-        put(&mut regs, 0, 532); // 53.2 V
+        put(&mut regs, 0, 3966); // 39.66 V
         put(&mut regs, 4, 87); // 87 %
                                // "EL200V2" with each register's bytes swapped.
         let name = b"EL200V2\0\0\0\0\0";
@@ -721,7 +723,7 @@ mod tests {
         let s = Status::parse(&regs).unwrap();
         assert_eq!(s.model, "EL200V2");
         assert_eq!(s.soc_pct, 87);
-        assert!((s.pack_volts - 53.2).abs() < 1e-3);
+        assert!((s.pack_volts - 39.66).abs() < 1e-3);
         assert!(s.ac_on && s.dc_on);
         assert_eq!(s.dc_out_w, 45);
         assert_eq!(s.ac_out_w, 120);
