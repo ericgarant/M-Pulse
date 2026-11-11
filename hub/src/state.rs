@@ -1,6 +1,6 @@
 //! Everything the hub knows, in one place.
 //!
-//! Each part of the firmware (heater and fridge links, cabin receiver, thermostat,
+//! Each part of the firmware (heater, fridge and Bluetti links, cabin receiver, thermostat,
 //! dashboard) runs on its own thread and reads or writes this shared state.
 //! Hold the lock only long enough to copy values in or out.
 
@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use m_pulse_core::actuator::Switch;
+use m_pulse_core::bluetti;
 use m_pulse_core::fridge::{self, RunMode};
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
@@ -64,6 +65,16 @@ pub struct Fridge {
     pub warm_alert: bool,
 }
 
+/// The Bluetti power station, read only.
+#[derive(Clone, Debug, Default)]
+pub struct Bluetti {
+    pub connected: bool,
+    /// Whether the encrypted key exchange has finished on this connection.
+    pub secure: bool,
+    pub status: Option<bluetti::Status>,
+    pub status_at: Option<Instant>,
+}
+
 /// Who is allowed to switch the heater.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -89,6 +100,7 @@ pub struct Hub {
     pub cabin: Option<Cabin>,
     pub heater: Heater,
     pub fridge: Fridge,
+    pub bluetti: Bluetti,
     pub control: Control,
     /// The hub's address on your Wi-Fi network, once joined.
     pub sta_ip: Option<String>,
@@ -103,6 +115,7 @@ impl Shared {
             cabin: None,
             heater: Heater::default(),
             fridge: Fridge::default(),
+            bluetti: Bluetti::default(),
             control: Control {
                 mode: Mode::Monitor,
                 config,

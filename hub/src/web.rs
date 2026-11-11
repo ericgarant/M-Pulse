@@ -314,6 +314,38 @@ fn state_json(hub: &Hub) -> String {
     }
     out.push_str("},");
 
+    let b = &hub.bluetti;
+    let _ = write!(
+        out,
+        "\"bluetti\":{{\"connected\":{},\"secure\":{}",
+        b.connected, b.secure
+    );
+    match (&b.status, b.status_at) {
+        (Some(st), Some(at)) => {
+            let _ = write!(
+                out,
+                ",\"age_s\":{},\"model\":{},\"soc\":{},\"volts\":{:.1},\"amps\":{:.1},\"pv_w\":{},\"grid_w\":{},\
+                 \"ac_w\":{},\"dc_w\":{},\"ac_on\":{},\"dc_on\":{},\"to_full_min\":{},\"to_empty_min\":{},\"charging\":{}",
+                at.elapsed().as_secs(),
+                opt_str(Some(&st.model)),
+                st.soc_pct,
+                st.pack_volts,
+                st.pack_amps,
+                st.pv_in_w,
+                st.grid_in_w,
+                st.ac_out_w,
+                st.dc_out_w,
+                st.ac_on,
+                st.dc_on,
+                st.minutes_to_full,
+                st.minutes_to_empty,
+                st.charging_status
+            );
+        }
+        _ => out.push_str(",\"soc\":null"),
+    }
+    out.push_str("},");
+
     let c = &hub.control;
     let _ = write!(
         out,

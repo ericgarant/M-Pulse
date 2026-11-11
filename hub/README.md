@@ -7,6 +7,9 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
 - keeps a second BLE link to the BougeRV Rocky 50 fridge (`SYZ-R50-...`),
   reads it every 2 s, and lets the dashboard change it (see
   [Fridge](#fridge))
+- keeps a third BLE link to the Bluetti Elite 200 V2 power station and reads
+  its battery, inputs and outputs every 5 s, read only (see
+  [Bluetti](#bluetti))
 - receives cabin readings from the [sensor node](../sensor-node) over Wi-Fi
 - runs the thermostat on those readings
 - switches the heater on and off, either from the dashboard's On and Off
@@ -111,6 +114,27 @@ format and the warm alert live in [`core/src/fridge.rs`](../core/src/fridge.rs).
 - While the hub holds the link, the BougeRV phone app cannot connect to the
   fridge. Unplug the hub to use the app.
 
+## Bluetti
+
+The Elite 200 V2 speaks Modbus over BLE inside an encrypted channel, like
+every newer Bluetti. The key exchange comes from the open-source
+`bluetti-bt-lib`; the register map from the Bluetti app (v3.1.5). Both live
+in [`core/src/bluetti.rs`](../core/src/bluetti.rs). No Bluetti account or
+licence file is needed.
+
+- Service `ff00`; requests are written to `ff02` (with response), replies
+  and key-exchange messages arrive on `ff01`. The hub finds the station by
+  that service; it advertises no name.
+- On connect the station sends a challenge, then its signed P-256 key. The
+  hub answers with its own signed key, and from then on every message is
+  AES-256-CBC under the shared secret. The station repeats its key until it
+  hears back, and the hub ignores the repeats.
+- The hub reads 62 registers from register 100 (the app's home screen)
+  every 5 s: charge %, solar and charger input, AC and DC output, and
+  whether the AC and DC outputs are on. It writes nothing else.
+- While the hub holds the link, the Bluetti app can only reach the station
+  over the cloud, not Bluetooth.
+
 ## Build and flash
 
 Set up the toolchain first: [../docs/mac-setup.md](../docs/mac-setup.md).
@@ -138,6 +162,14 @@ Tested on the BougeRV Rocky 50 fridge, alongside the heater link:
 - The hub reads the fridge every 2 s, and both links held together.
 - From the dashboard: target up to 7 °C and back to 4 °C, Eco then Max, and
   Off then On. The fridge applied each change within about a second.
+
+Tested on the Bluetti Elite 200 V2, alongside the heater and fridge links:
+
+- The key exchange finishes about 1.5 s after connecting, and the station
+  answers every read within 0.1 s. All three links held together.
+- First read: model `Elite200V2`, 94 %, AC and DC outputs on, no load and no
+  input. The station reports 5994 min to full and to empty when it has no
+  estimate, so the dashboard hides that.
 
 ## Thermostat defaults
 
