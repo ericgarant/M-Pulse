@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::filter::MedianFilter;
-use m_pulse_core::protocol::RunState;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
 use crate::state::{Mode, Shared};
@@ -112,16 +111,19 @@ fn drive_heater(hub: &mut crate::state::Hub, want_heat: bool) {
     if !h.connected || at.elapsed() > STATUS_MAX_AGE || h.pending.is_some() {
         return;
     }
-    if status.state == RunState::On {
+    if actuator::is_running(&status) {
         // The start succeeded, so the next one gets a fresh set of tries.
-        // Starting does not count: an ignition can fail and fall back to
-        // Off without reporting a fault.
+        // The state On alone does not count: the heater reports it seconds
+        // after a start command, and an ignition can still fail and fall
+        // back to Off without reporting a fault.
         h.start_attempts = 0;
     }
-    let Some(next) = actuator::command(want_heat, &status) else {
+    let last = h.last_sent.map(|(sent, when)| (sent, when.elapsed()));
+    // An ignition we started that is still not burning steadily.
+    let stuck = matches!(last, Some((Switch::On, ago)) if ago >= actuator::IGNITION_LIMIT);
+    let Some(next) = actuator::command(want_heat, &status, stuck) else {
         return;
     };
-    let last = h.last_sent.map(|(sent, when)| (sent, when.elapsed()));
     if !actuator::should_send(next, last, min_on, min_off) {
         return;
     }

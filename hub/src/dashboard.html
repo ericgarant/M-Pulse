@@ -122,7 +122,8 @@ async function refresh() {
   $("link").textContent = h.connected ? "connected" : "searching";
   $("link").className = h.connected ? "ok" : "bad";
   if (h.state) {
-    $("state").textContent = h.state;
+    // The heater says "On" seconds after a start, minutes before it burns.
+    $("state").textContent = h.state === "On" ? (h.running ? "Running" : "Igniting") : h.state;
     $("parts").textContent = [h.flame, h.glow, h.pump, h.fan].map(yes).join(" / ");
     $("power").textContent = h.power_kw.toFixed(1) + " / " + h.set_power_kw.toFixed(1) + " kW";
     $("htemp").textContent = h.set_temp_c + " °C";
