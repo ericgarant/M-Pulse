@@ -210,8 +210,8 @@ heater, in Monitor it stays off until switched on. The logic is in
 [`core/src/heater_cutoff.rs`](../core/src/heater_cutoff.rs).
 
 - It is on after every restart. The levels, and an off switch, are on the
-  dashboard's Power card; a red notice shows on the Thermostat card while it
-  holds the heater off.
+  dashboard's Battery rules card; a red alert shows at the top of the page
+  while it holds the heater off.
 - A heater that is already cooling down or off is left alone. The Off is
   repeated every 20 s while the heater still reports On or Starting.
 - A lost Bluetti link neither trips it nor clears it. It needs a Bluetti
@@ -228,7 +228,7 @@ and back to Max when it is up to the high level again (defaults 30 % and
 50 %). The logic is in [`core/src/eco_guard.rs`](../core/src/eco_guard.rs).
 
 - It is off after every restart. Turn it on and pick the levels on the
-  dashboard's Power card.
+  dashboard's Battery rules card.
 - It acts only when the charge crosses a level, and restores Max only if it
   was the one that set Eco. Change the mode by hand and it leaves it alone.
 - It needs a Bluetti reading under 30 s old and a fridge status under 10 s
@@ -249,6 +249,17 @@ source ../wifi.env
 cargo build --release
 espflash flash --monitor --partition-table partitions.csv target/xtensa-esp32s3-espidf/release/m-pulse-hub
 ```
+
+With more than one board or phone plugged into the Mac, espflash asks which
+port to use. The hub is the one listed as `USB Single Serial` (on this Mac,
+`/dev/cu.usbmodem5AB90751111`); pass it with `--port` to skip the question.
+The dashboard page is built into the firmware, so changing it means
+reflashing the hub. After a flash the hub is back in Monitor only.
+
+To work on the dashboard without the hub, serve `src/dashboard.html` from
+any small web server that also answers `GET /api/state` with a saved copy of
+the hub's JSON. The page only talks to the routes listed at the top of
+[`src/web.rs`](src/web.rs).
 
 ## Tested
 
@@ -280,6 +291,18 @@ Tested for the fridge saver, on the real fridge and Bluetti (charge 91 %):
 - With the levels set to 95/100 % the fridge went to Eco within 2 s; moving
   them to 5/10 % put it back to Max.
 
+Tested for the dashboard (the redesign in PR #10):
+
+- In a browser against a stand-in hub with the same API: landscape tablet
+  (1280×800), portrait tablet (800×1280) and phone (390×844), in the dark,
+  Night and light themes, with no sideways scrolling. Every control sent the
+  expected single request, and cancelling a confirmation sent nothing. The
+  alerts, the links-down state and an unreachable hub all showed correctly,
+  and the page recovered by itself when the hub came back.
+- Flashed to the hub: it booted, started the dashboard server and
+  reconnected the fridge. The 1.5 MB firmware uses about half of the 3 MB
+  app partition.
+
 Tested for the heater low-battery stop:
 
 - With the stop level set above the charge it tripped within a second, and
@@ -289,12 +312,13 @@ Not yet tested:
 
 - **Stopping a burning heater with the low-battery stop.** The heater was
   off in the test above, so no Off was sent. The Off command itself is the
-  one the Manual button sends, which is tested.
+  one the dashboard's Heater OFF button sends, which is tested.
 - Solar and charger input readings, and the sign of the charger reading.
   The Bluetti has only been read idle and with an AC load.
 - The fridge saver and the heater stop at a real low charge. Both were
   triggered by moving their levels, not by draining the Bluetti.
 - Joining another Wi-Fi (see [Networks](#networks)).
+- The redesigned dashboard on the real tablet and phone, with live data.
 
 ## Thermostat defaults
 
