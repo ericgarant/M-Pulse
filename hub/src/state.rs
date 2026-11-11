@@ -1,6 +1,6 @@
 //! Everything the hub knows, in one place.
 //!
-//! Each part of the firmware (heater link, cabin receiver, thermostat,
+//! Each part of the firmware (heater and fridge links, cabin receiver, thermostat,
 //! dashboard) runs on its own thread and reads or writes this shared state.
 //! Hold the lock only long enough to copy values in or out.
 
@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use m_pulse_core::actuator::Switch;
+use m_pulse_core::fridge::{self, RunMode};
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
 
@@ -40,6 +41,29 @@ pub struct Heater {
     pub start_attempts: u8,
 }
 
+/// A change the dashboard asked the fridge for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FridgeCommand {
+    Power(bool),
+    Mode(RunMode),
+    /// Target temperature, in the fridge's own unit.
+    SetTemp(i8),
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Fridge {
+    pub connected: bool,
+    pub status: Option<fridge::Status>,
+    pub status_at: Option<Instant>,
+    /// A command waiting to be written by the fridge link.
+    pub pending: Option<FridgeCommand>,
+    /// The last command written, and when.
+    pub last_sent: Option<(FridgeCommand, Instant)>,
+    pub warm: fridge::WarmWatch,
+    /// Whether the warm alert is on.
+    pub warm_alert: bool,
+}
+
 /// Who is allowed to switch the heater.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -64,6 +88,7 @@ pub struct Control {
 pub struct Hub {
     pub cabin: Option<Cabin>,
     pub heater: Heater,
+    pub fridge: Fridge,
     pub control: Control,
     /// The hub's address on your Wi-Fi network, once joined.
     pub sta_ip: Option<String>,
@@ -77,6 +102,7 @@ impl Shared {
         Self(Arc::new(Mutex::new(Hub {
             cabin: None,
             heater: Heater::default(),
+            fridge: Fridge::default(),
             control: Control {
                 mode: Mode::Monitor,
                 config,

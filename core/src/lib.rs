@@ -6,6 +6,7 @@
 pub mod actuator;
 pub mod clock;
 pub mod filter;
+pub mod fridge;
 pub mod protocol;
 pub mod thermostat;
 pub mod wire;
