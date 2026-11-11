@@ -33,12 +33,12 @@ Open a new Terminal window after installing Rust so `cargo` is on your PATH.
 
 ## 3. Install the ESP32 Rust toolchain
 
-The classic ESP32 uses the Xtensa architecture, which needs Espressif's build
-of the Rust compiler. `espup` installs it.
+Both boards (the ESP32 and the ESP32-S3) use the Xtensa architecture, which
+needs Espressif's build of the Rust compiler. `espup` installs it.
 
 ```sh
 cargo install espup espflash ldproxy --locked
-espup install --targets esp32
+espup install --targets esp32,esp32s3
 ```
 
 `espup` writes a file called `~/export-esp.sh`. It must be loaded in every
@@ -62,7 +62,10 @@ The first build downloads and compiles ESP-IDF, which takes 10 to 20 minutes
 and about 5 GB of disk. Later builds take well under a minute.
 
 `cargo run` flashes the board and opens the serial monitor. Press `Ctrl+C` to
-leave the monitor.
+leave the monitor. Opening the monitor restarts the board.
+
+The hub README explains the optional `wifi.env` file with the network
+password; build with it loaded (`source ../wifi.env`) when you have one.
 
 ## Troubleshooting
 
@@ -74,6 +77,6 @@ leave the monitor.
 - **"Failed to connect" while flashing.** Hold the `BOOT` button on the board
   while espflash prints "Connecting...", then release it.
 - **`error: toolchain 'esp' is not installed`.** Run `espup install --targets
-  esp32` again and make sure `~/export-esp.sh` is loaded.
+  esp32,esp32s3` again and make sure `~/export-esp.sh` is loaded.
 - **Build fails with a long path error.** Keep the repo in a short path such
   as `~/code/M-Pulse`. ESP-IDF does not like spaces in the path.

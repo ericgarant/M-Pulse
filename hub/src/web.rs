@@ -273,7 +273,24 @@ fn state_json(hub: &Hub) -> String {
     out
 }
 
-/// A JSON string or `null`. The values here never contain quotes.
+/// A JSON string or `null`. Quotes, backslashes and control characters are
+/// escaped, because the firmware version comes from the heater as-is.
 fn opt_str(value: Option<&str>) -> String {
-    value.map_or("null".to_string(), |v| format!("\"{v}\""))
+    let Some(v) = value else {
+        return "null".to_string();
+    };
+    let mut out = String::with_capacity(v.len() + 2);
+    out.push('"');
+    for ch in v.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
