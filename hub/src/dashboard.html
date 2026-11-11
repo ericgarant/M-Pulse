@@ -112,7 +112,9 @@ async function refresh() {
   $("reason").textContent = c.reason || "--";
   $("m-monitor").className = "wide" + (c.mode === "monitor" ? " active" : "");
   $("m-auto").className = "wide" + (c.mode === "auto" ? " active" : "");
-  $("modenote").textContent = c.mode === "auto"
+  $("modenote").textContent = c.start_failed
+    ? "The heater did not start after 3 tries. Check it, then press Auto again to retry."
+    : c.mode === "auto"
     ? "Auto: the thermostat switches the heater."
     : "Monitor only: the thermostat decides but does not switch the heater.";
 
