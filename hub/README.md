@@ -4,6 +4,9 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
 
 - keeps a BLE link to the BougeRV diesel heater (`BougeRV-DHG001`) and
   reconnects if it drops
+- keeps a second BLE link to the BougeRV Rocky 50 fridge (`SYZ-R50-...`),
+  reads it every 2 s, and lets the dashboard change it (see
+  [Fridge](#fridge))
 - receives cabin readings from the [sensor node](../sensor-node) over Wi-Fi
 - runs the thermostat on those readings
 - switches the heater on and off, either from the dashboard's On and Off
@@ -79,6 +82,34 @@ Join the `M-Pulse` Wi-Fi and open `http://192.168.71.1` (type the `http://`).
   has accepted a start but is not yet burning steadily (that takes about
   4 to 5 minutes); *Running* means it has a flame and the glow plug is off.
   The details show `--` while the link is down.
+
+- **Fridge** shows the temperature inside, the target, the mode, the input
+  voltage, the battery protection level and the panel lock. **+** and **−**
+  change the target by 1 degree; **Eco** and **Max** change the mode;
+  **Fridge ON** and **Fridge OFF** switch it (Off asks first). A red note
+  appears when the fridge has stayed more than 4 °C above its target for
+  30 minutes: check the lid and the power.
+
+## Fridge
+
+The Rocky 50 speaks the protocol of Alpicool-family compressor fridges,
+read from the BougeRV app (v2.6.2) and checked on a live fridge. The wire
+format and the warm alert live in [`core/src/fridge.rs`](../core/src/fridge.rs).
+
+- Service `00001234-0000-1000-8000-00805f9b34fb`; commands are written to
+  `...1235...` (write without response), replies arrive on `...1236...`
+  (notify). The subscription must be written with a response, or the fridge
+  never replies.
+- Frames are `FE FE len cmd payload.. sum_hi sum_lo`. The hub sends the
+  status query `FE FE 03 01 02 00` every 2 s; the fridge never reports
+  unasked.
+- Target changes use command `05`. Power and Eco/Max rewrite the whole
+  settings block (command `02`) from the last status, changing one field, so
+  the hub sends them only with a status less than 10 s old.
+- The heater and fridge links take turns to search and connect, because
+  NimBLE allows one scan or connection attempt at a time.
+- While the hub holds the link, the BougeRV phone app cannot connect to the
+  fridge. Unplug the hub to use the app.
 
 ## Build and flash
 
