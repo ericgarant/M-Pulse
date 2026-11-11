@@ -5,9 +5,10 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
 - keeps a BLE link to the BougeRV diesel heater (`BougeRV-DHG001`) and
   reconnects if it drops
 - receives cabin readings from the [sensor node](../sensor-node) over Wi-Fi
-- runs the thermostat on those readings. **Dry run**: it decides but never
-  switches the heater. The only commands it writes are the version request
-  and the clock sync
+- runs the thermostat on those readings
+- switches the heater on and off, either from the dashboard's On and Off
+  buttons or by the thermostat in Auto mode. After every restart the hub is
+  in Monitor mode and sends no switch commands until you choose otherwise
 - serves a dashboard at http://192.168.71.1 (hub network) and at its address
   on your Wi-Fi
 - sets the heater's clock from internet time (SNTP), or from your phone's
@@ -68,3 +69,15 @@ espflash flash --monitor --partition-table partitions.csv target/xtensa-esp32s3-
 
 They live in `Config::default()` in `../core/src/thermostat.rs`. A setpoint
 change from the dashboard lasts until the hub restarts.
+
+## Safety notes
+
+- The heater has no idea the hub exists. If the hub loses power or its
+  Bluetooth link while the heater is running, **the heater keeps running** at
+  its own setting until you switch it off at the heater or its remote.
+- In Auto mode, a lost sensor (no reading for 2 minutes) switches the heater
+  off.
+- The hub never starts a heater that reports a fault or is still in its
+  shutdown cycle, and it respects the minimum on and off times.
+- The hub restarts in Monitor mode. After a power cut it will not resume
+  Auto by itself.

@@ -1,19 +1,26 @@
 //! Dashboard served by the hub.
 //!
 //! `/` is a single page that polls `/api/state` every two seconds. The page
-//! can change the setpoint (`POST /api/setpoint`, body `18.5`) and, when the
-//! hub has no internet time, set the hub's clock from the phone
-//! (`POST /api/time`, body is Unix seconds).
+//! can:
+//!
+//! - change the setpoint (`POST /api/setpoint`, body `18.5`)
+//! - choose who switches the heater (`POST /api/mode`, body `auto` or
+//!   `monitor`)
+//! - switch the heater by hand (`POST /api/heater`, body `on` or `off`),
+//!   which also drops back to Monitor mode so the thermostat does not undo it
+//! - set the hub's clock from the phone when the hub has no internet time
+//!   (`POST /api/time`, body is Unix seconds)
 
 use std::fmt::Write as _;
 
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer, Request};
 use esp_idf_svc::http::Method;
 use esp_idf_svc::io::Write;
-use log::info;
+use log::{info, warn};
+use m_pulse_core::actuator::Switch;
 
 use crate::clock;
-use crate::state::{Hub, Shared};
+use crate::state::{Hub, Mode, Shared};
 
 const PAGE: &str = include_str!("dashboard.html");
 
@@ -59,6 +66,53 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
                 req.into_status_response(400)?
                     .write_all(b"setpoint must be 5 to 30")?;
             }
+        }
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/mode", Method::Post, move |mut req| {
+        let mode = match read_body(&mut req)?.trim() {
+            "auto" => Mode::Auto,
+            "monitor" => Mode::Monitor,
+            _ => {
+                req.into_status_response(400)?
+                    .write_all(b"mode must be auto or monitor")?;
+                return Ok(());
+            }
+        };
+        s.lock().control.mode = mode;
+        warn!("Dashboard set the mode to {mode:?}");
+        req.into_ok_response()?.write_all(b"ok")?;
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/heater", Method::Post, move |mut req| {
+        let switch = match read_body(&mut req)?.trim() {
+            "on" => Switch::On,
+            "off" => Switch::Off,
+            _ => {
+                req.into_status_response(400)?
+                    .write_all(b"body must be on or off")?;
+                return Ok(());
+            }
+        };
+        let queued = {
+            let mut hub = s.lock();
+            // A manual command takes the thermostat out of the loop.
+            hub.control.mode = Mode::Monitor;
+            if hub.heater.connected {
+                hub.heater.pending = Some(switch);
+            }
+            hub.heater.connected
+        };
+        if queued {
+            warn!("Dashboard asked to switch the heater {switch:?}");
+            req.into_ok_response()?.write_all(b"ok")?;
+        } else {
+            req.into_status_response(409)?
+                .write_all(b"heater is not connected")?;
         }
         Ok(())
     })?;
@@ -112,10 +166,15 @@ fn state_json(hub: &Hub) -> String {
     let h = &hub.heater;
     let _ = write!(
         out,
-        "\"heater\":{{\"connected\":{},\"clock_synced\":{},\"firmware\":{}",
+        "\"heater\":{{\"connected\":{},\"clock_synced\":{},\"firmware\":{},\"last_command\":{}",
         h.connected,
         h.clock_synced,
-        opt_str(h.firmware.as_deref())
+        opt_str(h.firmware.as_deref()),
+        opt_str(
+            h.last_sent
+                .map(|(sent, when)| format!("{sent:?} {} s ago", when.elapsed().as_secs()))
+                .as_deref()
+        )
     );
     match (h.status, h.status_at) {
         (Some(st), Some(at)) => {
@@ -145,8 +204,12 @@ fn state_json(hub: &Hub) -> String {
     let c = &hub.control;
     let _ = write!(
         out,
-        "\"control\":{{\"dry_run\":true,\"setpoint_c\":{:.1},\"hysteresis_c\":{:.1},\"smoothed_c\":{},\
+        "\"control\":{{\"mode\":\"{}\",\"setpoint_c\":{:.1},\"hysteresis_c\":{:.1},\"smoothed_c\":{},\
          \"heat\":{},\"reason\":{}}},",
+        match c.mode {
+            Mode::Monitor => "monitor",
+            Mode::Auto => "auto",
+        },
         c.config.setpoint_c,
         c.config.hysteresis_c,
         c.smoothed_c.map_or("null".to_string(), |t| format!("{t:.1}")),

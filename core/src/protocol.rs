@@ -6,15 +6,23 @@
 //! `[0x00, command, payload.., checksum]`, where the checksum is the low byte
 //! of the sum of all preceding bytes.
 //!
-//! Known commands that this firmware does not send yet:
+//! A known command that this firmware does not send:
 //!
-//! - `0x05`: switch, payload `1` for on and `0` for off
 //! - `0x07`: power level, payload is kilowatts times ten (14 = 1.4 kW)
 
 /// Ask for the firmware version. The app sends this right after connecting.
 pub const CMD_VERSION: u8 = 0x0E;
 /// Set the heater's clock. The app sends this once status is subscribed.
 pub const CMD_CLOCK: u8 = 0x0A;
+
+/// Switch the heater on (payload 1) or off (payload 0).
+pub const CMD_SWITCH: u8 = 0x05;
+
+/// Builds the switch command.
+pub fn switch_frame(switch: crate::actuator::Switch) -> Vec<u8> {
+    let on = matches!(switch, crate::actuator::Switch::On);
+    frame(CMD_SWITCH, &[u8::from(on)])
+}
 
 /// Builds the clock sync command: `YY MM DD hh mm ss`, two-digit year.
 pub fn clock_frame(t: &crate::clock::LocalTime) -> Vec<u8> {
@@ -128,8 +136,9 @@ mod tests {
     fn frames_match_the_vendor_app() {
         assert_eq!(frame(CMD_VERSION, &[]), [0x00, 0x0e, 0x0e]);
         // Switch on, switch off, and 1.4 kW, as the app builds them.
-        assert_eq!(frame(0x05, &[1]), [0x00, 0x05, 0x01, 0x06]);
-        assert_eq!(frame(0x05, &[0]), [0x00, 0x05, 0x00, 0x05]);
+        use crate::actuator::Switch;
+        assert_eq!(switch_frame(Switch::On), [0x00, 0x05, 0x01, 0x06]);
+        assert_eq!(switch_frame(Switch::Off), [0x00, 0x05, 0x00, 0x05]);
         assert_eq!(frame(0x07, &[14]), [0x00, 0x07, 0x0e, 0x15]);
     }
 

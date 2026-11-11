@@ -2,8 +2,11 @@
 //!
 //! Owns the BLE link to the BougeRV diesel heater, receives cabin readings
 //! from the sensor node over Wi-Fi, runs the thermostat, and serves the
-//! dashboard. The thermostat is a dry run: it decides but never switches the
-//! heater.
+//! dashboard.
+//!
+//! After every restart the hub is in Monitor mode and sends no switch
+//! commands. The heater is switched only from the dashboard's On and Off
+//! buttons, or by the thermostat once Auto mode is chosen there.
 //!
 //! The classic ESP32 could not hold this heater's BLE link (the heater went
 //! silent about 11 s into every connection), while the S3 holds it, so the

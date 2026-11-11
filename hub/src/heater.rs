@@ -6,8 +6,10 @@
 //! once the hub knows the time, and publishes every status report. If the
 //! link drops, it reconnects.
 //!
-//! The version request and the clock sync are the only commands written to
-//! the heater. This code never sends the on/off or power commands.
+//! Besides the version request and the clock sync, the only command written
+//! to the heater is the on/off switch, and only when another part of the hub
+//! queues one in the shared state: the dashboard's On and Off buttons, or the
+//! thermostat in Auto mode. This code never sends the power command.
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -115,6 +117,8 @@ pub async fn run(
             let mut s = state.lock();
             s.heater.connected = false;
             s.heater.clock_synced = false;
+            // A command must never fire late, after a reconnect.
+            s.heater.pending = None;
         }
         timer.after(RETRY_PAUSE).await?;
     }
@@ -214,6 +218,14 @@ async fn stay_connected(
                 write_command(client, &sync).await?;
                 state.lock().heater.clock_synced = true;
             }
+        }
+
+        let queued = state.lock().heater.pending.take();
+        if let Some(switch) = queued {
+            let frame = protocol::switch_frame(switch);
+            warn!("Switching heater {switch:?}: writing {}", describe(&frame));
+            write_command(client, &frame).await?;
+            state.lock().heater.last_sent = Some((switch, Instant::now()));
         }
 
         let last_status = state.lock().heater.status_at.unwrap_or(subscribed_at);
