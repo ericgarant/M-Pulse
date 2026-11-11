@@ -1,0 +1,5 @@
+# Rust needs more main-task stack than the 3K default for C.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
+
+# This board only senses; the hub owns Bluetooth.
+CONFIG_BT_ENABLED=n
