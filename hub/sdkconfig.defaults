@@ -13,3 +13,7 @@ CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
 # Dashboard: room for the browser's request headers.
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 CONFIG_HTTPD_MAX_URI_LEN=128
+
+# Sockets: 10 for the dashboard's web server, 3 it keeps for itself, plus
+# the sensor receiver, SNTP and DHCP.
+CONFIG_LWIP_MAX_SOCKETS=16
