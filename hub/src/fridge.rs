@@ -61,8 +61,16 @@ pub async fn run(
                     warn!("Fridge link ended: {err}");
                 }
             }
-            Ok(None) => info!("Fridge not in range"),
-            Err(err) => error!("Fridge search failed: {err}"),
+            // Hand the radio on before the pause below, or this link takes
+            // it straight back and the others never get to search.
+            Ok(None) => {
+                drop(turn);
+                info!("Fridge not in range");
+            }
+            Err(err) => {
+                drop(turn);
+                error!("Fridge search failed: {err}");
+            }
         }
         {
             let mut s = state.lock();
@@ -78,7 +86,9 @@ pub async fn run(
 
 async fn find(device: &BLEDevice, duration_ms: i32) -> Result<Option<BLEAddress>, BLEError> {
     let mut scan = BLEScan::new();
-    scan.active_scan(true).interval(100).window(99);
+    scan.active_scan(true)
+        .interval(radio::SCAN_INTERVAL)
+        .window(radio::SCAN_WINDOW);
     scan.start(device, duration_ms, |adv, data| {
         let name = data.name()?;
         if !name.to_string().starts_with(NAME_PREFIX) {

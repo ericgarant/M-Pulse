@@ -92,8 +92,8 @@ hub serves, so it needs no internet.
 - **Alerts** appear in a strip under the top bar: the low-battery stop
   holding the heater off, the fridge warm alert, a heater that did not start
   after 3 tries, a cabin sensor that is missing or more than 2 minutes old,
-  and a hub the page cannot reach. When the hub cannot be reached, the cards
-  also fade until it answers again.
+  and a hub that has not answered for 12 s. When the hub cannot be reached,
+  the cards also fade until it answers again.
 - **Climate**:
   - The dial shows the cabin temperature against a 5 to 30 °C scale, with
     the target as a knob and the comfort band (target ± 1 °C, where the
@@ -169,7 +169,11 @@ format and the warm alert live in [`core/src/fridge.rs`](../core/src/fridge.rs).
   the hub sends them only with a status less than 10 s old.
 - The heater, fridge and Bluetti links take turns to search and connect,
   because NimBLE allows one scan or connection attempt at a time. All three
-  are then held together (`CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4`).
+  are then held together (`CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4`). A link
+  that finds nothing hands the turn on before its 10 s pause.
+- Searches listen 30 % of the time (30 ms in every 100 ms). Wi-Fi and
+  Bluetooth share one radio, and a search that listened all the time left
+  the dashboard stalling for seconds while a device was out of range.
 - While the hub holds the link, the BougeRV phone app cannot connect to the
   fridge. Unplug the hub to use the app.
 
