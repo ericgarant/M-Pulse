@@ -1,0 +1,9 @@
+[package]
+name = "m-pulse-core"
+version = "0.1.0"
+edition = "2021"
+description = "Hardware-independent logic shared by M-Pulse nodes"
+license = "MIT"
+publish = false
+
+[dependencies]
