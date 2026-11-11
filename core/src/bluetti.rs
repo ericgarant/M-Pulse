@@ -337,28 +337,22 @@ enum Key<'a> {
     Aes256(&'a [u8; 32]),
 }
 
-fn block_of(chunk: &[u8]) -> aes::Block {
-    let mut bytes = [0u8; BLOCK];
-    bytes.copy_from_slice(chunk);
-    bytes.into()
-}
-
 /// AES-CBC with zero padding up to a whole block, as the station expects.
 fn cbc_encrypt(key: Key<'_>, iv: &[u8; 16], data: &[u8]) -> Vec<u8> {
     let mut out = data.to_vec();
     out.resize(data.len().div_ceil(BLOCK) * BLOCK, 0);
     let mut prev = *iv;
-    for chunk in out.chunks_exact_mut(BLOCK) {
+    for chunk in out.as_chunks_mut::<BLOCK>().0 {
         for (c, p) in chunk.iter_mut().zip(prev) {
             *c ^= p;
         }
-        let mut block = block_of(chunk);
+        let mut block = aes::Block::from(*chunk);
         match key {
             Key::Aes128(k) => aes::Aes128::new(k.into()).encrypt_block(&mut block),
             Key::Aes256(k) => aes::Aes256::new(k.into()).encrypt_block(&mut block),
         }
         chunk.copy_from_slice(&block);
-        prev.copy_from_slice(chunk);
+        prev = *chunk;
     }
     out
 }
@@ -369,10 +363,9 @@ fn cbc_decrypt(key: Key<'_>, iv: &[u8; 16], data: &[u8]) -> Result<Vec<u8>, Erro
     }
     let mut out = data.to_vec();
     let mut prev = *iv;
-    for chunk in out.chunks_exact_mut(BLOCK) {
-        let mut cipher = [0u8; BLOCK];
-        cipher.copy_from_slice(chunk);
-        let mut block = block_of(chunk);
+    for chunk in out.as_chunks_mut::<BLOCK>().0 {
+        let cipher = *chunk;
+        let mut block = aes::Block::from(*chunk);
         match key {
             Key::Aes128(k) => aes::Aes128::new(k.into()).decrypt_block(&mut block),
             Key::Aes256(k) => aes::Aes256::new(k.into()).decrypt_block(&mut block),
@@ -479,9 +472,11 @@ impl Status {
         // 32-bit values: low word first.
         let u32_at = |b: usize| u32::from(u16_at(b)) | (u32::from(u16_at(b + 2)) << 16);
         let model: String = regs[20..32]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             // Each register holds two characters, swapped.
-            .flat_map(|w| [w[1], w[0]])
+            .flat_map(|&[a, b]| [b, a])
             .filter(|c| c.is_ascii_graphic())
             .map(char::from)
             .collect();
@@ -714,7 +709,7 @@ mod tests {
         put(&mut regs, 4, 87); // 87 %
                                // "EL200V2" with each register's bytes swapped.
         let name = b"EL200V2\0\0\0\0\0";
-        for (i, pair) in name.chunks_exact(2).enumerate() {
+        for (i, pair) in name.as_chunks::<2>().0.iter().enumerate() {
             regs[20 + 2 * i] = pair[1];
             regs[21 + 2 * i] = pair[0];
         }
