@@ -62,7 +62,10 @@ The first build downloads and compiles ESP-IDF, which takes 10 to 20 minutes
 and about 5 GB of disk. Later builds take well under a minute.
 
 `cargo run` flashes the board and opens the serial monitor. Press `Ctrl+C` to
-leave the monitor. Opening the monitor restarts the board.
+leave the monitor. Opening the monitor restarts the board, which puts the hub
+back in Monitor mode with its default low-battery levels.
+
+To check the shared logic without a board, run `cargo test` in `core/`.
 
 The hub README explains the optional `wifi.env` file with the network
 password; build with it loaded (`source ../wifi.env`) when you have one.

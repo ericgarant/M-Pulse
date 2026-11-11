@@ -1,360 +1,1328 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<meta name="mobile-web-app-capable" content="yes">
 <title>M-Pulse</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ff7a3d'/%3E%3Cpath d='M3 17h6l3-7 4 14 4-11 2 4h7' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!-- Everything is inline: the hub's network has no internet. -->
 <style>
-:root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --muted:#667085; --accent:#d9480f; --ok:#2b8a3e; --bad:#c92a2a; }
-@media (prefers-color-scheme: dark) { :root { --bg:#111418; --card:#1b2027; --fg:#e8eaed; --muted:#98a2b3; --accent:#ff8a4c; --ok:#69db7c; --bad:#ff6b6b; } }
-* { box-sizing: border-box; }
-body { margin:0; padding:16px; font:16px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-main { max-width:480px; margin:0 auto; display:grid; gap:12px; }
-h1 { font-size:20px; margin:0 0 4px; }
-section { background:var(--card); border-radius:12px; padding:14px 16px; }
-h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 8px; }
-.big { font-size:40px; font-weight:600; }
-.row { display:flex; justify-content:space-between; gap:8px; padding:2px 0; }
-.row span:first-child { color:var(--muted); }
-.ok { color:var(--ok); } .bad { color:var(--bad); }
-.set { display:flex; align-items:center; justify-content:space-between; }
-button { font:inherit; font-size:22px; width:52px; height:44px; border:0; border-radius:10px; background:var(--accent); color:#fff; }
-#clockbtn { width:auto; font-size:15px; padding:0 14px; }
-.modes { display:flex; gap:8px; margin:10px 0 6px; }
-button.wide { flex:1; width:auto; font-size:16px; background:var(--muted); }
-button.wide.active { background:var(--accent); }
-#h-off, #f-off { background:var(--fg); color:var(--bg); }
-#h-on { background:var(--accent); }
-.note { font-size:13px; color:var(--muted); }
-select { font:inherit; font-size:16px; padding:4px 6px; border-radius:8px; background:var(--bg); color:var(--fg); border:1px solid var(--muted); }
-h3 { font-size:15px; margin:14px 0 4px; }
+:root {
+  --bg: #0b0f14; --bg2: #111821; --card: #141b24; --card2: #1a2330; --line: #ffffff14; --line2: #ffffff24;
+  --fg: #eef2f6; --muted: #8d99a8; --faint: #5b6675;
+  --heat: #ff7a3d; --heat2: #ffb347; --ice: #4cc9f0; --ice2: #8be3ff; --go: #5fd68a; --warn: #ffb020; --bad: #ff5d5d;
+  --btn: #222c3a; --btn-fg: #eef2f6; --shadow: 0 10px 30px #0006;
+  --glow-heat: #ff7a3d55; --glow-ice: #4cc9f04d; --glow-go: #5fd68a40;
+  --r: 22px; --ease: cubic-bezier(.2,.8,.2,1);
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #eef1f5; --bg2: #e3e8ef; --card: #ffffff; --card2: #f4f6f9; --line: #0f1a2a14; --line2: #0f1a2a24;
+  --fg: #142030; --muted: #5d6b7c; --faint: #9aa5b3;
+  --heat: #e8590c; --heat2: #f59f00; --ice: #1c9fd6; --ice2: #4cc9f0; --go: #2f9e5b; --warn: #d98a00; --bad: #e03131;
+  --btn: #e7ecf2; --btn-fg: #142030; --shadow: 0 8px 24px #0f1a2a1a;
+  --glow-heat: #e8590c33; --glow-ice: #1c9fd633; --glow-go: #2f9e5b33;
+  color-scheme: light;
+}
+/* Night: red only and dim, so it does not spoil night vision. */
+:root[data-theme="night"] {
+  --bg: #050000; --bg2: #0a0101; --card: #0e0303; --card2: #140505; --line: #ff2a2a14; --line2: #ff2a2a26;
+  --fg: #e04848; --muted: #9a3030; --faint: #5e1c1c;
+  --heat: #ff4a3a; --heat2: #ff6a4a; --ice: #c43a3a; --ice2: #e04848; --go: #c43a3a; --warn: #ff5a3a; --bad: #ff3030;
+  --btn: #1a0606; --btn-fg: #e04848; --shadow: none;
+  --glow-heat: #ff2a2a33; --glow-ice: #ff2a2a22; --glow-go: #ff2a2a22;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body {
+  margin: 0; min-height: 100vh; color: var(--fg); background: var(--bg);
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+  padding: 0 max(16px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow-x: hidden;
+}
+body::before { /* soft warm and cool light behind the cards */
+  content: ""; position: fixed; inset: -20vmax; z-index: -1; pointer-events: none;
+  background: radial-gradient(40vmax 30vmax at 18% 12%, var(--glow-heat), transparent 70%),
+              radial-gradient(40vmax 30vmax at 88% 30%, var(--glow-ice), transparent 70%),
+              radial-gradient(40vmax 30vmax at 60% 100%, var(--glow-go), transparent 70%);
+  opacity: .55; animation: drift 30s ease-in-out infinite alternate;
+}
+@keyframes drift { to { transform: translate3d(3vmax, -2vmax, 0) rotate(4deg); } }
+:root[data-theme="night"] body::before { opacity: .25; }
+a { color: inherit; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; touch-action: manipulation; }
+button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--ice); outline-offset: 3px; }
+svg.i { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+[hidden] { display: none !important; }
+
+/* ---------- Top bar ---------- */
+.top {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px;
+  margin: 0 -16px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .02em; font-size: 19px; }
+.brand small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+.logo { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, var(--heat), var(--ice)); color: #fff; position: relative; }
+:root[data-theme="night"] .logo { background: #2a0808; color: var(--fg); }
+.logo svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.logo path { stroke-dasharray: 60; stroke-dashoffset: 0; }
+.logo.beat path { animation: ecg 1.1s var(--ease); }
+@keyframes ecg { 0% { stroke-dashoffset: 60; } 100% { stroke-dashoffset: 0; } }
+.logo::after { content: ""; position: absolute; inset: -3px; border-radius: 14px; border: 2px solid var(--go); opacity: 0; }
+.logo.beat::after { animation: ping 1.1s var(--ease); }
+@keyframes ping { 0% { opacity: .8; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.25); } }
+.top .spacer { flex: 1; }
+.chips { display: flex; gap: 6px; }
+.chip { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 99px; background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; transition: background .3s, color .3s; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); transition: background .3s; }
+.chip.ok .dot { background: var(--go); box-shadow: 0 0 0 3px var(--glow-go); }
+.chip.wait .dot { background: var(--warn); animation: blink 1.2s infinite; }
+.chip.bad .dot { background: var(--bad); animation: blink .8s infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.clock { font-size: 15px; font-weight: 600; color: var(--muted); min-width: 44px; text-align: right; }
+.icon-btn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line); color: var(--muted); transition: transform .15s var(--ease), color .2s; }
+.icon-btn:active { transform: scale(.9); }
+.icon-btn:hover { color: var(--fg); }
+
+/* ---------- Alerts ---------- */
+#alerts { display: grid; gap: 8px; max-width: 1400px; margin: 12px auto 0; }
+#alerts:empty { margin: 0 auto; }
+.alert { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: 16px; font-size: 15px; font-weight: 500;
+  background: color-mix(in srgb, var(--bad) 14%, var(--card)); border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent);
+  animation: drop .45s var(--ease) both; }
+.alert.warn { background: color-mix(in srgb, var(--warn) 12%, var(--card)); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.alert svg { width: 22px; height: 22px; color: var(--bad); margin-top: 1px; }
+.alert.warn svg { color: var(--warn); }
+.alert.out { animation: lift .3s var(--ease) both; }
+@keyframes drop { from { opacity: 0; transform: translateY(-10px) scale(.98); } }
+@keyframes lift { to { opacity: 0; transform: translateY(-8px); } }
+
+/* ---------- Layout ---------- */
+main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "climate" "fridge" "power" "rules"; }
+@media (min-width: 720px) {
+  main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "climate climate" "fridge power" "rules rules"; }
+}
+@media (min-width: 1100px) {
+  main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-areas: "climate fridge" "climate power" "rules rules"; }
+  #climate { align-self: stretch; }
+}
+#climate { grid-area: climate; } #fridge { grid-area: fridge; } #power { grid-area: power; } #rules { grid-area: rules; }
+
+.card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow);
+  animation: rise .6s var(--ease) both; transition: opacity .4s, filter .4s; min-width: 0; }
+.card:nth-child(2) { animation-delay: .07s; } .card:nth-child(3) { animation-delay: .14s; } .card:nth-child(4) { animation-delay: .21s; }
+@keyframes rise { from { opacity: 0; transform: translateY(16px) scale(.985); } }
+.offline .card { filter: grayscale(.7); opacity: .6; }
+.card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.card-h h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.card-h .badge { margin-left: auto; }
+.ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none; }
+.ic.heat { background: color-mix(in srgb, var(--heat) 18%, transparent); color: var(--heat); }
+.ic.ice { background: color-mix(in srgb, var(--ice) 18%, transparent); color: var(--ice); }
+.ic.go { background: color-mix(in srgb, var(--go) 18%, transparent); color: var(--go); }
+.ic.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.badge { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 99px; font-size: 12.5px; font-weight: 700; letter-spacing: .03em;
+  background: var(--card2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; transition: all .3s; }
+.badge.heat { color: var(--heat); border-color: color-mix(in srgb, var(--heat) 40%, transparent); background: color-mix(in srgb, var(--heat) 12%, transparent); }
+.badge.ice { color: var(--ice); border-color: color-mix(in srgb, var(--ice) 40%, transparent); background: color-mix(in srgb, var(--ice) 12%, transparent); }
+.badge.go { color: var(--go); border-color: color-mix(in srgb, var(--go) 40%, transparent); background: color-mix(in srgb, var(--go) 12%, transparent); }
+.badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.note { font-size: 13.5px; color: var(--muted); margin: 8px 0 0; }
+.big { font-weight: 300; letter-spacing: -.03em; line-height: 1; }
+.unit { font-size: .42em; font-weight: 500; color: var(--muted); margin-left: 3px; letter-spacing: 0; vertical-align: .9em; }
+
+/* ---------- Buttons and controls ---------- */
+.btn { height: 52px; border-radius: 16px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 16px; font-weight: 650; white-space: nowrap; background: var(--btn); color: var(--btn-fg); border: 1px solid var(--line);
+  transition: transform .15s var(--ease), background .25s, box-shadow .25s, opacity .2s; user-select: none; -webkit-user-select: none; }
+.btn:active { transform: scale(.95); }
+.btn.heat { background: linear-gradient(135deg, var(--heat), var(--heat2)); color: #fff; border-color: transparent; box-shadow: 0 6px 20px var(--glow-heat); }
+.btn.dark { background: var(--fg); color: var(--bg); border-color: transparent; }
+:root[data-theme="night"] .btn.heat, :root[data-theme="night"] .btn.dark, :root[data-theme="night"] .btn.danger { background: #2a0808; color: var(--fg); box-shadow: none; border: 1px solid var(--line2); }
+.btn.danger { background: var(--bad); color: #fff; border-color: transparent; }
+.btn.busy { opacity: .6; pointer-events: none; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.round { width: 56px; height: 56px; border-radius: 50%; font-size: 28px; font-weight: 400; padding: 0; flex: none; }
+.round svg { width: 24px; height: 24px; stroke-width: 2.2; }
+
+.seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg2); border: 1px solid var(--line); border-radius: 16px; padding: 4px; height: 52px; }
+.seg button { position: relative; z-index: 1; border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--muted); transition: color .3s; }
+.seg button[aria-checked="true"] { color: var(--fg); }
+.seg .thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n, 2)); border-radius: 12px; background: var(--card2);
+  border: 1px solid var(--line2); box-shadow: 0 2px 10px #0003; transform: translateX(calc(var(--i, 0) * 100%)); transition: transform .45s var(--ease), opacity .3s, background .3s; }
+.seg[data-i="-1"] .thumb { opacity: 0; }
+.seg.heat .thumb { background: color-mix(in srgb, var(--heat) 22%, var(--card2)); border-color: color-mix(in srgb, var(--heat) 50%, transparent); }
+.seg.ice .thumb { background: color-mix(in srgb, var(--ice) 20%, var(--card2)); border-color: color-mix(in srgb, var(--ice) 50%, transparent); }
+
+.switch { width: 58px; height: 34px; border-radius: 99px; background: var(--btn); border: 1px solid var(--line2); position: relative; flex: none; transition: background .3s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px #0004; transition: transform .35s var(--ease); }
+.switch[aria-checked="true"] { background: var(--go); border-color: transparent; }
+.switch[aria-checked="true"]::after { transform: translateX(24px); }
+.switch.busy::after { animation: blink .7s infinite; }
+:root[data-theme="night"] .switch::after { background: var(--fg); }
+:root[data-theme="night"] .switch[aria-checked="true"] { background: #4a1010; }
+
+.stepper { display: inline-flex; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 14px; height: 44px; flex: none; }
+.stepper button { width: 44px; height: 42px; font-size: 22px; color: var(--muted); border-radius: 13px; transition: transform .15s var(--ease), color .2s; }
+.stepper button:active { transform: scale(.85); color: var(--fg); }
+.stepper output { min-width: 58px; text-align: center; font-weight: 700; font-size: 16px; }
+.stepper.pending output { color: var(--warn); }
+
+/* ---------- Climate ---------- */
+.climate-body { display: grid; gap: 18px; }
+@media (min-width: 720px) { .climate-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; } }
+.dialwrap { position: relative; width: min(100%, 360px); margin: 0 auto; }
+.dial { width: 100%; display: block; overflow: visible; }
+.dial .track { stroke: var(--bg2); stroke-width: 18; fill: none; stroke-linecap: round; }
+.dial .band { stroke: color-mix(in srgb, var(--fg) 14%, transparent); stroke-width: 18; fill: none; transition: stroke-dasharray .7s var(--ease); }
+.dial .fill { stroke: url(#g-temp); stroke-width: 18; fill: none; stroke-linecap: round; transition: stroke-dasharray 1s var(--ease), opacity .4s; }
+:root[data-theme="night"] .dial .fill { stroke: var(--heat); }
+.dial .knob { transition: transform .7s var(--ease); transform-origin: 120px 120px; }
+.dial .knob circle { fill: var(--card); stroke: var(--fg); stroke-width: 4; }
+.dial .scale text { fill: var(--faint); font-size: 10px; font-weight: 600; text-anchor: middle; }
+.dial-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; padding-top: 6px; }
+.dial-center .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+.dial-center .big { font-size: clamp(56px, 13vw, 84px); margin: 4px 0 2px; }
+.dial-center .sub { font-size: 14px; color: var(--muted); display: flex; gap: 12px; }
+.dial-center .sub b { color: var(--fg); font-weight: 650; }
+.setter { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: -26px; position: relative; }
+.setter .sp { text-align: center; min-width: 120px; }
+.setter .sp .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+.setter .sp .v { font-size: 34px; font-weight: 600; color: var(--heat); transition: transform .2s var(--ease), color .3s; }
+.v.bump { transform: scale(1.12); }
+.setter .sp.pending .v { color: var(--warn); }
+
+.heater { display: grid; gap: 14px; min-width: 0; }
+.hvis { display: flex; align-items: center; gap: 16px; padding: 14px; border-radius: 18px; background: var(--bg2); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.hvis::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120px 90px at 50px 60%, var(--glow-heat), transparent 70%); opacity: 0; transition: opacity .8s; }
+.hvis[data-k="run"]::before { opacity: 1; animation: breathe 3s ease-in-out infinite; }
+.hvis[data-k="ignite"]::before { opacity: .5; animation: breathe 1.4s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .55; } }
+.flame { width: 74px; height: 88px; flex: none; position: relative; }
+.flame svg { width: 100%; height: 100%; overflow: visible; }
+.flame .outer, .flame .inner { transform-box: fill-box; transform-origin: 50% 100%; transition: opacity .8s, transform .8s var(--ease), fill .5s; }
+.flame .outer { fill: url(#g-flame); }
+.flame .inner { fill: url(#g-core); }
+:root[data-theme="night"] .flame .outer { fill: #c42020; } :root[data-theme="night"] .flame .inner { fill: #ff5a3a; }
+.flame .ember { fill: var(--heat2); opacity: 0; transform-box: fill-box; transform-origin: center; }
+.hvis[data-k="run"] .outer { animation: flick 1.6s ease-in-out infinite; }
+.hvis[data-k="run"] .inner { animation: flick2 1.1s ease-in-out infinite; }
+.hvis[data-k="ignite"] .outer { opacity: .35; transform: scale(.55); }
+.hvis[data-k="ignite"] .inner { opacity: .2; transform: scale(.5); }
+.hvis[data-k="ignite"] .ember { animation: ember 1.2s ease-in-out infinite; }
+.hvis[data-k="cool"] .outer { opacity: .25; transform: scale(.45); }
+.hvis[data-k="cool"] .inner { opacity: 0; transform: scale(.3); }
+.hvis[data-k="off"] .outer, .hvis[data-k="search"] .outer { opacity: .14; filter: grayscale(1); }
+.hvis[data-k="off"] .inner, .hvis[data-k="search"] .inner { opacity: 0; }
+.hvis[data-k="fault"] .outer { fill: var(--bad); opacity: .5; }
+.hvis[data-k="fault"] .inner { opacity: 0; }
+@keyframes flick { 0%,100% { transform: scale(1,1) skewX(0); } 25% { transform: scale(.96,1.06) skewX(2deg); } 50% { transform: scale(1.03,.97) skewX(-1.5deg); } 75% { transform: scale(.98,1.04) skewX(1deg); } }
+@keyframes flick2 { 0%,100% { transform: scale(1,1); } 40% { transform: scale(.92,1.1) translateX(1px); } 70% { transform: scale(1.04,.94) translateX(-1px); } }
+@keyframes ember { 50% { opacity: 1; transform: scale(1.4); } }
+.hstate { min-width: 0; position: relative; }
+.hstate .t { font-size: 28px; font-weight: 650; letter-spacing: -.01em; }
+.hvis[data-k="run"] .t, .hvis[data-k="ignite"] .t { color: var(--heat); }
+.hvis[data-k="cool"] .t { color: var(--ice); }
+.hvis[data-k="fault"] .t { color: var(--bad); }
+.hvis[data-k="search"] .t { color: var(--muted); }
+.hstate .s { font-size: 14px; color: var(--muted); }
+.parts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.part { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--faint); transition: all .4s; }
+.part svg { width: 22px; height: 22px; }
+.part.on { color: var(--heat); border-color: color-mix(in srgb, var(--heat) 35%, transparent); background: color-mix(in srgb, var(--heat) 10%, var(--bg2)); }
+.part.fan.on { color: var(--ice); border-color: color-mix(in srgb, var(--ice) 35%, transparent); background: color-mix(in srgb, var(--ice) 10%, var(--bg2)); }
+.part.fan.on svg { animation: spin .9s linear infinite; }
+.part.glow.on svg { animation: ember 1s ease-in-out infinite; }
+.part.pump.on svg { animation: drip 1s ease-in-out infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes drip { 50% { transform: translateY(2px); } }
+.why { display: flex; align-items: center; gap: 10px; font-size: 14.5px; padding: 10px 14px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--line); }
+.why .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); flex: none; transition: background .3s; }
+.why.heat .dot { background: var(--heat); box-shadow: 0 0 0 4px var(--glow-heat); }
+.why.idle .dot { background: var(--go); }
+.why.warn .dot { background: var(--warn); }
+.why span { color: var(--muted); }
+.why b { font-weight: 600; }
+.ctl-label { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 4px 2px -6px; }
+
+/* ---------- Details ---------- */
+details { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 4px; }
+summary { list-style: none; display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 10px 2px; font-size: 14px; font-weight: 600; color: var(--muted); border-radius: 8px; user-select: none; }
+summary::-webkit-details-marker { display: none; }
+summary svg { transition: transform .3s var(--ease); }
+details[open] summary svg { transform: rotate(180deg); }
+details[open] .kv { animation: rise .35s var(--ease); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 14.5px; padding: 2px 2px 6px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; font-weight: 550; overflow-wrap: anywhere; }
+.ok { color: var(--go); } .bad { color: var(--bad); } .wn { color: var(--warn); }
+
+/* ---------- Fridge ---------- */
+.fbody { display: flex; align-items: center; gap: 18px; }
+.fring { width: 150px; height: 150px; flex: none; border-radius: 50%; position: relative; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--ice) 14%, var(--card)), var(--card) 70%); }
+.fring::before { content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 5px;
+  background: conic-gradient(from 0deg, var(--ice), var(--ice2), transparent 55%, var(--ice));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: spin 8s linear infinite; transition: opacity .5s; }
+.fring .snow { position: absolute; inset: 6px; pointer-events: none; overflow: hidden; border-radius: 50%; }
+.fring .snow i { position: absolute; top: -10px; border-radius: 50%; background: var(--ice2); opacity: .7; animation: fall linear infinite; }
+@keyframes fall { to { transform: translateY(160px) translateX(8px); opacity: 0; } }
+#fridge.off .fring::before, #fridge.nolink .fring::before { opacity: .15; animation-play-state: paused; }
+#fridge.off .snow, #fridge.nolink .snow { display: none; }
+#fridge.warm .fring::before { background: conic-gradient(from 0deg, var(--bad), var(--warn), transparent 55%, var(--bad)); animation-duration: 2s; }
+.fring .big { font-size: 50px; position: relative; }
+.fring .big .unit { font-size: 18px; }
+.fring .lbl { position: absolute; bottom: 26px; font-size: 11px; letter-spacing: .14em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.fside { flex: 1; display: grid; gap: 10px; min-width: 0; }
+.target { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.target .t { text-align: center; }
+.target .t .lbl { font-size: 11px; letter-spacing: .14em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.target .t .v { font-size: 26px; font-weight: 650; color: var(--ice); transition: transform .2s var(--ease), color .3s; }
+.target .t.pending .v { color: var(--warn); }
+.target .round { width: 48px; height: 48px; }
+.pwr { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px 9px 14px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--line); font-weight: 600; }
+.pwr .l { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 420px) { .fbody { flex-direction: column; } .fside { width: 100%; } }
+
+/* ---------- Power ---------- */
+.flow { display: grid; grid-template-columns: minmax(64px, 92px) minmax(10px, 1fr) 80px minmax(10px, 1fr) minmax(64px, 92px); grid-template-rows: auto auto; align-items: center; row-gap: 12px; }
+.node { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--line); text-align: center; transition: all .4s; min-width: 0; }
+.node svg { width: 22px; height: 22px; color: var(--faint); transition: color .4s; }
+.node .n { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.node .w { font-size: 17px; font-weight: 700; white-space: nowrap; }
+.node.live { border-color: color-mix(in srgb, var(--go) 40%, transparent); }
+.node.live svg { color: var(--go); }
+.node.sun.live svg { color: var(--heat2); animation: spin 12s linear infinite; }
+.node.sun.live { border-color: color-mix(in srgb, var(--heat2) 45%, transparent); }
+.node.out.live svg { color: var(--ice); }
+.node.out.live { border-color: color-mix(in srgb, var(--ice) 40%, transparent); }
+.node .sw { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.node .sw.on { color: var(--go); }
+.wire { height: 4px; border-radius: 4px; background: var(--bg2); margin: 0 4px; position: relative; overflow: hidden; }
+.wire::after { content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity .4s;
+  background: repeating-linear-gradient(90deg, var(--go) 0 8px, transparent 8px 18px); animation: flow .7s linear infinite; }
+.wire.out::after { background: repeating-linear-gradient(90deg, var(--ice) 0 8px, transparent 8px 18px); }
+.wire.sun::after { background: repeating-linear-gradient(90deg, var(--heat2) 0 8px, transparent 8px 18px); }
+.wire.live::after { opacity: 1; }
+@keyframes flow { from { transform: translateX(-18px); } to { transform: translateX(0); } }
+.wire::after { left: -18px; }
+.battwrap { grid-column: 3; grid-row: 1 / span 2; justify-self: center; position: relative; padding-top: 7px; }
+.battwrap::before { content: ""; position: absolute; top: 0; left: 50%; width: 26px; height: 8px; margin-left: -13px; border-radius: 4px 4px 0 0; background: var(--line2); }
+.batt { width: 72px; height: 150px; border-radius: 18px; border: 3px solid var(--line2); position: relative; overflow: hidden; background: var(--bg2); }
+.batt .liq { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(180deg, var(--lvl, var(--go)), color-mix(in srgb, var(--lvl, var(--go)) 55%, #000)); transition: height 1.2s var(--ease); }
+.batt .liq::before, .batt .liq::after { content: ""; position: absolute; left: 50%; top: 0; width: 200px; height: 200px; margin-left: -100px; margin-top: -194px; border-radius: 42%;
+  background: var(--bg2); animation: spin 7s linear infinite; opacity: .9; }
+.batt .liq::after { border-radius: 38%; opacity: .5; animation-duration: 11s; }
+.batt .pct { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; font-weight: 800; text-shadow: 0 1px 6px #0008; z-index: 1; color: #fff; }
+:root[data-theme="night"] .batt .pct { color: var(--fg); }
+.batt .bolt { position: absolute; top: 10px; left: 50%; margin-left: -9px; width: 18px; height: 18px; color: var(--heat2); z-index: 1; opacity: 0; transition: opacity .4s; }
+.batt.charging .bolt { opacity: 1; animation: blink 1.6s ease-in-out infinite; }
+.pwr-sum { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.pwr-sum .big { font-size: 54px; }
+.pwr-sum .eta { font-size: 14px; color: var(--muted); text-align: right; }
+.pwr-sum .eta b { display: block; font-size: 18px; color: var(--fg); }
+
+/* ---------- Rules ---------- */
+.rules { display: grid; gap: 14px; }
+@media (min-width: 720px) { .rules { grid-template-columns: 1fr 1fr; } }
+.rule { padding: 16px; border-radius: 18px; background: var(--bg2); border: 1px solid var(--line); display: grid; gap: 10px; align-content: start; transition: border-color .4s; min-width: 0; }
+.rule.tripped { border-color: color-mix(in srgb, var(--bad) 55%, transparent); }
+.rule-h { display: flex; align-items: center; gap: 10px; }
+.rule-h h3 { margin: 0; font-size: 17px; flex: 1; }
+.rule p { margin: 0; font-size: 13.5px; color: var(--muted); }
+.lvl { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14.5px; }
+.rule.disabled .lvl { opacity: .5; }
+.rstate { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.rstate .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+.rstate.watch .dot { background: var(--go); animation: sonar 2.4s infinite; }
+.rstate.hold .dot { background: var(--warn); }
+.rstate.bad { color: var(--bad); }
+.rstate.bad .dot { background: var(--bad); animation: blink .9s infinite; }
+@keyframes sonar { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--go) 60%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+.rule .last { font-size: 12.5px; color: var(--faint); }
+
+footer.hub { max-width: 1400px; margin: 16px auto 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 13px; color: var(--faint); padding: 0 4px; }
+footer.hub b { color: var(--muted); font-weight: 600; }
+footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 12px; }
+
+/* ---------- Phone tab bar ---------- */
+.tabs { display: none; }
+@media (max-width: 719px) {
+  body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; z-index: 25; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+    height: 64px; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    border: 1px solid var(--line2); box-shadow: 0 10px 30px #0006; }
+  .tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 650; color: var(--faint); text-decoration: none; border-radius: 16px; transition: color .3s, background .3s; }
+  .tabs a svg { width: 22px; height: 22px; }
+  .tabs a.on { color: var(--fg); background: var(--bg2); }
+  .chip .n { display: none; }
+  .chip { padding: 0 11px; }
+  .brand small { display: none; }
+  .clock { display: none; }
+  .card { padding: 16px; }
+}
+@media (max-width: 360px) { .chips { display: none; } }
+
+/* ---------- Sheet and toast ---------- */
+.sheet { position: fixed; inset: 0; z-index: 50; display: grid; align-items: end; justify-items: center; }
+@media (min-width: 720px) { .sheet { align-items: center; } }
+.sheet .scrim { position: absolute; inset: 0; background: #0009; animation: fade .25s both; }
+.sheet .panel { position: relative; width: min(440px, calc(100% - 24px)); margin: 12px 12px calc(12px + env(safe-area-inset-bottom)); background: var(--card); border: 1px solid var(--line2); border-radius: 26px; padding: 24px 22px 20px;
+  box-shadow: 0 20px 60px #0008; animation: pop .4s var(--ease) both; text-align: center; }
+.sheet.closing .scrim { animation: fadeout .2s both; } .sheet.closing .panel { animation: popout .2s both; }
+@keyframes fade { from { opacity: 0; } }
+@keyframes fadeout { to { opacity: 0; } }
+@keyframes pop { from { opacity: 0; transform: translateY(40px) scale(.96); } }
+@keyframes popout { to { opacity: 0; transform: translateY(30px) scale(.97); } }
+.sheet .si { width: 56px; height: 56px; border-radius: 18px; margin: 0 auto 12px; }
+.sheet .si svg { width: 28px; height: 28px; }
+.sheet h3 { margin: 0 0 6px; font-size: 21px; }
+.sheet p { margin: 0 0 20px; color: var(--muted); font-size: 15px; }
+.sheet .row2 .btn { width: 100%; }
+#toasts { position: fixed; z-index: 60; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: grid; gap: 8px; width: min(440px, calc(100% - 32px)); pointer-events: none; }
+@media (min-width: 720px) { #toasts { bottom: 24px; } }
+.toast { padding: 12px 16px; border-radius: 16px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 14.5px; box-shadow: 0 10px 30px #0006; animation: pop .35s var(--ease) both; text-align: center; }
+.toast.bad { background: var(--bad); color: #fff; }
+.toast.out { animation: fadeout .3s both; }
+:root[data-theme="night"] .toast { background: #2a0808; color: var(--fg); }
+
+/* ---------- Loading ---------- */
+.loading .num, .loading .node .w, .loading .hstate .t { color: transparent !important; border-radius: 8px; background: linear-gradient(90deg, var(--bg2), var(--card2), var(--bg2)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  html { scroll-behavior: auto; }
+}
 </style>
 </head>
-<body>
+<body class="loading">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="g-temp" gradientUnits="userSpaceOnUse" x1="40" y1="200" x2="200" y2="200"><stop offset="0" stop-color="#4cc9f0"/><stop offset=".5" stop-color="#ffb347"/><stop offset="1" stop-color="#ff5a36"/></linearGradient>
+    <linearGradient id="g-flame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff3d1f"/><stop offset=".6" stop-color="#ff7a3d"/><stop offset="1" stop-color="#ffb347"/></linearGradient>
+    <linearGradient id="g-core" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff3b0"/><stop offset="1" stop-color="#ffd166"/></linearGradient>
+  </defs>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2-4.5.3 1.6 1.2 2.6 2.2 2.8C10.5 9 11 5.5 12 3z"/></symbol>
+  <symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 2v20M3.3 7l17.4 10M3.3 17l17.4-10M9 4l3 2 3-2M9 20l3-2 3 2"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/></symbol>
+  <symbol id="i-fan" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.6"/><path d="M12 10.4C11 6 12.5 3 15 3c2 0 3 2 1.8 4-1 1.7-3 2.7-4.8 3.4zM13.4 12.8c4.3 1.4 6.2 4.2 4.9 6.4-1 1.7-3.3 1.7-4.5 0-1.1-1.6-1-3.9-.4-5.6zM10.6 12.8c-3.4 3-6.8 3.2-8 1-1-1.7.2-3.6 2.3-3.9 2-.2 4 .9 5.2 2.3z"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></symbol>
+  <symbol id="i-coil" viewBox="0 0 24 24"><path d="M12 2v3M8 5h8v3H8zM12 8v1.5c-3 .6-3 2.4 0 3s3 2.4 0 3-3 2.4 0 3V22"/></symbol>
+  <symbol id="i-outlet" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 8v4M15 8v4M10 16.5h4"/></symbol>
+  <symbol id="i-dc" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 4v3M17 4v3M6.5 13h3.5M14 13h3.5M15.75 11.25v3.5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v5M12 17.5v.01"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5v.01"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" id="logo"><svg viewBox="0 0 32 32"><path d="M3 17h6l3-7 4 14 4-11 2 4h7"/></svg></div>
+    <div>M-Pulse<small>Project M</small></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="chips">
+    <a class="chip" id="ch-heater" href="#climate" title="Heater link"><span class="dot"></span><span class="n">Heater</span></a>
+    <a class="chip" id="ch-fridge" href="#fridge" title="Fridge link"><span class="dot"></span><span class="n">Fridge</span></a>
+    <a class="chip" id="ch-power" href="#power" title="Bluetti link"><span class="dot"></span><span class="n">Power</span></a>
+  </div>
+  <div class="clock" id="hclock"></div>
+  <button class="icon-btn" id="theme" aria-label="Change theme"><svg class="i"><use href="#i-moon"/></svg></button>
+  <button class="icon-btn" id="fs" aria-label="Full screen" hidden><svg class="i"><use href="#i-full"/></svg></button>
+</header>
+
+<div id="alerts" aria-live="polite"></div>
+
 <main>
-  <h1>M-Pulse</h1>
-  <section>
-    <h2>Cabin</h2>
-    <div class="big" id="cabin">--</div>
-    <div class="row"><span>Humidity</span><span id="rh">--</span></div>
-    <div class="row"><span>Updated</span><span id="cage">--</span></div>
+  <!-- Climate: cabin reading, thermostat and the heater -->
+  <section class="card" id="climate" aria-labelledby="h-climate">
+    <div class="card-h">
+      <div class="ic heat"><svg class="i"><use href="#i-flame"/></svg></div>
+      <h2 id="h-climate">Climate</h2>
+      <span class="badge" id="modebadge">--</span>
+    </div>
+    <div class="climate-body">
+      <div>
+        <div class="dialwrap">
+          <svg class="dial" viewBox="0 0 240 240" aria-hidden="true">
+            <path class="track" pathLength="100" d=""/>
+            <path class="band" pathLength="100" d="" stroke-dasharray="0 1000"/>
+            <path class="fill" pathLength="100" d="" stroke-dasharray="0 1000" style="opacity:0"/>
+            <g class="scale"></g>
+            <g class="knob" id="knob" style="transform:rotate(135deg)"><circle cx="216" cy="120" r="11"/></g>
+          </svg>
+          <div class="dial-center">
+            <div class="lbl">Cabin</div>
+            <div class="big"><span class="num" id="cab-t">--</span><span class="unit">°C</span></div>
+            <div class="sub"><span>Humidity <b id="cab-rh">--</b></span></div>
+            <div class="sub" id="cab-age" style="font-size:12.5px;margin-top:2px">--</div>
+          </div>
+        </div>
+        <div class="setter">
+          <button class="btn round" id="sp-down" aria-label="Lower the setpoint"><svg class="i"><use href="#i-minus"/></svg></button>
+          <div class="sp" id="sp-box"><div class="lbl">Target</div><div class="v"><span id="sp">--</span>°</div></div>
+          <button class="btn round" id="sp-up" aria-label="Raise the setpoint"><svg class="i"><use href="#i-plus"/></svg></button>
+        </div>
+      </div>
+      <div class="heater">
+        <div class="hvis" id="hvis" data-k="search">
+          <div class="flame" aria-hidden="true">
+            <svg viewBox="0 0 100 120">
+              <path class="outer" d="M50 6C58 30 86 44 86 78a36 36 0 0 1-72 0c0-16 8-27 16-34 1 12 7 20 14 22C40 46 42 24 50 6z"/>
+              <path class="inner" d="M50 52c5 12 17 18 17 32a17 17 0 0 1-34 0c0-8 4-13 8-17 1 6 4 9 7 10-1-10 0-17 2-25z"/>
+              <circle class="ember" cx="50" cy="96" r="7"/>
+            </svg>
+          </div>
+          <div class="hstate"><div class="t" id="h-t">Heater</div><div class="s" id="h-s">Connecting to the hub</div></div>
+        </div>
+        <div class="parts">
+          <div class="part" id="p-flame"><svg class="i"><use href="#i-flame"/></svg>Flame</div>
+          <div class="part glow" id="p-glow"><svg class="i"><use href="#i-coil"/></svg>Glow</div>
+          <div class="part pump" id="p-pump"><svg class="i"><use href="#i-drop"/></svg>Pump</div>
+          <div class="part fan" id="p-fan"><svg class="i"><use href="#i-fan"/></svg>Fan</div>
+        </div>
+        <div class="why" id="why"><i class="dot"></i><div><span>Thermostat:</span> <b id="reason">--</b></div></div>
+        <div class="ctl-label">Who switches the heater</div>
+        <div class="seg heat" id="mode" role="radiogroup" aria-label="Thermostat mode" style="--n:2" data-i="-1">
+          <span class="thumb"></span>
+          <button role="radio" aria-checked="false" data-v="monitor">Monitor only</button>
+          <button role="radio" aria-checked="false" data-v="auto">Auto</button>
+        </div>
+        <p class="note" id="modenote" style="margin:-4px 2px 0">--</p>
+        <div class="ctl-label">Manual</div>
+        <div class="row2">
+          <button class="btn heat" id="h-on"><svg class="i"><use href="#i-flame"/></svg>Heater ON</button>
+          <button class="btn dark" id="h-off"><svg class="i"><use href="#i-power"/></svg>Heater OFF</button>
+        </div>
+        <p class="note" style="margin:-4px 2px 0">A manual command switches back to Monitor only.</p>
+      </div>
+    </div>
+    <details>
+      <summary><svg class="i"><use href="#i-chev"/></svg>Heater details</summary>
+      <dl class="kv">
+        <dt>Link</dt><dd id="link">--</dd>
+        <dt>State</dt><dd id="state">--</dd>
+        <dt>Flame / glow / pump / fan</dt><dd id="parts">--</dd>
+        <dt>Power (live / set)</dt><dd id="power-kw">--</dd>
+        <dt>Heater set temperature</dt><dd id="htemp">--</dd>
+        <dt>Supply</dt><dd id="volts">--</dd>
+        <dt>Error</dt><dd id="err">--</dd>
+        <dt>Firmware</dt><dd id="fw">--</dd>
+        <dt>Last command</dt><dd id="last">--</dd>
+        <dt>Comfort band</dt><dd id="band">--</dd>
+      </dl>
+    </details>
   </section>
-  <section>
-    <h2>Thermostat</h2>
-    <p class="bad" id="c-alert" hidden></p>
-    <div class="set">
-      <button id="down" aria-label="Lower setpoint">−</button>
-      <div class="big" id="sp">--</div>
-      <button id="up" aria-label="Raise setpoint">+</button>
+
+  <!-- Fridge -->
+  <section class="card nolink" id="fridge" aria-labelledby="h-fridge">
+    <div class="card-h">
+      <div class="ic ice"><svg class="i"><use href="#i-snow"/></svg></div>
+      <h2 id="h-fridge">Fridge</h2>
+      <span class="badge" id="f-badge">--</span>
     </div>
-    <div class="row"><span>Wants heat</span><span id="heat">--</span></div>
-    <div class="row"><span>Reason</span><span id="reason">--</span></div>
-    <div class="modes">
-      <button id="m-monitor" class="wide">Monitor only</button>
-      <button id="m-auto" class="wide">Auto</button>
+    <div class="fbody">
+      <div class="fring">
+        <div class="snow" id="snow"></div>
+        <div class="big"><span class="num" id="f-temp">--</span><span class="unit" id="f-unit">°C</span></div>
+        <div class="lbl">Inside</div>
+      </div>
+      <div class="fside">
+        <div class="target">
+          <button class="btn round" id="f-down" aria-label="Lower the fridge target"><svg class="i"><use href="#i-minus"/></svg></button>
+          <div class="t" id="f-tbox"><div class="lbl">Target</div><div class="v" id="f-set">--</div></div>
+          <button class="btn round" id="f-up" aria-label="Raise the fridge target"><svg class="i"><use href="#i-plus"/></svg></button>
+        </div>
+        <div class="seg ice" id="f-mode" role="radiogroup" aria-label="Fridge mode" style="--n:2" data-i="-1">
+          <span class="thumb"></span>
+          <button role="radio" aria-checked="false" data-v="eco">Eco</button>
+          <button role="radio" aria-checked="false" data-v="max">Max</button>
+        </div>
+        <div class="pwr"><span class="l"><svg class="i"><use href="#i-power"/></svg>Power</span><button class="switch" id="f-pwr" role="switch" aria-checked="false" aria-label="Fridge power"></button></div>
+      </div>
     </div>
-    <p class="note" id="modenote">--</p>
+    <details>
+      <summary><svg class="i"><use href="#i-chev"/></svg>Fridge details</summary>
+      <dl class="kv">
+        <dt>Link</dt><dd id="f-link">--</dd>
+        <dt>Power</dt><dd id="f-power">--</dd>
+        <dt>Input</dt><dd id="f-volts">--</dd>
+        <dt>Battery protection</dt><dd id="f-prot">--</dd>
+        <dt>Panel lock</dt><dd id="f-lock">--</dd>
+        <dt>Last command</dt><dd id="f-last">--</dd>
+      </dl>
+    </details>
   </section>
-  <section>
-    <h2>Manual</h2>
-    <div class="modes">
-      <button id="h-on" class="wide">Heater ON</button>
-      <button id="h-off" class="wide">Heater OFF</button>
+
+  <!-- Power: the Bluetti, read only -->
+  <section class="card" id="power" aria-labelledby="h-power">
+    <div class="card-h">
+      <div class="ic go"><svg class="i"><use href="#i-bolt"/></svg></div>
+      <h2 id="h-power">Power</h2>
+      <span class="badge" id="b-badge">--</span>
     </div>
-    <div class="row"><span>Last command</span><span id="last">--</span></div>
-    <p class="note">A manual command switches back to Monitor only.</p>
+    <div class="pwr-sum">
+      <div class="big"><span class="num" id="b-soc">--</span><span class="unit">%</span></div>
+      <div class="eta" id="b-eta">--</div>
+    </div>
+    <div class="flow">
+      <div class="node sun" id="n-pv" style="grid-column:1;grid-row:1"><svg class="i"><use href="#i-sun"/></svg><span class="n">Solar</span><span class="w" id="b-pv">--</span></div>
+      <div class="wire sun" id="w-pv" style="grid-column:2;grid-row:1"></div>
+      <div class="node" id="n-grid" style="grid-column:1;grid-row:2"><svg class="i"><use href="#i-plug"/></svg><span class="n">Charger</span><span class="w" id="b-grid">--</span></div>
+      <div class="wire" id="w-grid" style="grid-column:2;grid-row:2"></div>
+      <div class="battwrap"><div class="batt" id="batt"><div class="liq" id="liq"></div><svg class="bolt i"><use href="#i-bolt"/></svg><div class="pct" id="b-pct"></div></div></div>
+      <div class="wire out" id="w-ac" style="grid-column:4;grid-row:1"></div>
+      <div class="node out" id="n-ac" style="grid-column:5;grid-row:1"><svg class="i"><use href="#i-outlet"/></svg><span class="n">AC out</span><span class="w" id="b-ac">--</span><span class="sw" id="b-acsw">--</span></div>
+      <div class="wire out" id="w-dc" style="grid-column:4;grid-row:2"></div>
+      <div class="node out" id="n-dc" style="grid-column:5;grid-row:2"><svg class="i"><use href="#i-dc"/></svg><span class="n">DC out</span><span class="w" id="b-dc">--</span><span class="sw" id="b-dcsw">--</span></div>
+    </div>
+    <p class="note">Read only: nothing here switches the Bluetti.</p>
+    <details>
+      <summary><svg class="i"><use href="#i-chev"/></svg>Battery details</summary>
+      <dl class="kv">
+        <dt>Link</dt><dd id="b-link">--</dd>
+        <dt>Model</dt><dd id="b-model">--</dd>
+        <dt>Battery</dt><dd id="b-volts">--</dd>
+        <dt>DC out covers</dt><dd>12 V and USB</dd>
+      </dl>
+    </details>
   </section>
-  <section>
-    <h2>Heater</h2>
-    <div class="row"><span>Link</span><span id="link">--</span></div>
-    <div class="row"><span>State</span><span id="state">--</span></div>
-    <div class="row"><span>Flame / glow / pump / fan</span><span id="parts">--</span></div>
-    <div class="row"><span>Power (live / set)</span><span id="power">--</span></div>
-    <div class="row"><span>Heater set temperature</span><span id="htemp">--</span></div>
-    <div class="row"><span>Supply</span><span id="volts">--</span></div>
-    <div class="row"><span>Error</span><span id="err">--</span></div>
-    <div class="row"><span>Firmware</span><span id="fw">--</span></div>
-  </section>
-  <section>
-    <h2>Fridge</h2>
-    <p class="bad" id="f-alert" hidden>The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power.</p>
-    <div class="set">
-      <button id="f-down" aria-label="Lower fridge target">−</button>
-      <div><div class="big" id="f-temp">--</div><div class="note" id="f-set">target --</div></div>
-      <button id="f-up" aria-label="Raise fridge target">+</button>
+
+  <!-- Battery rules -->
+  <section class="card" id="rules" aria-labelledby="h-rules">
+    <div class="card-h">
+      <div class="ic warn"><svg class="i"><use href="#i-shield"/></svg></div>
+      <h2 id="h-rules">Battery rules</h2>
     </div>
-    <div class="modes">
-      <button id="f-eco" class="wide">Eco</button>
-      <button id="f-max" class="wide">Max</button>
+    <div class="rules">
+      <div class="rule" id="r-cutoff">
+        <div class="rule-h"><div class="ic heat"><svg class="i"><use href="#i-flame"/></svg></div><h3>Heater low-battery stop</h3>
+          <button class="switch" id="c-sw" role="switch" aria-checked="false" aria-label="Heater low-battery stop"></button></div>
+        <p>Stops the heater cleanly, with its full cool-down, when the Bluetti runs low, and blocks starts until it has recharged.</p>
+        <div class="lvl"><span>Stop at or below</span><div class="stepper" id="c-stop"><button aria-label="Lower the stop level">−</button><output>--</output><button aria-label="Raise the stop level">+</button></div></div>
+        <div class="lvl"><span>Allow starts at or above</span><div class="stepper" id="c-resume"><button aria-label="Lower the restart level">−</button><output>--</output><button aria-label="Raise the restart level">+</button></div></div>
+        <div class="rstate" id="c-state"><i class="dot"></i><span>--</span></div>
+      </div>
+      <div class="rule" id="r-saver">
+        <div class="rule-h"><div class="ic ice"><svg class="i"><use href="#i-snow"/></svg></div><h3>Fridge saver</h3>
+          <button class="switch" id="s-sw" role="switch" aria-checked="false" aria-label="Fridge saver"></button></div>
+        <p>Puts the fridge in Eco when the Bluetti runs low, and back to Max once it has recharged.</p>
+        <div class="lvl"><span>Eco at or below</span><div class="stepper" id="s-low"><button aria-label="Lower the Eco level">−</button><output>--</output><button aria-label="Raise the Eco level">+</button></div></div>
+        <div class="lvl"><span>Max again at or above</span><div class="stepper" id="s-high"><button aria-label="Lower the Max level">−</button><output>--</output><button aria-label="Raise the Max level">+</button></div></div>
+        <div class="rstate" id="s-state"><i class="dot"></i><span>--</span></div>
+        <div class="last" id="s-last">--</div>
+      </div>
     </div>
-    <div class="modes">
-      <button id="f-on" class="wide">Fridge ON</button>
-      <button id="f-off" class="wide">Fridge OFF</button>
-    </div>
-    <div class="row"><span>Link</span><span id="f-link">--</span></div>
-    <div class="row"><span>Power</span><span id="f-power">--</span></div>
-    <div class="row"><span>Input</span><span id="f-volts">--</span></div>
-    <div class="row"><span>Battery protection</span><span id="f-prot">--</span></div>
-    <div class="row"><span>Panel lock</span><span id="f-lock">--</span></div>
-    <div class="row"><span>Last command</span><span id="f-last">--</span></div>
-  </section>
-  <section>
-    <h2>Power</h2>
-    <div class="big" id="b-soc">--</div>
-    <div class="note" id="b-eta">--</div>
-    <div class="row"><span>Link</span><span id="b-link">--</span></div>
-    <div class="row"><span>Solar in</span><span id="b-pv">--</span></div>
-    <div class="row"><span>Charger in</span><span id="b-grid">--</span></div>
-    <div class="row"><span>AC out</span><span id="b-ac">--</span></div>
-    <div class="row"><span>DC out (12 V, USB)</span><span id="b-dc">--</span></div>
-    <div class="row"><span>Battery</span><span id="b-volts">--</span></div>
-    <h3>Fridge saver</h3>
-    <p class="note">Puts the fridge in Eco when the Bluetti runs low, and back to Max once it has recharged.</p>
-    <div class="modes">
-      <button id="s-on" class="wide">Saver on</button>
-      <button id="s-off" class="wide">Saver off</button>
-    </div>
-    <div class="row"><span>Eco at or below</span><select id="s-low" aria-label="Eco at or below"></select></div>
-    <div class="row"><span>Max again at or above</span><select id="s-high" aria-label="Max again at or above"></select></div>
-    <div class="row"><span>Now</span><span id="s-state">--</span></div>
-    <div class="row"><span>Last change</span><span id="s-last">--</span></div>
-    <h3>Heater low-battery stop</h3>
-    <p class="note">Stops the heater cleanly (with its full cool-down) when the Bluetti runs low, and blocks starts until it has recharged.</p>
-    <div class="modes">
-      <button id="c-on" class="wide">Stop on</button>
-      <button id="c-off" class="wide">Stop off</button>
-    </div>
-    <div class="row"><span>Stop at or below</span><select id="c-stop" aria-label="Stop the heater at or below"></select></div>
-    <div class="row"><span>Allow starts at or above</span><select id="c-resume" aria-label="Allow heater starts at or above"></select></div>
-    <div class="row"><span>Now</span><span id="c-state">--</span></div>
-  </section>
-  <section>
-    <h2>Hub</h2>
-    <div class="row"><span>Clock</span><span id="clock">--</span></div>
-    <div class="row"><span>On your Wi-Fi</span><span id="ip">--</span></div>
-    <button id="clockbtn" hidden>Set clock from this phone</button>
+    <p class="note">Levels change in 5 % steps and apply a moment after you stop tapping. They go back to the defaults when the hub restarts.</p>
   </section>
 </main>
+
+<footer class="hub">
+  <span><svg class="i" style="vertical-align:-4px"><use href="#i-wifi"/></svg> Hub</span>
+  <span>Clock <b id="clock">--</b></span>
+  <span>On your Wi-Fi <b id="ip">--</b></span>
+  <span id="updated">Connecting…</span>
+  <button class="btn" id="clockbtn" hidden>Set clock from this device</button>
+</footer>
+
+<nav class="tabs" aria-label="Sections">
+  <a href="#climate" class="on"><svg class="i"><use href="#i-flame"/></svg>Climate</a>
+  <a href="#fridge"><svg class="i"><use href="#i-snow"/></svg>Fridge</a>
+  <a href="#power"><svg class="i"><use href="#i-bolt"/></svg>Power</a>
+  <a href="#rules"><svg class="i"><use href="#i-shield"/></svg>Rules</a>
+</nav>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="scrim" id="sh-scrim"></div>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sh-title">
+    <div class="si ic" id="sh-icon"><svg class="i"><use href="#i-alert"/></svg></div>
+    <h3 id="sh-title"></h3>
+    <p id="sh-body"></p>
+    <div class="row2"><button class="btn" id="sh-no">Cancel</button><button class="btn heat" id="sh-yes">OK</button></div>
+  </div>
+</div>
+<div id="toasts" aria-live="assertive"></div>
+
 <script>
+"use strict";
 const $ = id => document.getElementById(id);
 const yes = b => b ? "on" : "off";
-let setpoint = null, sentClock = false, fridge = null;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// The setpoint range the hub accepts, and the level limits of the two
+// battery rules (core/src/eco_guard.rs and core/src/heater_cutoff.rs).
+const SP_MIN = 5, SP_MAX = 30, GAP = 5;
+const LOW_LIMITS = { saver: [5, 95], cutoff: [5, 50] };
 
+let last = null;         // last state from the hub
+let fridge = null;       // fridge status while its link is up
+let fails = 0, sentClock = false, pollTimer = null, lastOk = 0;
+
+/* ---------- Small helpers ---------- */
 function post(path, body) {
   return fetch(path, { method: "POST", body: String(body) });
 }
-function sendClock() {
-  sentClock = true;
-  post("/api/time", Math.floor(Date.now() / 1000));
+function buzz() { try { navigator.vibrate && navigator.vibrate(8); } catch (e) {} }
+function ago(s) {
+  if (s < 5) return "just now";
+  if (s < 90) return s + " s ago";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  return Math.round(s / 3600) + " h ago";
+}
+function setText(id, text, cls) {
+  const el = $(id);
+  el.textContent = text;
+  if (cls !== undefined) el.className = cls;
+}
+// Counts a number up or down to its new value.
+function tween(el, to, dec) {
+  const from = parseFloat(el.dataset.v);
+  el.dataset.v = to;
+  cancelAnimationFrame(el._raf);
+  if (isNaN(from) || reduce || from === to) { el.textContent = to.toFixed(dec); return; }
+  const t0 = performance.now(), d = 700;
+  const step = now => {
+    const k = Math.min(1, (now - t0) / d), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = (from + (to - from) * e).toFixed(dec);
+    if (k < 1) el._raf = requestAnimationFrame(step);
+  };
+  el._raf = requestAnimationFrame(step);
+}
+function blank(id) { const el = $(id); cancelAnimationFrame(el._raf); el.dataset.v = ""; el.textContent = "--"; }
+function bump(el) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); setTimeout(() => el.classList.remove("bump"), 200); }
+function seg(id, value) {
+  const g = $(id), btns = [...g.querySelectorAll("button")];
+  const i = btns.findIndex(b => b.dataset.v === value);
+  btns.forEach((b, j) => b.setAttribute("aria-checked", j === i));
+  g.dataset.i = i;
+  g.style.setProperty("--i", Math.max(0, i));
+}
+// Repeats while a +/- button is held down.
+function hold(btn, fn) {
+  let t = null, iv = null;
+  const stop = () => { clearTimeout(t); clearInterval(iv); t = iv = null; };
+  btn.addEventListener("pointerdown", e => {
+    if (e.button) return;
+    stop();
+    fn(); buzz();
+    t = setTimeout(() => { iv = setInterval(fn, 140); }, 450);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => btn.addEventListener(ev, stop));
+  // Keyboard presses arrive as clicks with no pointer.
+  btn.addEventListener("click", e => { if (e.detail === 0) fn(); });
+  btn.addEventListener("contextmenu", e => e.preventDefault());
 }
 
-async function refresh() {
-  let s;
-  try { s = await (await fetch("/api/state")).json(); } catch (e) { $("link").textContent = "hub unreachable"; return; }
+/* ---------- Toasts and the confirm sheet ---------- */
+function toast(msg, kind) {
+  const t = document.createElement("div");
+  t.className = "toast" + (kind ? " " + kind : "");
+  t.textContent = msg;
+  $("toasts").append(t);
+  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 300); }, kind === "bad" ? 5000 : 2200);
+}
+async function failed(r) {
+  let msg = "";
+  try { msg = await r.text(); } catch (e) {}
+  toast(msg || "The hub said no (" + r.status + ").", "bad");
+}
+const ICONS = { heat: ["heat", "i-flame"], ice: ["ice", "i-snow"], warn: ["warn", "i-alert"] };
+let sheetDone = null;
+// An in-page replacement for confirm(): resolves true only on the yes button.
+function ask({ title, body, yes = "OK", icon = "warn", danger = false }) {
+  if (sheetDone) sheetDone(false);
+  const [cls, sym] = ICONS[icon];
+  $("sh-icon").className = "si ic " + cls;
+  $("sh-icon").firstElementChild.firstElementChild.setAttribute("href", "#" + sym);
+  $("sh-title").textContent = title;
+  $("sh-body").textContent = body;
+  $("sh-yes").textContent = yes;
+  $("sh-yes").className = "btn " + (danger ? "danger" : "heat");
+  const sheet = $("sheet");
+  sheet.classList.remove("closing");
+  sheet.hidden = false;
+  $("sh-no").focus();
+  return new Promise(resolve => {
+    sheetDone = answer => {
+      sheetDone = null;
+      sheet.classList.add("closing");
+      setTimeout(() => { if (!sheetDone) sheet.hidden = true; }, 200);
+      resolve(answer);
+    };
+  });
+}
+$("sh-yes").onclick = () => sheetDone && sheetDone(true);
+$("sh-no").onclick = $("sh-scrim").onclick = () => sheetDone && sheetDone(false);
+addEventListener("keydown", e => { if (e.key === "Escape" && sheetDone) sheetDone(false); });
 
-  if (s.cabin) {
-    $("cabin").textContent = s.cabin.temp_c.toFixed(1) + " °C";
-    $("rh").textContent = s.cabin.rh + " %";
-    $("cage").textContent = s.cabin.age_s + " s ago";
-  } else {
-    $("cabin").textContent = "--";
-    $("cage").textContent = "no reading from the sensor yet";
+/* ---------- Theme and full screen ---------- */
+const THEMES = ["dark", "night", "light"];
+const THEME_ICON = { dark: "i-moon", night: "i-eye", light: "i-sun" };
+const THEME_NAME = { dark: "Dark", night: "Night (red)", light: "Light" };
+const THEME_BG = { dark: "#0b0f14", night: "#050000", light: "#eef1f5" };
+function applyTheme(t, announce) {
+  document.documentElement.dataset.theme = t;
+  $("theme").firstElementChild.firstElementChild.setAttribute("href", "#" + THEME_ICON[t]);
+  document.querySelector('meta[name="theme-color"]').content = THEME_BG[t];
+  try { localStorage.setItem("mpulse-theme", t); } catch (e) {}
+  if (announce) toast(THEME_NAME[t] + " theme");
+}
+let theme = "dark";
+try { theme = localStorage.getItem("mpulse-theme") || "dark"; } catch (e) {}
+if (!THEMES.includes(theme)) theme = "dark";
+applyTheme(theme);
+$("theme").onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % 3]; applyTheme(theme, true); buzz(); };
+if (document.documentElement.requestFullscreen) {
+  $("fs").hidden = false;
+  $("fs").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {});
+}
+
+/* ---------- The dial ---------- */
+// 270 degrees of arc, from bottom left round to bottom right.
+const CX = 120, CY = 120, R = 96, A0 = 135, SWEEP = 270;
+const pt = (deg, r = R) => [CX + r * Math.cos(deg * Math.PI / 180), CY + r * Math.sin(deg * Math.PI / 180)];
+const frac = v => Math.min(1, Math.max(0, (v - SP_MIN) / (SP_MAX - SP_MIN)));
+(function buildDial() {
+  const [x0, y0] = pt(A0), [x1, y1] = pt(A0 + SWEEP);
+  const d = `M${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 1 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  document.querySelectorAll(".dial path").forEach(p => p.setAttribute("d", d));
+  let g = "";
+  for (let v = SP_MIN; v <= SP_MAX; v += 5) {
+    const [tx, ty] = pt(A0 + SWEEP * frac(v), R + 21);
+    g += `<text x="${tx.toFixed(1)}" y="${(ty + 3.5).toFixed(1)}">${v}°</text>`;
   }
+  document.querySelector(".dial .scale").innerHTML = g;
+})();
+function drawDial(temp, sp, hyst) {
+  const fill = document.querySelector(".dial .fill");
+  const band = document.querySelector(".dial .band");
+  // The long gap keeps the dash pattern from repeating at the far end, and
+  // an empty arc is hidden, since a round cap would still draw a dot.
+  const p = temp === null ? 0 : frac(temp) * 100;
+  fill.setAttribute("stroke-dasharray", p.toFixed(2) + " 1000");
+  fill.style.opacity = temp === null ? 0 : 1;
+  const lo = frac(sp - hyst) * 100, hi = frac(sp + hyst) * 100;
+  band.setAttribute("stroke-dasharray", "0 " + lo.toFixed(2) + " " + (hi - lo).toFixed(2) + " 1000");
+  $("knob").style.transform = "rotate(" + (A0 + SWEEP * frac(sp)) + "deg)";
+}
 
-  const c = s.control;
-  setpoint = c.setpoint_c;
-  $("sp").textContent = c.setpoint_c.toFixed(1) + " °C";
-  $("heat").textContent = c.reason ? (c.heat ? "yes" : "no") : "--";
-  $("reason").textContent = c.reason || "--";
-  $("m-monitor").className = "wide" + (c.mode === "monitor" ? " active" : "");
-  $("m-auto").className = "wide" + (c.mode === "auto" ? " active" : "");
+/* ---------- Setpoint: quick taps add up, then one send ---------- */
+const spPend = { v: null, timer: null, until: 0 };
+function nudge(delta) {
+  if (!last) return;
+  const base = spPend.v ?? last.control.setpoint_c;
+  const v = Math.min(SP_MAX, Math.max(SP_MIN, Math.round((base + delta) * 2) / 2));
+  if (v === base) return;
+  spPend.v = v; spPend.until = Infinity;
+  showSetpoint(v);
+  clearTimeout(spPend.timer);
+  spPend.timer = setTimeout(async () => {
+    spPend.timer = null;
+    try {
+      const r = await post("/api/setpoint", v.toFixed(1));
+      if (!r.ok) { spPend.v = null; await failed(r); }
+    } catch (e) { spPend.v = null; toast("Could not reach the hub.", "bad"); }
+    spPend.until = Date.now() + 3000;
+    refresh();
+  }, 500);
+}
+function showSetpoint(v) {
+  $("sp").textContent = v.toFixed(1);
+  $("sp-box").classList.add("pending");
+  bump($("sp-box").querySelector(".v"));
+  drawDial(last.cabin ? last.cabin.temp_c : null, v, last.control.hysteresis_c);
+}
+hold($("sp-down"), () => nudge(-0.5));
+hold($("sp-up"), () => nudge(0.5));
+
+/* ---------- Thermostat mode and manual heater ---------- */
+async function setMode(m) {
+  if (m === "auto" && !(await ask({ title: "Turn on Auto?", body: "The thermostat will switch the heater on and off by itself to hold the target.", yes: "Use Auto", icon: "heat" }))) return;
+  seg("mode", m);
+  try {
+    const r = await post("/api/mode", m);
+    if (!r.ok) await failed(r); else toast(m === "auto" ? "Auto: the thermostat is in charge" : "Monitor only");
+  } catch (e) { toast("Could not reach the hub.", "bad"); }
+  refresh();
+}
+$("mode").querySelectorAll("button").forEach(b => b.onclick = () => { buzz(); setMode(b.dataset.v); });
+async function heater(cmd) {
+  const btn = $("h-" + cmd);
+  btn.classList.add("busy");
+  try {
+    const r = await post("/api/heater", cmd);
+    if (!r.ok) await failed(r); else toast(cmd === "on" ? "Start sent to the heater" : "Stop sent to the heater");
+  } catch (e) { toast("Could not reach the hub.", "bad"); }
+  btn.classList.remove("busy");
+  refresh();
+}
+$("h-on").onclick = async () => {
+  buzz();
+  if (await ask({ title: "Switch the heater ON now?", body: "This also puts the thermostat in Monitor only, so it will not switch the heater off for you.", yes: "Heater ON", icon: "heat" })) heater("on");
+};
+$("h-off").onclick = () => { buzz(); heater("off"); };
+
+/* ---------- Fridge ---------- */
+const ftPend = { v: null, timer: null, until: 0 };
+async function fridgeCmd(cmd) {
+  try {
+    const r = await post("/api/fridge", cmd);
+    if (!r.ok) { ftPend.v = null; await failed(r); }
+  } catch (e) { ftPend.v = null; toast("Could not reach the hub.", "bad"); }
+  // The fridge answers within a poll or two.
+  setTimeout(refresh, 2500);
+}
+function fridgeNudge(delta) {
+  if (!fridge) { toast("The fridge is not connected.", "bad"); return; }
+  const base = ftPend.v ?? fridge.set_temp;
+  const t = Math.min(fridge.max_temp, Math.max(fridge.min_temp, base + delta));
+  if (t === base) return;
+  ftPend.v = t; ftPend.until = Infinity;
+  $("f-set").textContent = t + "°";
+  $("f-tbox").classList.add("pending");
+  bump($("f-set"));
+  clearTimeout(ftPend.timer);
+  ftPend.timer = setTimeout(() => {
+    ftPend.timer = null;
+    ftPend.until = Date.now() + 8000;
+    fridgeCmd("temp:" + t);
+  }, 600);
+}
+hold($("f-down"), () => fridgeNudge(-1));
+hold($("f-up"), () => fridgeNudge(1));
+$("f-mode").querySelectorAll("button").forEach(b => b.onclick = () => {
+  buzz();
+  if (!fridge) { toast("The fridge is not connected.", "bad"); return; }
+  seg("f-mode", b.dataset.v);
+  fridgeCmd(b.dataset.v);
+});
+$("f-pwr").onclick = async () => {
+  buzz();
+  if (!fridge) { toast("The fridge is not connected.", "bad"); return; }
+  if (fridge.power && !(await ask({ title: "Switch the fridge OFF?", body: "Food will warm up until you switch it back on.", yes: "Fridge OFF", icon: "ice", danger: true }))) return;
+  $("f-pwr").classList.add("busy");
+  fridgeCmd(fridge.power ? "off" : "on");
+};
+// A few flakes drifting down inside the ring.
+(function snow() {
+  if (reduce) return;
+  for (let i = 0; i < 9; i++) {
+    const f = document.createElement("i");
+    const s = 2 + Math.random() * 3;
+    f.style.cssText = `left:${10 + Math.random() * 80}%;width:${s}px;height:${s}px;animation-duration:${3 + Math.random() * 4}s;animation-delay:${-Math.random() * 6}s`;
+    $("snow").append(f);
+  }
+})();
+
+/* ---------- Battery rules ---------- */
+// Level edits wait a moment so several taps go out as one change.
+const lvPend = { saver: null, cutoff: null };
+const RULE_IDS = { saver: ["s-low", "s-high"], cutoff: ["c-stop", "c-resume"] };
+const levelsOf = rule => rule === "saver" ? { lo: last.saver.low, hi: last.saver.high } : { lo: last.cutoff.stop, hi: last.cutoff.resume };
+function stepLevel(rule, which, delta) {
+  if (!last) return;
+  const cur = lvPend[rule] || levelsOf(rule);
+  let { lo, hi } = cur;
+  const [min, max] = LOW_LIMITS[rule];
+  if (which === "lo") {
+    lo = Math.min(max, Math.max(min, lo + delta));
+    if (hi < lo + GAP) hi = Math.min(100, lo + GAP);
+  } else {
+    hi = Math.min(100, Math.max(min + GAP, hi + delta));
+    if (lo > hi - GAP) lo = Math.max(min, hi - GAP);
+  }
+  if (lo === cur.lo && hi === cur.hi) return;
+  clearTimeout(cur.timer);
+  const p = lvPend[rule] = { lo, hi, until: Infinity, timer: null };
+  showLevels(rule, lo, hi, true);
+  p.timer = setTimeout(async () => {
+    p.timer = null;
+    try {
+      const r = await post("/api/" + rule, "levels:" + lo + "-" + hi);
+      if (!r.ok) { lvPend[rule] = null; await failed(r); }
+      else toast("Levels saved");
+    } catch (e) { lvPend[rule] = null; toast("Could not reach the hub.", "bad"); }
+    p.until = Date.now() + 3000;
+    refresh();
+  }, 900);
+}
+function showLevels(rule, lo, hi, pending) {
+  const [a, b] = RULE_IDS[rule];
+  [[a, lo], [b, hi]].forEach(([id, v]) => {
+    const st = $(id);
+    st.querySelector("output").textContent = v + " %";
+    st.classList.toggle("pending", !!pending);
+  });
+}
+Object.entries(RULE_IDS).forEach(([rule, [a, b]]) => {
+  [[a, "lo"], [b, "hi"]].forEach(([id, which]) => {
+    const [down, up] = $(id).querySelectorAll("button");
+    hold(down, () => stepLevel(rule, which, -5));
+    hold(up, () => stepLevel(rule, which, 5));
+  });
+});
+async function ruleCmd(path, body) {
+  try {
+    const r = await post(path, body);
+    if (!r.ok) await failed(r);
+  } catch (e) { toast("Could not reach the hub.", "bad"); }
+  refresh();
+}
+function flip(id, on) {
+  $(id).setAttribute("aria-checked", on);
+  $(id).classList.add("busy");
+}
+$("s-sw").onclick = () => {
+  buzz();
+  if (!last) return;
+  const on = !last.saver.enabled;
+  flip("s-sw", on);
+  ruleCmd("/api/saver", on ? "on" : "off");
+};
+$("c-sw").onclick = async () => {
+  buzz();
+  if (!last) return;
+  const on = !last.cutoff.enabled;
+  if (!on && !(await ask({ title: "Turn off the low-battery stop?", body: "The heater could then drain the Bluetti.", yes: "Turn it off", icon: "warn", danger: true }))) return;
+  flip("c-sw", on);
+  ruleCmd("/api/cutoff", on ? "on" : "off");
+};
+
+/* ---------- Clock ---------- */
+function sendClock() {
+  sentClock = true;
+  post("/api/time", Math.floor(Date.now() / 1000)).catch(() => {});
+}
+$("clockbtn").onclick = () => { sendClock(); toast("Clock sent"); setTimeout(refresh, 800); };
+
+/* ---------- Rendering the state ---------- */
+const REASONS = {
+  TooCold: ["Below the comfort band: wants heat", "heat"],
+  WarmEnough: ["Warm enough: no heat needed", "idle"],
+  InDeadband: ["Inside the comfort band: holding", "idle"],
+  HoldingMinOn: ["Warm enough, finishing the minimum run time", "heat"],
+  HoldingMinOff: ["Cold, but resting the glow plug first", "warn"],
+  SensorLost: ["No fresh cabin reading: heat stays off", "warn"],
+};
+function render(s) {
+  document.body.classList.remove("loading");
+  renderClimate(s);
+  renderHeater(s.heater, s.cutoff);
+  renderFridge(s.fridge);
+  renderPower(s.bluetti);
+  renderRules(s.saver, s.cutoff);
+  renderHub(s);
+  renderAlerts(s);
+}
+
+function renderClimate(s) {
+  const c = s.control, cab = s.cabin;
+  if (cab) {
+    tween($("cab-t"), cab.temp_c, 1);
+    $("cab-rh").textContent = cab.rh + " %";
+    $("cab-age").textContent = "Updated " + ago(cab.age_s);
+  } else {
+    blank("cab-t");
+    $("cab-rh").textContent = "--";
+    $("cab-age").textContent = "No reading from the sensor yet";
+  }
+  if (spPend.v !== null && !spPend.timer && (Math.abs(c.setpoint_c - spPend.v) < 0.01 || Date.now() > spPend.until)) spPend.v = null;
+  const sp = spPend.v ?? c.setpoint_c;
+  $("sp").textContent = sp.toFixed(1);
+  $("sp-box").classList.toggle("pending", spPend.v !== null);
+  drawDial(cab ? cab.temp_c : null, sp, c.hysteresis_c);
+  $("band").textContent = (sp - c.hysteresis_c).toFixed(1) + " to " + (sp + c.hysteresis_c).toFixed(1) + " °C";
+
+  seg("mode", c.mode);
+  const b = $("modebadge");
+  b.textContent = c.mode === "auto" ? "Auto" : "Monitor only";
+  b.className = "badge " + (c.mode === "auto" ? "heat" : "");
   $("modenote").textContent = c.start_failed
     ? "The heater did not start after 3 tries. Check it, then press Auto again to retry."
     : c.mode === "auto"
     ? "Auto: the thermostat switches the heater."
     : "Monitor only: the thermostat decides but does not switch the heater.";
+  $("modenote").className = "note" + (c.start_failed ? " wn" : "");
 
-  const h = s.heater;
-  $("link").textContent = h.connected ? "connected" : "searching";
-  $("link").className = h.connected ? "ok" : "bad";
+  const [text, kind] = REASONS[c.reason] || [c.reason || "Waiting for the first decision", ""];
+  $("reason").textContent = text;
+  $("why").className = "why " + kind;
+}
+
+function heaterView(h, co) {
+  if (!h.connected) return ["search", "Searching", "Looking for the heater over Bluetooth"];
+  if (!h.state) return ["search", "Connected", "Waiting for the first status"];
+  if (h.error !== null) return ["fault", "Fault", "Code " + h.error + ". Clear it at the heater."];
+  switch (h.state) {
+    // The heater says "On" seconds after a start, minutes before it burns.
+    case "On": return h.running ? ["run", "Running", h.power_kw.toFixed(1) + " kW, heater set to " + h.set_temp_c + " °C"]
+                                : ["ignite", "Igniting", "Warming up, about 4 to 5 minutes"];
+    case "Starting": return ["ignite", "Starting", "Start accepted"];
+    case "ShuttingDown": return ["cool", "Cooling down", "The fan runs until the burner is cool"];
+    default: return ["off", "Off", co.enabled && co.tripped ? "Held off: Bluetti battery low" : "Ready"];
+  }
+}
+function renderHeater(h, co) {
+  const [k, t, sub] = heaterView(h, co);
+  $("hvis").dataset.k = k;
+  $("h-t").textContent = t;
+  $("h-s").textContent = sub;
+  const live = h.connected && h.state;
+  [["p-flame", h.flame], ["p-glow", h.glow], ["p-pump", h.pump], ["p-fan", h.fan]].forEach(([id, on]) => $(id).classList.toggle("on", !!(live && on)));
+
+  setText("link", h.connected ? "connected" : "searching", h.connected ? "ok" : "bad");
   // After the link drops the hub still holds the last status; do not show
   // it as if it were current.
-  const parts = ["state", "parts", "power", "htemp", "volts", "err"];
-  if (!h.connected || !h.state) {
-    parts.forEach(id => { $(id).textContent = "--"; $(id).className = ""; });
+  if (!live) {
+    ["state", "parts", "power-kw", "htemp", "volts", "err"].forEach(id => setText(id, "--", ""));
   } else {
-    // The heater says "On" seconds after a start, minutes before it burns.
-    $("state").textContent = h.state === "On" ? (h.running ? "Running" : "Igniting") : h.state;
-    $("parts").textContent = [h.flame, h.glow, h.pump, h.fan].map(yes).join(" / ");
-    $("power").textContent = h.power_kw.toFixed(1) + " / " + h.set_power_kw.toFixed(1) + " kW";
-    $("htemp").textContent = h.set_temp_c + " °C";
-    $("volts").textContent = h.volts.toFixed(1) + " V";
-    $("err").textContent = h.error === null ? "none" : "code " + h.error;
-    $("err").className = h.error === null ? "" : "bad";
+    setText("state", h.state === "On" ? (h.running ? "Running" : "Igniting") : h.state);
+    setText("parts", [h.flame, h.glow, h.pump, h.fan].map(yes).join(" / "));
+    setText("power-kw", h.power_kw.toFixed(1) + " / " + h.set_power_kw.toFixed(1) + " kW");
+    setText("htemp", h.set_temp_c + " °C");
+    setText("volts", h.volts.toFixed(1) + " V");
+    setText("err", h.error === null ? "none" : "code " + h.error, h.error === null ? "" : "bad");
   }
-  $("fw").textContent = h.firmware || "--";
-  $("last").textContent = h.last_command || "none";
+  setText("fw", h.firmware || "--");
+  setText("last", h.last_command || "none");
+  $("ch-heater").className = "chip " + (!h.connected ? "bad" : h.state ? "ok" : "wait");
+}
 
-  showFridge(s.fridge);
-  showBluetti(s.bluetti);
-  showSaver(s.saver);
-  showCutoff(s.cutoff);
+function renderFridge(f) {
+  setText("f-link", f.connected ? "connected" : "searching", f.connected ? "ok" : "bad");
+  setText("f-last", f.last_command || "none");
+  // Do not show the last reading as current once the link is down.
+  fridge = f.connected && f.power !== null ? f : null;
+  const card = $("fridge");
+  card.classList.toggle("nolink", !fridge);
+  card.classList.toggle("warm", !!f.warm_alert);
+  $("ch-fridge").className = "chip " + (!f.connected ? "bad" : fridge ? "ok" : "wait");
+  $("f-pwr").classList.remove("busy");
+  const badge = $("f-badge");
+  if (!fridge) {
+    blank("f-temp");
+    $("f-set").textContent = "--";
+    ["f-power", "f-volts", "f-prot", "f-lock"].forEach(id => setText(id, "--"));
+    seg("f-mode", null);
+    $("f-pwr").setAttribute("aria-checked", "false");
+    card.classList.remove("off");
+    badge.textContent = f.connected ? "Connecting" : "Searching";
+    badge.className = "badge warn";
+    clearTimeout(ftPend.timer);
+    ftPend.v = ftPend.timer = null;
+    $("f-tbox").classList.remove("pending");
+    return;
+  }
+  card.classList.toggle("off", !f.power);
+  $("f-unit").textContent = "°" + f.unit;
+  tween($("f-temp"), f.temp, 0);
+  if (ftPend.v !== null && !ftPend.timer && (f.set_temp === ftPend.v || Date.now() > ftPend.until)) ftPend.v = null;
+  $("f-set").textContent = (ftPend.v ?? f.set_temp) + "°";
+  $("f-tbox").classList.toggle("pending", ftPend.v !== null);
+  seg("f-mode", f.mode.toLowerCase());
+  $("f-pwr").setAttribute("aria-checked", f.power);
+  setText("f-power", f.power ? "on" : "off");
+  setText("f-volts", f.volts.toFixed(1) + " V");
+  setText("f-prot", f.protection);
+  setText("f-lock", f.locked ? "locked" : "unlocked");
+  if (f.warm_alert) { badge.textContent = "Too warm"; badge.className = "badge bad"; }
+  else if (!f.power) { badge.textContent = "Off"; badge.className = "badge"; }
+  else { badge.textContent = f.mode; badge.className = "badge ice"; }
+}
 
-  $("clock").textContent = s.clock || "not set";
-  $("ip").textContent = s.sta_ip || "not joined";
+function renderPower(b) {
+  setText("b-link", !b.connected ? "searching" : b.secure ? "connected" : "connecting", b.connected && b.secure ? "ok" : "bad");
+  $("ch-power").className = "chip " + (!b.connected ? "bad" : b.secure && b.soc !== null ? "ok" : "wait");
+  const badge = $("b-badge");
+  const nodes = [["b-pv", "w-pv", "n-pv", "pv_w"], ["b-grid", "w-grid", "n-grid", "grid_w"], ["b-ac", "w-ac", "n-ac", "ac_w"], ["b-dc", "w-dc", "n-dc", "dc_w"]];
+  // Do not show the last reading as current once the link is down.
+  if (!b.connected || b.soc === null) {
+    blank("b-soc");
+    $("b-eta").textContent = "--";
+    $("b-pct").textContent = "";
+    $("liq").style.height = "0";
+    $("batt").classList.remove("charging");
+    nodes.forEach(([v, w, n]) => { $(v).textContent = "--"; $(w).classList.remove("live"); $(n).classList.remove("live"); });
+    ["b-acsw", "b-dcsw"].forEach(id => setText(id, "--", "sw"));
+    setText("b-volts", "--"); setText("b-model", "--");
+    badge.textContent = b.connected ? "Connecting" : "Searching";
+    badge.className = "badge warn";
+    return;
+  }
+  tween($("b-soc"), b.soc, 0);
+  $("b-pct").textContent = b.soc + "%";
+  $("liq").style.height = Math.max(4, b.soc) + "%";
+  $("liq").style.setProperty("--lvl", b.soc <= 20 ? "var(--bad)" : b.soc <= 50 ? "var(--warn)" : "var(--go)");
+  const hm = m => Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min";
+  // The station reports 5994 min (99.9 h) when it has no estimate.
+  const est = m => m > 0 && m < 5994;
+  const inW = b.pv_w + Math.max(0, b.grid_w), outW = b.ac_w + b.dc_w;
+  const eta = $("b-eta");
+  eta.textContent = "";
+  const line = (head, tail) => { const x = document.createElement("b"); x.textContent = head; eta.append(x, tail); };
+  if (inW > outW && est(b.to_full_min)) line(hm(b.to_full_min), "to full");
+  else if (outW > inW && est(b.to_empty_min)) line(hm(b.to_empty_min), "to empty");
+  else line((inW >= outW ? "+" : "−") + Math.abs(inW - outW) + " W", "net");
+  $("batt").classList.toggle("charging", inW > outW);
+  nodes.forEach(([v, w, n, key]) => {
+    const watts = b[key];
+    $(v).textContent = watts + " W";
+    $(w).classList.toggle("live", watts > 0);
+    $(n).classList.toggle("live", watts > 0);
+  });
+  setText("b-acsw", yes(b.ac_on), "sw" + (b.ac_on ? " on" : ""));
+  setText("b-dcsw", yes(b.dc_on), "sw" + (b.dc_on ? " on" : ""));
+  setText("b-volts", b.volts.toFixed(1) + " V, " + b.amps.toFixed(1) + " A");
+  setText("b-model", b.model || "Bluetti");
+  badge.textContent = inW > outW ? "Charging" : outW > inW ? "Discharging" : "Idle";
+  badge.className = "badge " + (b.soc <= 20 ? "bad" : inW > outW ? "go" : "");
+}
+
+function renderRules(sv, co) {
+  ["saver", "cutoff"].forEach(rule => {
+    const p = lvPend[rule];
+    if (p && !p.timer && Date.now() > p.until) lvPend[rule] = null;
+  });
+  $("s-sw").setAttribute("aria-checked", sv.enabled);
+  $("s-sw").classList.remove("busy");
+  $("r-saver").classList.toggle("disabled", !sv.enabled);
+  if (lvPend.saver) showLevels("saver", lvPend.saver.lo, lvPend.saver.hi, true);
+  else showLevels("saver", sv.low, sv.high, false);
+  const [st, cls] = !sv.enabled ? ["Off", ""]
+    : sv.holding_eco ? ["Holding the fridge in Eco until " + sv.high + " %", "hold"]
+    : sv.battery_low ? ["Battery low, waiting to recover", "hold"]
+    : ["Watching the battery", "watch"];
+  $("s-state").className = "rstate " + cls;
+  $("s-state").lastElementChild.textContent = st;
+  $("s-last").textContent = "Last change: " + (sv.last_action || "none");
+
+  $("c-sw").setAttribute("aria-checked", co.enabled);
+  $("c-sw").classList.remove("busy");
+  $("r-cutoff").classList.toggle("disabled", !co.enabled);
+  $("r-cutoff").classList.toggle("tripped", co.enabled && co.tripped);
+  if (lvPend.cutoff) showLevels("cutoff", lvPend.cutoff.lo, lvPend.cutoff.hi, true);
+  else showLevels("cutoff", co.stop, co.resume, false);
+  const [ct, ccls] = !co.enabled ? ["Off: the heater can drain the Bluetti", ""]
+    : co.tripped ? ["Heater stopped, battery low", "bad"]
+    : ["Watching the battery", "watch"];
+  $("c-state").className = "rstate " + ccls;
+  $("c-state").lastElementChild.textContent = ct;
+}
+
+function renderHub(s) {
+  setText("clock", s.clock || "not set");
+  setText("ip", s.sta_ip || "not joined");
+  $("hclock").textContent = s.clock ? s.clock.slice(11, 16) : "";
   $("clockbtn").hidden = !!s.clock;
   if (!s.clock && !sentClock) sendClock();
 }
 
-function showBluetti(b) {
-  $("b-link").textContent = !b.connected ? "searching" : b.secure ? "connected" : "connecting";
-  $("b-link").className = b.connected && b.secure ? "ok" : "bad";
-  const ids = ["b-pv", "b-grid", "b-ac", "b-dc", "b-volts"];
-  // Do not show the last reading as current once the link is down.
-  if (!b.connected || b.soc === null) {
-    $("b-soc").textContent = "--";
-    $("b-eta").textContent = "--";
-    ids.forEach(id => $(id).textContent = "--");
-    return;
+// Alerts at the top, kept by key so only new ones animate in.
+function renderAlerts(s) {
+  const list = [];
+  if (!s) list.push(["offline", "bad", "Can't reach the hub. Check this device is on the M-Pulse Wi-Fi. Retrying…"]);
+  else {
+    const co = s.cutoff, c = s.control;
+    if (co.enabled && co.tripped) list.push(["cutoff", "bad", "Bluetti battery low (" + (co.tripped_at || "") + "): the heater was stopped and cannot start until the battery is back to " + co.resume + " %."]);
+    if (s.fridge.warm_alert) list.push(["warm", "bad", "The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power."]);
+    if (c.start_failed) list.push(["start", "warn", "The heater did not start after 3 tries. Check it, then press Auto again to retry."]);
+    if (!s.cabin) list.push(["sensor", "warn", "No reading from the cabin sensor yet."]);
+    else if (s.cabin.age_s > 120) list.push(["sensor", "warn", "The cabin sensor was last heard " + ago(s.cabin.age_s) + "."]);
   }
-  const hm = m => Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min";
-  $("b-soc").textContent = b.soc + " %";
-  // The station reports 5994 min (99.9 h) when it has no estimate.
-  const est = m => m > 0 && m < 5994;
-  const inW = b.pv_w + Math.max(0, b.grid_w), outW = b.ac_w + b.dc_w;
-  $("b-eta").textContent = inW > outW && est(b.to_full_min) ? "full in " + hm(b.to_full_min)
-    : outW > inW && est(b.to_empty_min) ? "empty in " + hm(b.to_empty_min) : (b.model || "Bluetti");
-  $("b-pv").textContent = b.pv_w + " W";
-  $("b-grid").textContent = b.grid_w + " W";
-  $("b-ac").textContent = b.ac_w + " W (" + yes(b.ac_on) + ")";
-  $("b-dc").textContent = b.dc_w + " W (" + yes(b.dc_on) + ")";
-  $("b-volts").textContent = b.volts.toFixed(1) + " V, " + b.amps.toFixed(1) + " A";
+  const box = $("alerts"), keep = new Set(list.map(a => a[0]));
+  [...box.children].forEach(el => {
+    if (!keep.has(el.dataset.k) && !el.classList.contains("out")) {
+      el.classList.add("out");
+      setTimeout(() => el.remove(), 300);
+    }
+  });
+  list.forEach(([k, kind, text]) => {
+    let el = box.querySelector('[data-k="' + k + '"]:not(.out)');
+    if (!el) {
+      el = document.createElement("div");
+      el.dataset.k = k;
+      el.className = "alert " + kind;
+      el.setAttribute("role", "alert");
+      el.innerHTML = '<svg class="i"><use href="#i-alert"/></svg><div></div>';
+      box.append(el);
+    }
+    el.lastElementChild.textContent = text;
+  });
 }
-// Levels offered for the fridge saver, in 5 % steps.
-for (let p = 5; p <= 100; p += 5) {
-  if (p <= 95) $("s-low").add(new Option(p + " %", p));
-  if (p >= 10) $("s-high").add(new Option(p + " %", p));
-}
-let saverEditing = false;
-function showSaver(v) {
-  $("s-on").className = "wide" + (v.enabled ? " active" : "");
-  $("s-off").className = "wide" + (v.enabled ? "" : " active");
-  // Leave the pickers alone while someone is choosing a level.
-  if (!saverEditing) { $("s-low").value = v.low; $("s-high").value = v.high; }
-  $("s-state").textContent = !v.enabled ? "off"
-    : v.holding_eco ? "fridge held in Eco until " + v.high + " %"
-    : v.battery_low ? "battery low, waiting to recover"
-    : "watching";
-  $("s-last").textContent = v.last_action || "none";
-}
-async function saver(body) {
-  const r = await post("/api/saver", body);
-  if (!r.ok) alert(await r.text());
-  saverEditing = false;
-  refresh();
-}
-$("s-on").onclick = () => saver("on");
-$("s-off").onclick = () => saver("off");
-["s-low", "s-high"].forEach(id => {
-  $(id).onfocus = () => { saverEditing = true; };
-  $(id).onchange = () => saver("levels:" + $("s-low").value + "-" + $("s-high").value);
-});
-for (let p = 5; p <= 100; p += 5) {
-  if (p <= 50) $("c-stop").add(new Option(p + " %", p));
-  if (p >= 10) $("c-resume").add(new Option(p + " %", p));
-}
-let cutoffEditing = false;
-function showCutoff(c) {
-  $("c-on").className = "wide" + (c.enabled ? " active" : "");
-  $("c-off").className = "wide" + (c.enabled ? "" : " active");
-  if (!cutoffEditing) { $("c-stop").value = c.stop; $("c-resume").value = c.resume; }
-  $("c-state").textContent = !c.enabled ? "off" : c.tripped ? "heater stopped, battery low" : "watching";
-  $("c-state").className = c.enabled && c.tripped ? "bad" : "";
-  $("c-alert").hidden = !(c.enabled && c.tripped);
-  $("c-alert").textContent = "Bluetti battery low (" + (c.tripped_at || "") +
-    "): the heater was stopped and cannot start until the battery is back to " + c.resume + " %.";
-}
-async function cutoff(body) {
-  const r = await post("/api/cutoff", body);
-  if (!r.ok) alert(await r.text());
-  cutoffEditing = false;
-  refresh();
-}
-$("c-on").onclick = () => cutoff("on");
-$("c-off").onclick = () => { if (confirm("Turn off the low-battery stop? The heater could drain the Bluetti.")) cutoff("off"); };
-["c-stop", "c-resume"].forEach(id => {
-  $(id).onfocus = () => { cutoffEditing = true; };
-  $(id).onchange = () => cutoff("levels:" + $("c-stop").value + "-" + $("c-resume").value);
-});
-function showFridge(f) {
-  $("f-link").textContent = f.connected ? "connected" : "searching";
-  $("f-link").className = f.connected ? "ok" : "bad";
-  $("f-last").textContent = f.last_command || "none";
-  $("f-alert").hidden = !f.warm_alert;
-  // Do not show the last reading as current once the link is down.
-  fridge = f.connected && f.power !== null ? f : null;
-  const ids = ["f-power", "f-volts", "f-prot", "f-lock"];
-  if (!fridge) {
-    $("f-temp").textContent = "--";
-    $("f-set").textContent = "target --";
-    ids.forEach(id => $(id).textContent = "--");
-    $("f-eco").className = $("f-max").className = "wide";
-    return;
-  }
-  const u = " °" + f.unit;
-  $("f-temp").textContent = f.temp + u;
-  $("f-set").textContent = "target " + f.set_temp + u;
-  $("f-power").textContent = f.power ? "on" : "off";
-  $("f-volts").textContent = f.volts.toFixed(1) + " V";
-  $("f-prot").textContent = f.protection;
-  $("f-lock").textContent = f.locked ? "locked" : "unlocked";
-  $("f-eco").className = "wide" + (f.mode === "Eco" ? " active" : "");
-  $("f-max").className = "wide" + (f.mode === "Max" ? " active" : "");
-}
-async function fridgeCmd(cmd) {
-  const r = await post("/api/fridge", cmd);
-  if (!r.ok) alert(await r.text());
-  // The fridge answers within a poll or two.
-  setTimeout(refresh, 2500);
-}
-function fridgeNudge(delta) {
-  if (!fridge) return;
-  const t = Math.min(fridge.max_temp, Math.max(fridge.min_temp, fridge.set_temp + delta));
-  if (t === fridge.set_temp) return;
-  // Show the new target at once, so quick taps count from it rather than
-  // from the last reading.
-  fridge.set_temp = t;
-  $("f-set").textContent = "target " + t + " °" + fridge.unit;
-  fridgeCmd("temp:" + t);
-}
-$("f-down").onclick = () => fridgeNudge(-1);
-$("f-up").onclick = () => fridgeNudge(1);
-$("f-eco").onclick = () => fridgeCmd("eco");
-$("f-max").onclick = () => fridgeCmd("max");
-$("f-on").onclick = () => fridgeCmd("on");
-$("f-off").onclick = () => { if (confirm("Switch the fridge OFF? Food will warm up.")) fridgeCmd("off"); };
 
-function nudge(delta) {
-  if (setpoint === null) return;
-  const v = Math.min(30, Math.max(5, setpoint + delta));
-  post("/api/setpoint", v.toFixed(1)).then(refresh);
+function beat() {
+  const l = $("logo");
+  l.classList.remove("beat"); void l.offsetWidth; l.classList.add("beat");
 }
-$("down").onclick = () => nudge(-0.5);
-$("up").onclick = () => nudge(0.5);
-$("clockbtn").onclick = sendClock;
-$("m-monitor").onclick = () => post("/api/mode", "monitor").then(refresh);
-$("m-auto").onclick = () => {
-  if (confirm("Let the thermostat switch the heater on and off?")) post("/api/mode", "auto").then(refresh);
-};
-async function heater(cmd) {
-  const r = await post("/api/heater", cmd);
-  if (!r.ok) alert(await r.text());
-  refresh();
+
+/* ---------- Polling ---------- */
+async function refresh() {
+  let s;
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 4000);
+    const r = await fetch("/api/state", { cache: "no-store", signal: ctl.signal });
+    clearTimeout(t);
+    if (!r.ok) throw new Error(r.status);
+    s = await r.json();
+  } catch (e) {
+    // One missed poll is normal on Wi-Fi; say so after two.
+    if (++fails >= 2) {
+      document.body.classList.add("offline");
+      renderAlerts(null);
+      ["ch-heater", "ch-fridge", "ch-power"].forEach(id => $(id).className = "chip");
+    }
+    return;
+  }
+  fails = 0;
+  lastOk = Date.now();
+  document.body.classList.remove("offline");
+  last = s;
+  render(s);
+  beat();
 }
-$("h-on").onclick = () => { if (confirm("Switch the heater ON now?")) heater("on"); };
-$("h-off").onclick = () => heater("off");
-refresh();
-setInterval(refresh, 2000);
+setInterval(() => {
+  if (lastOk) $("updated").textContent = "Updated " + ago(Math.round((Date.now() - lastOk) / 1000));
+}, 1000);
+async function loop() {
+  clearTimeout(pollTimer);
+  await refresh();
+  clearTimeout(pollTimer);
+  if (!document.hidden) pollTimer = setTimeout(loop, 2000);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) loop(); });
+loop();
+
+/* ---------- Phone tab bar follows the scroll ---------- */
+const tabs = [...document.querySelectorAll(".tabs a")];
+const seen = {};
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => { seen[e.target.id] = e.intersectionRatio; });
+  const best = Object.keys(seen).reduce((a, b) => seen[b] > (seen[a] ?? -1) ? b : a, null);
+  if (best && seen[best] > 0) tabs.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + best));
+}, { threshold: [0, .1, .25, .5, .75, 1] });
+["climate", "fridge", "power", "rules"].forEach(id => io.observe($(id)));
+tabs.forEach(a => a.addEventListener("click", buzz));
 </script>
 </body>
 </html>

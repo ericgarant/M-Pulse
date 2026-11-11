@@ -10,13 +10,18 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
 - keeps a third BLE link to the Bluetti Elite 200 V2 power station and reads
   its battery, inputs and outputs every 5 s, read only (see
   [Bluetti](#bluetti))
+- stops the heater cleanly when the Bluetti runs low and blocks starts until
+  it has recharged (see [Heater low-battery stop](#heater-low-battery-stop),
+  on after every restart)
 - can put the fridge in Eco while the Bluetti is low and back to Max once it
-  recovers (the fridge saver, off after every restart)
+  recovers (see [Fridge saver](#fridge-saver), off after every restart)
 - receives cabin readings from the [sensor node](../sensor-node) over Wi-Fi
 - runs the thermostat on those readings
 - switches the heater on and off, either from the dashboard's On and Off
   buttons or by the thermostat in Auto mode. After every restart the hub is
-  in Monitor mode and sends no switch commands until you choose otherwise
+  in Monitor mode: the thermostat sends no switch commands until you choose
+  Auto. The one command the hub can send by itself in Monitor mode is the
+  low-battery stop's Off
 - serves a dashboard at http://192.168.71.1 on the hub network
 - sets the heater's clock from internet time (SNTP), or from your phone's
   time when you open the dashboard without internet
@@ -74,26 +79,77 @@ Join the `M-Pulse` Wi-Fi and open `http://192.168.71.1` (type the `http://`).
 
 ## Using the dashboard
 
-- **Cabin** shows the latest reading from the sensor node and its age.
-- **Thermostat** changes the setpoint in 0.5 °C steps and chooses the mode:
-  - *Monitor only* (the mode after every restart): the thermostat decides and
-    shows its reason, but does not switch the heater.
-  - *Auto*: the thermostat switches the heater. Pressing Auto again also
-    retries after 3 failed starts.
-- **Manual** switches the heater on or off now. Any manual button press puts
-  the hub back in Monitor only, so the thermostat does not undo it. Heater ON
-  is refused while the heater reports a fault or is not fully off.
-- **Heater** shows the link and what the heater reports. *Igniting* means it
-  has accepted a start but is not yet burning steadily (that takes about
-  4 to 5 minutes); *Running* means it has a flame and the glow plug is off.
-  The details show `--` while the link is down.
+The page is built for the camper's tablet and works on a phone too: on a
+tablet the cards sit side by side, and on a phone they stack, with a tab bar
+at the bottom to jump between them. Everything is inside the one page the
+hub serves, so it needs no internet.
 
-- **Fridge** shows the temperature inside, the target, the mode, the input
-  voltage, the battery protection level and the panel lock. **+** and **−**
-  change the target by 1 degree; **Eco** and **Max** change the mode;
-  **Fridge ON** and **Fridge OFF** switch it (Off asks first). A red note
-  appears when the fridge has stayed more than 4 °C above its target for
-  30 minutes: check the lid and the power.
+- **Top bar**: a dot for each link (heater, fridge, Bluetti): green when
+  connected, amber while connecting, red while searching. Tap one to jump to
+  its card. The logo pulses each time fresh data arrives. The buttons on the
+  right change the theme (dark, a dim red *Night* theme for after dark, and
+  light; each device remembers its choice) and go full screen.
+- **Alerts** appear in a strip under the top bar: the low-battery stop
+  holding the heater off, the fridge warm alert, a heater that did not start
+  after 3 tries, a cabin sensor that is missing or more than 2 minutes old,
+  and a hub the page cannot reach. When the hub cannot be reached, the cards
+  also fade until it answers again.
+- **Climate**:
+  - The dial shows the cabin temperature against a 5 to 30 °C scale, with
+    the target as a knob and the comfort band (target ± 1 °C, where the
+    thermostat holds its state) as a lighter stretch of track. Humidity and
+    the reading's age sit in the middle.
+  - **+** and **−** change the target in 0.5 °C steps. Hold a button to
+    keep stepping. Quick taps add up and go to the hub as one change; the
+    target shows amber until the hub has it.
+  - The heater panel shows what the heater is doing (Off, Starting,
+    Igniting, Running, Cooling down, Fault or Searching) with an animated
+    flame, and which of its parts (flame, glow plug, fuel pump, fan) are on.
+    *Igniting* means it has accepted a start but is not yet burning steadily
+    (that takes about 4 to 5 minutes); *Running* means it has a flame and the
+    glow plug is off. Below it is the thermostat's reason in plain words.
+  - *Monitor only* (the mode after every restart): the thermostat decides
+    but does not switch the heater. *Auto* (asks first): the thermostat
+    switches the heater. Pressing Auto again also retries after 3 failed
+    starts.
+  - **Heater ON** (asks first) and **Heater OFF** switch the heater now. Any
+    manual press puts the hub back in Monitor only, so the thermostat does
+    not undo it. Heater ON is refused while the heater reports a fault, is
+    not fully off, or the low-battery stop is holding it off; the reason
+    shows in a note at the bottom of the screen.
+  - *Heater details* opens the raw readings: link, state, parts, power,
+    the heater's own set temperature, supply voltage, error code, firmware
+    and last command.
+- **Fridge** shows the temperature inside in a ring that frosts over while
+  the fridge runs and turns red with the warm alert (more than 4 °C above its
+  target for 30 minutes: check the lid and the power). **+** and **−**
+  change the target by 1 degree, and quick taps go out as one change;
+  **Eco** / **Max** change the mode; the **Power** switch turns it on, or off
+  after asking. *Fridge details* has the input voltage, battery protection
+  level, panel lock and last command.
+- **Power** shows the Bluetti: charge, time to full or empty when the
+  station has an estimate (otherwise the net watts), and a flow picture with
+  solar and charger input on the left and AC and DC output on the right. The
+  lines animate while power flows, and the battery's colour follows its
+  charge (green, amber at 50 % and below, red at 20 % and below). Nothing on
+  this card switches the Bluetti. *Battery details* has the voltage and
+  current.
+- **Battery rules**:
+  - *Heater low-battery stop*: a switch (turning it off asks first), the
+    stop and restart levels, and what it is doing now.
+  - *Fridge saver*: a switch, the Eco and Max levels, what it is doing now
+    and its last change.
+
+  Levels change in 5 % steps with **+** and **−** and go to the hub a
+  moment after you stop tapping. Raising one level past the other moves the
+  other too, to keep the 5 % gap the hub needs. Like the setpoint, they go
+  back to the defaults when the hub restarts.
+- **Footer**: the hub's clock and its address on another Wi-Fi, if joined.
+  The page sets the hub's clock from the device's time when the hub has no
+  internet time.
+
+The Climate, Fridge and Power cards show `--` in place of readings while
+their link is down, never the last values.
 
 ## Fridge
 
@@ -111,8 +167,9 @@ format and the warm alert live in [`core/src/fridge.rs`](../core/src/fridge.rs).
 - Target changes use command `05`. Power and Eco/Max rewrite the whole
   settings block (command `02`) from the last status, changing one field, so
   the hub sends them only with a status less than 10 s old.
-- The heater and fridge links take turns to search and connect, because
-  NimBLE allows one scan or connection attempt at a time.
+- The heater, fridge and Bluetti links take turns to search and connect,
+  because NimBLE allows one scan or connection attempt at a time. All three
+  are then held together (`CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4`).
 - While the hub holds the link, the BougeRV phone app cannot connect to the
   fridge. Unplug the hub to use the app.
 
@@ -132,8 +189,13 @@ licence file is needed.
   AES-256-CBC under the shared secret. The station repeats its key until it
   hears back, and the hub ignores the repeats.
 - The hub reads 62 registers from register 100 (the app's home screen)
-  every 5 s: charge %, solar and charger input, AC and DC output, and
-  whether the AC and DC outputs are on. It writes nothing else.
+  every 5 s: charge %, battery voltage and current, solar and charger
+  input, AC and DC output, and whether the AC and DC outputs are on. It
+  writes nothing else, so it cannot switch the Bluetti's outputs. Four
+  missed replies in a row close the link and rebuild it.
+- Battery voltage is in hundredths of a volt on this model (the app divides
+  by 10). The station reports 5994 minutes to full or empty when it has no
+  estimate, and the dashboard hides that.
 - While the hub holds the link, the Bluetti app can only reach the station
   over the cloud, not Bluetooth.
 
@@ -152,7 +214,12 @@ heater, in Monitor it stays off until switched on. The logic is in
   holds the heater off.
 - A heater that is already cooling down or off is left alone. The Off is
   repeated every 20 s while the heater still reports On or Starting.
-- A lost Bluetti link neither trips it nor clears it.
+- A lost Bluetti link neither trips it nor clears it. It needs a Bluetti
+  reading under 30 s old to change state.
+- It works in Monitor mode too. A start that was waiting to be sent when it
+  trips is dropped.
+- The stop level can be 5 to 50 %, and the resume level at least 5 points
+  above it. The levels go back to the defaults when the hub restarts.
 
 ## Fridge saver
 
@@ -167,6 +234,9 @@ and back to Max when it is up to the high level again (defaults 30 % and
 - It needs a Bluetti reading under 30 s old and a fridge status under 10 s
   old; without them it waits. A change the fridge does not take is retried
   every 30 s, three times at most.
+- The low level can be 5 to 95 %, and the high level at least 5 points above
+  it. The levels, and whether it is on, go back to the defaults when the hub
+  restarts.
 
 ## Build and flash
 
@@ -198,19 +268,33 @@ Tested on the BougeRV Rocky 50 fridge, alongside the heater link:
 
 Tested on the Bluetti Elite 200 V2, alongside the heater and fridge links:
 
-- The key exchange finishes about 1.5 s after connecting, and the station
+- The key exchange finishes about 1.3 s after connecting, and the station
   answers every read within 0.1 s. All three links held together.
 - First read: model `Elite200V2`, 94 %, AC and DC outputs on, no load and no
-  input. The station reports 5994 min to full and to empty when it has no
-  estimate, so the dashboard hides that.
-- Battery voltage is in hundredths (the app's divide-by-10 is wrong for this
-  model): 39.66 V at 2.2 A out matched the 83 W AC load. Charging-status
-  code 2 means discharging.
-- Fridge saver: with the levels set to 95/100 % (charge was 91 %) the fridge
-  went to Eco within seconds; moving them to 5/10 % put it back to Max.
-- Heater stop: with the stop level above the charge, it tripped within a
-  second and cleared when the levels were lowered. The heater was off, so
-  no Off was needed; stopping a burning heater is not yet tested live.
+  input.
+- With an AC load: 39.66 V at 2.2 A out matched the 83 W the station
+  reported, and the charging-status code read 2 (discharging).
+
+Tested for the fridge saver, on the real fridge and Bluetti (charge 91 %):
+
+- With the levels set to 95/100 % the fridge went to Eco within 2 s; moving
+  them to 5/10 % put it back to Max.
+
+Tested for the heater low-battery stop:
+
+- With the stop level set above the charge it tripped within a second, and
+  it cleared when the levels were lowered.
+
+Not yet tested:
+
+- **Stopping a burning heater with the low-battery stop.** The heater was
+  off in the test above, so no Off was sent. The Off command itself is the
+  one the Manual button sends, which is tested.
+- Solar and charger input readings, and the sign of the charger reading.
+  The Bluetti has only been read idle and with an AC load.
+- The fridge saver and the heater stop at a real low charge. Both were
+  triggered by moving their levels, not by draining the Bluetti.
+- Joining another Wi-Fi (see [Networks](#networks)).
 
 ## Thermostat defaults
 
@@ -226,11 +310,28 @@ Tested on the Bluetti Elite 200 V2, alongside the heater and fridge links:
 They live in `Config::default()` in `../core/src/thermostat.rs`. A setpoint
 change from the dashboard lasts until the hub restarts.
 
+## Low-battery defaults
+
+| Setting | Value | After a restart |
+| --- | --- | --- |
+| Heater stop | at or below 15 % | on |
+| Heater starts allowed again | at or above 25 % | |
+| Fridge to Eco | at or below 30 % | off |
+| Fridge back to Max | at or above 50 % | |
+
+They live in `Config::default()` in `../core/src/heater_cutoff.rs` and
+`../core/src/eco_guard.rs`.
+
 ## Safety notes
 
 - The heater has no idea the hub exists. If the hub loses power or its
   Bluetooth link while the heater is running, **the heater keeps running** at
-  its own setting until you switch it off at the heater or its remote.
+  its own setting until you switch it off at the heater or its remote. The
+  low-battery stop cannot help then either.
+- The low-battery stop needs the hub's links to both the Bluetti and the
+  heater. It has not yet been tried on a burning heater (see
+  [Tested](#tested)), so do not rely on it alone to protect the Bluetti.
+- The hub only reads the Bluetti. It never switches its outputs.
 - In Auto mode, a lost sensor (no reading for 2 minutes) switches the heater
   off once it is burning steadily.
 - The hub never starts a heater that reports a fault or is still in its
@@ -243,4 +344,5 @@ change from the dashboard lasts until the hub restarts.
 - The hub only sends a command while it has a fresh status from the heater
   (under 10 seconds old).
 - The hub restarts in Monitor mode. After a power cut it will not resume
-  Auto by itself.
+  Auto by itself. The low-battery stop comes back on with its default
+  levels, and the fridge saver comes back off.
