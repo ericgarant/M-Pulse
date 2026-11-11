@@ -21,8 +21,8 @@ use esp_idf_svc::timer::EspAsyncTimer;
 use log::{error, info, warn};
 use m_pulse_core::protocol::{self, Status};
 
-use crate::clock;
 use crate::state::Shared;
+use crate::{clock, radio};
 
 /// The heater advertises as `BougeRV-DHG001`. Matching on the prefix keeps
 /// this working if the model suffix differs between units.
@@ -104,9 +104,11 @@ pub async fn run(
     state: Shared,
 ) -> anyhow::Result<()> {
     loop {
+        // Search and connect only while the fridge link is not doing the same.
+        let turn = radio::take(timer).await?;
         match find(device, FIND_DURATION_MS).await {
             Ok(Some(addr)) => {
-                if let Err(err) = session(device, &addr, timer, &state).await {
+                if let Err(err) = session(device, &addr, timer, &state, turn).await {
                     warn!("Heater link ended: {err}");
                 }
             }
@@ -155,6 +157,7 @@ async fn session(
     addr: &BLEAddress,
     timer: &mut EspAsyncTimer,
     state: &Shared,
+    turn: radio::Turn,
 ) -> anyhow::Result<()> {
     let mut client = device.new_client();
     let on_drop = state.clone();
@@ -184,6 +187,7 @@ async fn session(
     }
     info!("Connected, RSSI {:?} dBm", client.get_rssi().ok());
     limit_packet_size(&client);
+    drop(turn);
     {
         let mut s = state.lock();
         s.heater.connected = true;

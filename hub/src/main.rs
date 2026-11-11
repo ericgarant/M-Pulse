@@ -1,6 +1,7 @@
 //! M-Pulse hub (ESP32-S3).
 //!
-//! Owns the BLE link to the BougeRV diesel heater, receives cabin readings
+//! Owns the BLE links to the BougeRV diesel heater and the BougeRV Rocky 50
+//! fridge, receives cabin readings
 //! from the sensor node over Wi-Fi, runs the thermostat, and serves the
 //! dashboard.
 //!
@@ -15,11 +16,14 @@
 mod cabin;
 mod clock;
 mod control;
+mod fridge;
 mod heater;
 mod net;
+mod radio;
 mod state;
 mod web;
 
+use embassy_futures::join::join;
 use esp32_nimble::BLEDevice;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::peripherals::Peripherals;
@@ -53,8 +57,14 @@ fn main() -> anyhow::Result<()> {
     let _server = web::start(state.clone())?;
 
     let timers = EspTaskTimerService::new()?;
-    let mut timer = timers.timer_async()?;
+    let mut heater_timer = timers.timer_async()?;
+    let mut fridge_timer = timers.timer_async()?;
     let ble = BLEDevice::take();
 
-    block_on(heater::run(ble, &mut timer, state))
+    // Both links run on this task and take turns to search and connect.
+    let (heater, fridge) = block_on(join(
+        heater::run(ble, &mut heater_timer, state.clone()),
+        fridge::run(ble, &mut fridge_timer, state),
+    ));
+    heater.and(fridge)
 }

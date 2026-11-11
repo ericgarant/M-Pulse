@@ -8,6 +8,8 @@
 //!   `monitor`)
 //! - switch the heater by hand (`POST /api/heater`, body `on` or `off`),
 //!   which also drops back to Monitor mode so the thermostat does not undo it
+//! - change the fridge (`POST /api/fridge`, body `on`, `off`, `eco`, `max`
+//!   or `temp:<degrees>`)
 //! - set the hub's clock from the phone when the hub has no internet time
 //!   (`POST /api/time`, body is Unix seconds)
 
@@ -18,10 +20,11 @@ use esp_idf_svc::http::Method;
 use esp_idf_svc::io::Write;
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
+use m_pulse_core::fridge::RunMode;
 use m_pulse_core::protocol::RunState;
 
 use crate::clock;
-use crate::state::{Hub, Mode, Shared};
+use crate::state::{FridgeCommand, Hub, Mode, Shared};
 
 const PAGE: &str = include_str!("dashboard.html");
 
@@ -126,6 +129,32 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         Ok(())
     })?;
 
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/fridge", Method::Post, move |mut req| {
+        let text = read_body(&mut req)?;
+        let Some(command) = parse_fridge_command(text.trim()) else {
+            req.into_status_response(400)?
+                .write_all(b"body must be on, off, eco, max or temp:<degrees>")?;
+            return Ok(());
+        };
+        let queued = {
+            let mut hub = s.lock();
+            let ready = hub.fridge.connected && hub.fridge.status.is_some();
+            if ready {
+                hub.fridge.pending = Some(command);
+            }
+            ready
+        };
+        if queued {
+            warn!("Dashboard asked the fridge for {command:?}");
+            req.into_ok_response()?.write_all(b"ok")?;
+        } else {
+            req.into_status_response(409)?
+                .write_all(b"The fridge is not connected.")?;
+        }
+        Ok(())
+    })?;
+
     server.fn_handler::<anyhow::Error, _>("/api/time", Method::Post, |mut req| {
         let text = read_body(&mut req)?;
         // Internet time wins; only fill in a clock that was never set.
@@ -163,6 +192,20 @@ fn manual_refusal(hub: &Hub, switch: Switch) -> Option<&'static str> {
         RunState::Off => None,
         RunState::ShuttingDown => Some("The heater is cooling down. Wait until it is off."),
         RunState::On | RunState::Starting => Some("The heater is already on."),
+    }
+}
+
+fn parse_fridge_command(text: &str) -> Option<FridgeCommand> {
+    match text {
+        "on" => Some(FridgeCommand::Power(true)),
+        "off" => Some(FridgeCommand::Power(false)),
+        "eco" => Some(FridgeCommand::Mode(RunMode::Eco)),
+        "max" => Some(FridgeCommand::Mode(RunMode::Max)),
+        _ => text
+            .strip_prefix("temp:")?
+            .parse::<i8>()
+            .ok()
+            .map(FridgeCommand::SetTemp),
     }
 }
 
@@ -232,6 +275,42 @@ fn state_json(hub: &Hub) -> String {
             );
         }
         _ => out.push_str(",\"state\":null"),
+    }
+    out.push_str("},");
+
+    let f = &hub.fridge;
+    let _ = write!(
+        out,
+        "\"fridge\":{{\"connected\":{},\"warm_alert\":{},\"last_command\":{}",
+        f.connected,
+        f.warm_alert,
+        opt_str(
+            f.last_sent
+                .map(|(sent, when)| format!("{sent:?} {} s ago", when.elapsed().as_secs()))
+                .as_deref()
+        )
+    );
+    match (f.status, f.status_at) {
+        (Some(st), Some(at)) => {
+            let _ = write!(
+                out,
+                ",\"age_s\":{},\"power\":{},\"mode\":\"{:?}\",\"set_temp\":{},\"temp\":{},\"unit\":\"{}\",\
+                 \"min_temp\":{},\"max_temp\":{},\"volts\":{:.1},\"battery_pct\":{},\"protection\":\"{:?}\",\"locked\":{}",
+                at.elapsed().as_secs(),
+                st.powered,
+                st.mode,
+                st.set_temp,
+                st.temp,
+                if st.fahrenheit { "F" } else { "C" },
+                st.min_temp,
+                st.max_temp,
+                st.input_volts,
+                st.battery_pct,
+                st.battery_protection,
+                st.locked
+            );
+        }
+        _ => out.push_str(",\"power\":null"),
     }
     out.push_str("},");
 
