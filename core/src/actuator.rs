@@ -22,18 +22,32 @@ pub enum Switch {
 /// Start attempts before giving up on a heater that stays off.
 pub const MAX_START_ATTEMPTS: u8 = 3;
 
+/// How long an ignition may take before the heater is treated as stuck and
+/// may be switched off anyway. A normal start has a flame within 2 minutes
+/// and settles within 5.
+pub const IGNITION_LIMIT: Duration = Duration::from_secs(600);
+
+/// Whether the heater is burning steadily: it has a flame and the glow plug
+/// is off again. The heater reports the state On within seconds of a start
+/// command, minutes before it has a flame, so On alone does not mean this.
+pub fn is_running(status: &Status) -> bool {
+    status.state == RunState::On && status.flame && !status.glow_plug
+}
+
 /// The command that moves the heater toward `want_heat`, or `None` if it is
 /// already there or must be left alone for now.
 ///
 /// - Never starts a heater that reports a fault.
 /// - Never starts a heater that is still shutting down; the start is sent
 ///   once it reports Off.
-/// - Never stops a heater in the middle of its start-up, which is hard on
-///   the glow plug; the stop is sent once it reports On.
-pub fn command(want_heat: bool, status: &Status) -> Option<Switch> {
+/// - Never stops a heater in the middle of its ignition, which is hard on
+///   the glow plug; the stop is sent once it is burning steadily. `stuck`
+///   lifts this for an ignition that has run past [`IGNITION_LIMIT`].
+pub fn command(want_heat: bool, status: &Status, stuck: bool) -> Option<Switch> {
     match (want_heat, status.state) {
         (true, RunState::Off) if status.error.is_none() => Some(Switch::On),
-        (false, RunState::On) => Some(Switch::Off),
+        (false, RunState::On) if is_running(status) || stuck => Some(Switch::Off),
+        (false, RunState::Starting) if stuck => Some(Switch::Off),
         _ => None,
     }
 }
@@ -80,33 +94,64 @@ mod tests {
         }
     }
 
-    #[test]
-    fn starts_only_from_off_without_a_fault() {
-        assert_eq!(
-            command(true, &status(RunState::Off, None)),
-            Some(Switch::On)
-        );
-        assert_eq!(command(true, &status(RunState::Off, Some(3))), None);
-        assert_eq!(command(true, &status(RunState::ShuttingDown, None)), None);
-        assert_eq!(command(true, &status(RunState::Starting, None)), None);
-        assert_eq!(command(true, &status(RunState::On, None)), None);
+    /// State On with the given flame and glow plug bits.
+    fn on(flame: bool, glow_plug: bool) -> Status {
+        Status {
+            flame,
+            glow_plug,
+            ..status(RunState::On, None)
+        }
     }
 
     #[test]
-    fn stops_only_when_running() {
-        assert_eq!(
-            command(false, &status(RunState::On, None)),
-            Some(Switch::Off)
-        );
+    fn starts_only_from_off_without_a_fault() {
+        let start = |s: &Status| command(true, s, false);
+        assert_eq!(start(&status(RunState::Off, None)), Some(Switch::On));
+        assert_eq!(start(&status(RunState::Off, Some(3))), None);
+        assert_eq!(start(&status(RunState::ShuttingDown, None)), None);
+        assert_eq!(start(&status(RunState::Starting, None)), None);
+        assert_eq!(start(&on(true, false)), None);
+    }
+
+    #[test]
+    fn running_needs_a_flame_and_no_glow_plug() {
+        assert!(is_running(&on(true, false)));
+        // The sequence seen on a real start: On at once, glow plug, flame
+        // with the glow plug still on, then the glow plug goes off.
+        assert!(!is_running(&on(false, false)));
+        assert!(!is_running(&on(false, true)));
+        assert!(!is_running(&on(true, true)));
+        assert!(!is_running(&status(RunState::Starting, None)));
+    }
+
+    #[test]
+    fn stops_only_when_burning_steadily() {
+        let stop = |s: &Status| command(false, s, false);
+        assert_eq!(stop(&on(true, false)), Some(Switch::Off));
         // A fault never blocks switching off.
+        let faulty = Status {
+            error: Some(3),
+            ..on(true, false)
+        };
+        assert_eq!(stop(&faulty), Some(Switch::Off));
+        // Ignition is left to finish first.
+        assert_eq!(stop(&on(false, true)), None);
+        assert_eq!(stop(&on(true, true)), None);
+        assert_eq!(stop(&status(RunState::Starting, None)), None);
+        assert_eq!(stop(&status(RunState::Off, None)), None);
+        assert_eq!(stop(&status(RunState::ShuttingDown, None)), None);
+    }
+
+    #[test]
+    fn a_stuck_ignition_can_be_stopped() {
+        assert_eq!(command(false, &on(false, true), true), Some(Switch::Off));
         assert_eq!(
-            command(false, &status(RunState::On, Some(3))),
+            command(false, &status(RunState::Starting, None), true),
             Some(Switch::Off)
         );
-        // Start-up is left to finish first.
-        assert_eq!(command(false, &status(RunState::Starting, None)), None);
-        assert_eq!(command(false, &status(RunState::Off, None)), None);
-        assert_eq!(command(false, &status(RunState::ShuttingDown, None)), None);
+        // Stuck never causes a start or a stop of something already off.
+        assert_eq!(command(false, &status(RunState::Off, None), true), None);
+        assert_eq!(command(true, &on(false, true), true), None);
     }
 
     #[test]

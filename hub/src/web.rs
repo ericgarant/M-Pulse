@@ -213,10 +213,11 @@ fn state_json(hub: &Hub) -> String {
         (Some(st), Some(at)) => {
             let _ = write!(
                 out,
-                ",\"age_s\":{},\"state\":\"{:?}\",\"fan\":{},\"pump\":{},\"glow\":{},\"flame\":{},\
+                ",\"age_s\":{},\"running\":{},\"state\":\"{:?}\",\"fan\":{},\"pump\":{},\"glow\":{},\"flame\":{},\
                  \"error\":{},\"power_kw\":{:.1},\"set_power_kw\":{:.1},\"set_temp_c\":{},\
                  \"heater_temp_c\":{},\"volts\":{:.1}",
                 at.elapsed().as_secs(),
+                actuator::is_running(&st),
                 st.state,
                 st.fan,
                 st.fuel_pump,

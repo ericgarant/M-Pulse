@@ -77,11 +77,15 @@ pub struct Status {
     pub flame: bool,
     /// `None` when the heater reports no fault (0xFF on the wire).
     pub error: Option<u8>,
+    /// Rises to about 3.5 during warm-up with the setting at 1.4, then
+    /// eases back, so it tracks the burn rate more than the setting.
     pub live_power_kw: f32,
-    /// The heater's own temperature reading in degrees Celsius.
+    /// Byte 6 of the report. Thought to be a temperature, but it stayed at
+    /// 97 through a whole run on a DHG001, so do not build logic on it.
     pub heater_temp_c: i8,
     pub set_power_kw: f32,
     pub set_temp_c: u8,
+    /// Reads 0 while the heater is idle and 12 to 13 V while it runs.
     pub supply_volts: f32,
     pub schedule_enabled: bool,
 }
