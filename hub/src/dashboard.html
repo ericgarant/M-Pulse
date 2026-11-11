@@ -121,7 +121,12 @@ async function refresh() {
   const h = s.heater;
   $("link").textContent = h.connected ? "connected" : "searching";
   $("link").className = h.connected ? "ok" : "bad";
-  if (h.state) {
+  // After the link drops the hub still holds the last status; do not show
+  // it as if it were current.
+  const parts = ["state", "parts", "power", "htemp", "volts", "err"];
+  if (!h.connected || !h.state) {
+    parts.forEach(id => { $(id).textContent = "--"; $(id).className = ""; });
+  } else {
     // The heater says "On" seconds after a start, minutes before it burns.
     $("state").textContent = h.state === "On" ? (h.running ? "Running" : "Igniting") : h.state;
     $("parts").textContent = [h.flame, h.glow, h.pump, h.fan].map(yes).join(" / ");
