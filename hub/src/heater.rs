@@ -112,8 +112,16 @@ pub async fn run(
                     warn!("Heater link ended: {err}");
                 }
             }
-            Ok(None) => info!("Heater not in range"),
-            Err(err) => error!("Heater search failed: {err}"),
+            // Hand the radio on before the pause below, or this link takes
+            // it straight back and the others never get to search.
+            Ok(None) => {
+                drop(turn);
+                info!("Heater not in range");
+            }
+            Err(err) => {
+                drop(turn);
+                error!("Heater search failed: {err}");
+            }
         }
         {
             let mut s = state.lock();
@@ -130,7 +138,9 @@ pub async fn run(
 /// it is heard, or `None` if it did not advertise in that time.
 pub async fn find(device: &BLEDevice, duration_ms: i32) -> Result<Option<BLEAddress>, BLEError> {
     let mut scan = BLEScan::new();
-    scan.active_scan(true).interval(100).window(99);
+    scan.active_scan(true)
+        .interval(radio::SCAN_INTERVAL)
+        .window(radio::SCAN_WINDOW);
 
     scan.start(device, duration_ms, |adv, data| {
         let name = data.name()?;

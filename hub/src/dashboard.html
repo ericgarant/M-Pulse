@@ -677,6 +677,7 @@ const LOW_LIMITS = { saver: [5, 95], cutoff: [5, 50] };
 let last = null;         // last state from the hub
 let fridge = null;       // fridge status while its link is up
 let fails = 0, sentClock = false, pollTimer = null, lastOk = 0;
+const started = Date.now();
 
 /* ---------- Small helpers ---------- */
 function post(path, body) {
@@ -1280,14 +1281,16 @@ async function refresh() {
   let s;
   try {
     const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 4000);
+    const t = setTimeout(() => ctl.abort(), 8000);
     const r = await fetch("/api/state", { cache: "no-store", signal: ctl.signal });
     clearTimeout(t);
     if (!r.ok) throw new Error(r.status);
     s = await r.json();
   } catch (e) {
-    // One missed poll is normal on Wi-Fi; say so after two.
-    if (++fails >= 2) {
+    // The hub's Wi-Fi can pause for a few seconds while it searches for a
+    // Bluetooth device, so only call it unreachable after 12 s of silence.
+    fails++;
+    if (Date.now() - (lastOk || started) > 12000) {
       document.body.classList.add("offline");
       renderAlerts(null);
       ["ch-heater", "ch-fridge", "ch-power"].forEach(id => $(id).className = "chip");
