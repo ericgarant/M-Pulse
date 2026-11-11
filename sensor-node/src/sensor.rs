@@ -73,9 +73,8 @@ impl DelayNs for DhtDelay {
 
 /// Starts the sensor thread on `pin` and returns the shared reading slot.
 ///
-/// The pin is driven open-drain with the ESP32's internal pull-up (about 45k)
-/// enabled, so no external resistor is needed with short wires. If reads fail
-/// often, add a 4.7k to 10k pull-up from DATA to 3.3V.
+/// The pin is driven open-drain with the internal pull-up enabled as well as
+/// the external 10k pull-up from DATA to 3.3V.
 pub fn spawn<P>(pin: P) -> anyhow::Result<SharedReading>
 where
     P: InputPin + OutputPin + 'static,

@@ -1,14 +1,14 @@
 [package]
-name = "m-pulse-thermostat"
+name = "m-pulse-sensor-node"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.82"
-description = "M-Pulse thermostat node: DHT11 sensing and BLE control of a BougeRV diesel heater"
+description = "M-Pulse sensor node (ESP32): DHT11 cabin readings sent to the hub over Wi-Fi"
 license = "MIT"
 publish = false
 
 [[bin]]
-name = "m-pulse-thermostat"
+name = "m-pulse-sensor-node"
 harness = false # the ESP-IDF target has no test harness
 
 [profile.release]
@@ -22,10 +22,9 @@ opt-level = "z" # unoptimised builds are too large and too slow for the ESP32
 anyhow = "1"
 log = "0.4"
 esp-idf-svc = "0.53"
-esp32-nimble = "0.13"
 dht-sensor = "0.3"
 embedded-hal = "1"
-embassy-futures = "0.1"
+m-pulse-core = { path = "../core" }
 
 [build-dependencies]
 embuild = "0.33"
