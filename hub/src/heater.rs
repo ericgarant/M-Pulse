@@ -1,23 +1,28 @@
 //! BougeRV diesel heater BLE client.
 //!
-//! Finds the heater, connects, and performs the same opening handshake as
-//! the vendor app: subscribe to replies, ask for the firmware version, switch
-//! to the status stream, and set the heater's clock. After that it only
-//! listens and logs.
+//! Keeps a lasting link to the heater: finds it, connects, performs the same
+//! opening handshake as the vendor app (subscribe to replies, ask for the
+//! firmware version, switch to the status stream), sets the heater's clock
+//! once the hub knows the time, and publishes every status report. If the
+//! link drops, it reconnects.
 //!
-//! The version request and the clock sync are the only commands written to
-//! the heater. This code never sends the on/off or power commands.
+//! Besides the version request and the clock sync, the only command written
+//! to the heater is the on/off switch, and only when another part of the hub
+//! queues one in the shared state: the dashboard's On and Off buttons, or the
+//! thermostat in Auto mode. This code never sends the power command.
 
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use embassy_futures::select::{select, Either};
 use esp32_nimble::utilities::BleUuid;
 use esp32_nimble::{uuid128, BLEAddress, BLEClient, BLEDevice, BLEError, BLEScan};
 use esp_idf_svc::timer::EspAsyncTimer;
-use log::{info, warn};
-use m_pulse_core::clock::LocalTime;
+use log::{error, info, warn};
 use m_pulse_core::protocol::{self, Status};
+
+use crate::clock;
+use crate::state::Shared;
 
 /// The heater advertises as `BougeRV-DHG001`. Matching on the prefix keeps
 /// this working if the model suffix differs between units.
@@ -33,30 +38,9 @@ const CHAR_REPLY: BleUuid = uuid128!("bf83f3f2-399a-414d-9035-ce64ceb3ff67");
 /// "TX dat.": a status report arrives here every second.
 const CHAR_STATUS: BleUuid = uuid128!("bf83f3f3-399a-414d-9035-ce64ceb3ff67");
 
-/// Local time of the build machine, in `YYMMDDhhmmss` form. Set it when
-/// building: `M_PULSE_CLOCK=$(date +%y%m%d%H%M%S) cargo build --release`.
-/// Without it the clock sync is skipped.
-const BUILD_CLOCK: Option<&str> = option_env!("M_PULSE_CLOCK");
-
-static BOOT: OnceLock<Instant> = OnceLock::new();
-
-/// Records the boot moment. Call once, first thing in `main`.
-pub fn mark_boot() {
-    BOOT.get_or_init(Instant::now);
-}
-
-/// Best guess at the local time: the build time plus time since boot.
-/// Correct right after flashing, and drifts by however long the board took
-/// to be flashed after building, plus every power cycle since.
-fn current_time() -> Option<LocalTime> {
-    let built = LocalTime::parse_compact(BUILD_CLOCK?)?;
-    let since_boot = BOOT.get()?.elapsed().as_secs();
-    Some(built.add_seconds(since_boot))
-}
-
 /// Largest radio packet we send, in bytes, and its airtime in µs. NimBLE
-/// asks for 251 bytes on every new link; the heater drops the link about
-/// 10 s later, so this test caps it at the Bluetooth 4.0 minimum of 27.
+/// asks for 251 bytes on every new link. This caps it at the Bluetooth 4.0
+/// minimum of 27, which is what the ESP32-S3 link test that held used.
 const DATA_LEN_TX_OCTETS: u16 = 27;
 const DATA_LEN_TX_TIME_US: u16 = 328;
 
@@ -103,6 +87,43 @@ const CONN_SUPERVISION_TIMEOUT: u16 = 300; // units of 10 ms
 const CONN_SCAN_INTERVAL: u16 = 16; // units of 0.625 ms
 const CONN_SCAN_WINDOW: u16 = 16; // units of 0.625 ms
 
+/// How long to look for the heater in each attempt.
+const FIND_DURATION_MS: i32 = 15_000;
+
+/// Pause before looking for the heater again after a link ends.
+const RETRY_PAUSE: Duration = Duration::from_secs(10);
+
+/// The heater reports once a second. If it goes quiet this long while
+/// connected, the link is closed and rebuilt.
+const STATUS_SILENCE_LIMIT: Duration = Duration::from_secs(15);
+
+/// Keeps the heater link up for the life of the firmware.
+pub async fn run(
+    device: &BLEDevice,
+    timer: &mut EspAsyncTimer,
+    state: Shared,
+) -> anyhow::Result<()> {
+    loop {
+        match find(device, FIND_DURATION_MS).await {
+            Ok(Some(addr)) => {
+                if let Err(err) = session(device, &addr, timer, &state).await {
+                    warn!("Heater link ended: {err}");
+                }
+            }
+            Ok(None) => info!("Heater not in range"),
+            Err(err) => error!("Heater search failed: {err}"),
+        }
+        {
+            let mut s = state.lock();
+            s.heater.connected = false;
+            s.heater.clock_synced = false;
+            // A command must never fire late, after a reconnect.
+            s.heater.pending = None;
+        }
+        timer.after(RETRY_PAUSE).await?;
+    }
+}
+
 /// Scans for up to `duration_ms` and returns the heater's address as soon as
 /// it is heard, or `None` if it did not advertise in that time.
 pub async fn find(device: &BLEDevice, duration_ms: i32) -> Result<Option<BLEAddress>, BLEError> {
@@ -127,16 +148,20 @@ pub async fn find(device: &BLEDevice, duration_ms: i32) -> Result<Option<BLEAddr
     .await
 }
 
-/// Connects to the heater, performs the opening handshake, and logs status
-/// reports for `listen` before disconnecting.
-pub async fn inspect(
+/// One connection: connect, handshake, then stay connected until the link
+/// drops or the heater goes quiet.
+async fn session(
     device: &BLEDevice,
     addr: &BLEAddress,
-    listen: Duration,
     timer: &mut EspAsyncTimer,
+    state: &Shared,
 ) -> anyhow::Result<()> {
     let mut client = device.new_client();
-    client.on_disconnect(|reason| warn!("Heater disconnected (reason {reason:#x})"));
+    let on_drop = state.clone();
+    client.on_disconnect(move |reason| {
+        warn!("Heater disconnected (reason {reason:#x})");
+        on_drop.lock().heater.connected = false;
+    });
     client.set_connection_params(
         CONN_INTERVAL_MIN,
         CONN_INTERVAL_MAX,
@@ -159,34 +184,68 @@ pub async fn inspect(
     }
     info!("Connected, RSSI {:?} dBm", client.get_rssi().ok());
     limit_packet_size(&client);
-
-    if let Err(err) = handshake(&mut client, timer).await {
-        warn!("Handshake stopped early: {err}");
+    {
+        let mut s = state.lock();
+        s.heater.connected = true;
+        s.heater.clock_synced = false;
+        s.heater.status_at = None;
     }
+
+    let started = Instant::now();
+    let result = stay_connected(&mut client, timer, state).await;
 
     if client.connected() {
-        info!("Listening for {} s", listen.as_secs());
-        // Wake once a second so a dropped link ends the wait early.
-        let mut remaining = listen.as_secs();
-        while remaining > 0 && client.connected() {
-            timer.after(Duration::from_secs(1)).await?;
-            remaining -= 1;
-        }
-        if client.connected() {
-            info!("Link held for the full {} s", listen.as_secs());
-        } else {
-            warn!(
-                "Link lost {} s into the listen window",
-                listen.as_secs() - remaining
-            );
-        }
+        // A clean disconnect leaves the heater ready for the next connection.
+        let _ = client.disconnect();
     }
+    info!("Link lasted {} s", started.elapsed().as_secs());
+    result
+}
 
-    if client.connected() {
-        client.disconnect()?;
-        info!("Disconnected from heater");
+async fn stay_connected(
+    client: &mut BLEClient,
+    timer: &mut EspAsyncTimer,
+    state: &Shared,
+) -> anyhow::Result<()> {
+    handshake(client, timer, state).await?;
+    let subscribed_at = Instant::now();
+
+    while client.connected() {
+        if !state.lock().heater.clock_synced {
+            if let Some(now) = clock::local_now() {
+                let sync = protocol::clock_frame(&now);
+                info!("Writing clock sync {now:?} as {}", describe(&sync));
+                write_command(client, &sync).await?;
+                state.lock().heater.clock_synced = true;
+            }
+        }
+
+        let queued = state.lock().heater.pending.take();
+        if let Some(switch) = queued {
+            let frame = protocol::switch_frame(switch);
+            warn!("Switching heater {switch:?}: writing {}", describe(&frame));
+            write_command(client, &frame).await?;
+            state.lock().heater.last_sent = Some((switch, Instant::now()));
+        }
+
+        let last_status = state.lock().heater.status_at.unwrap_or(subscribed_at);
+        if last_status.elapsed() > STATUS_SILENCE_LIMIT {
+            anyhow::bail!("no status for {} s", STATUS_SILENCE_LIMIT.as_secs());
+        }
+
+        timer.after(Duration::from_secs(1)).await?;
     }
+    anyhow::bail!("link lost")
+}
 
+async fn write_command(client: &mut BLEClient, frame: &[u8]) -> anyhow::Result<()> {
+    client
+        .get_service(HEATER_SERVICE)
+        .await?
+        .get_characteristic(CHAR_COMMAND)
+        .await?
+        .write_value(frame, true)
+        .await?;
     Ok(())
 }
 
@@ -195,11 +254,14 @@ pub async fn inspect(
 /// 1. subscribe to replies
 /// 2. ask for the firmware version and wait for the answer
 /// 3. unsubscribe from replies, pause, subscribe to status
-/// 4. write the current date and time to the heater
 ///
-/// Step 4 uses the build machine's clock (see `current_time`) and is skipped
-/// if the firmware was built without one.
-async fn handshake(client: &mut BLEClient, timer: &mut EspAsyncTimer) -> anyhow::Result<()> {
+/// The app then writes the current time; `stay_connected` does that as soon
+/// as the hub's clock is set.
+async fn handshake(
+    client: &mut BLEClient,
+    timer: &mut EspAsyncTimer,
+    state: &Shared,
+) -> anyhow::Result<()> {
     let service = client.get_service(HEATER_SERVICE).await?;
 
     // 1. Replies.
@@ -227,10 +289,9 @@ async fn handshake(client: &mut BLEClient, timer: &mut EspAsyncTimer) -> anyhow:
     loop {
         if let Some(data) = reply.lock().unwrap_or_else(|e| e.into_inner()).take() {
             if data.len() >= 8 && data[1] == protocol::CMD_VERSION {
-                info!(
-                    "Heater firmware version {}.{}.{}",
-                    data[5], data[6], data[7]
-                );
+                let version = format!("{}.{}.{}", data[5], data[6], data[7]);
+                info!("Heater firmware version {version}");
+                state.lock().heater.firmware = Some(version);
             }
             break;
         }
@@ -250,26 +311,23 @@ async fn handshake(client: &mut BLEClient, timer: &mut EspAsyncTimer) -> anyhow:
     timer.after(SUBSCRIBE_GAP).await?;
 
     let status_chr = service.get_characteristic(CHAR_STATUS).await?;
-    status_chr.on_notify(|data| match Status::parse(data) {
-        Some(status) => info!("STATUS {} {status:?}", describe(data)),
+    let publish = state.clone();
+    let mut last: Option<Status> = None;
+    status_chr.on_notify(move |data| match Status::parse(data) {
+        Some(status) => {
+            // Log changes only; the heater repeats itself every second.
+            if last != Some(status) {
+                info!("Heater: {status:?}");
+                last = Some(status);
+            }
+            let mut s = publish.lock();
+            s.heater.status = Some(status);
+            s.heater.status_at = Some(Instant::now());
+        }
         None => warn!("STATUS (unrecognised) {}", describe(data)),
     });
     status_chr.subscribe_notify(true).await?;
     info!("Subscribed to status");
-
-    // 4. Clock sync.
-    match current_time() {
-        Some(now) => {
-            let sync = protocol::clock_frame(&now);
-            info!("Writing clock sync {now:?} as {}", describe(&sync));
-            service
-                .get_characteristic(CHAR_COMMAND)
-                .await?
-                .write_value(&sync, true)
-                .await?;
-        }
-        None => warn!("No build clock set, skipping the clock sync"),
-    }
     info!("Handshake complete");
 
     Ok(())

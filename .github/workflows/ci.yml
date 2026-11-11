@@ -28,25 +28,37 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-  thermostat:
-    name: Build thermostat firmware
+  firmware:
+    name: Build ${{ matrix.crate }} firmware
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: hub
+            chip: esp32s3
+          - crate: sensor-node
+            chip: esp32
     defaults:
       run:
-        working-directory: thermostat
+        working-directory: ${{ matrix.crate }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust for Xtensa
         uses: esp-rs/xtensa-toolchain@v1.7
+        # The installer looks up the latest toolchain through the GitHub
+        # API; without a token it fails when the shared rate limit runs out.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           default: true
-          buildtargets: esp32
+          buildtargets: ${{ matrix.chip }}
           ldproxy: true
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: thermostat
+          workspaces: ${{ matrix.crate }}
 
       - name: Check formatting
         run: cargo fmt --check
