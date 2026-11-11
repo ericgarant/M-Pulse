@@ -1,6 +1,6 @@
 //! Takes turns on the Bluetooth radio.
 //!
-//! The heater and fridge links run side by side, but NimBLE allows one scan
+//! The heater, fridge and Bluetti links run side by side, but NimBLE allows one scan
 //! or one connection attempt at a time. Each link holds this turn while it
 //! searches and connects, and releases it once connected.
 

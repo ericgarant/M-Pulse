@@ -96,6 +96,16 @@ button.wide.active { background:var(--accent); }
     <div class="row"><span>Last command</span><span id="f-last">--</span></div>
   </section>
   <section>
+    <h2>Power</h2>
+    <div class="big" id="b-soc">--</div>
+    <div class="note" id="b-eta">--</div>
+    <div class="row"><span>Link</span><span id="b-link">--</span></div>
+    <div class="row"><span>Solar in</span><span id="b-pv">--</span></div>
+    <div class="row"><span>Charger in</span><span id="b-grid">--</span></div>
+    <div class="row"><span>AC out</span><span id="b-ac">--</span></div>
+    <div class="row"><span>DC out (12 V, USB)</span><span id="b-dc">--</span></div>
+  </section>
+  <section>
     <h2>Hub</h2>
     <div class="row"><span>Clock</span><span id="clock">--</span></div>
     <div class="row"><span>On your Wi-Fi</span><span id="ip">--</span></div>
@@ -163,6 +173,7 @@ async function refresh() {
   $("last").textContent = h.last_command || "none";
 
   showFridge(s.fridge);
+  showBluetti(s.bluetti);
 
   $("clock").textContent = s.clock || "not set";
   $("ip").textContent = s.sta_ip || "not joined";
@@ -170,6 +181,29 @@ async function refresh() {
   if (!s.clock && !sentClock) sendClock();
 }
 
+function showBluetti(b) {
+  $("b-link").textContent = !b.connected ? "searching" : b.secure ? "connected" : "connecting";
+  $("b-link").className = b.connected && b.secure ? "ok" : "bad";
+  const ids = ["b-pv", "b-grid", "b-ac", "b-dc"];
+  // Do not show the last reading as current once the link is down.
+  if (!b.connected || b.soc === null) {
+    $("b-soc").textContent = "--";
+    $("b-eta").textContent = "--";
+    ids.forEach(id => $(id).textContent = "--");
+    return;
+  }
+  const hm = m => Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min";
+  $("b-soc").textContent = b.soc + " %";
+  // The station reports 5994 min (99.9 h) when it has no estimate.
+  const est = m => m > 0 && m < 5994;
+  const inW = b.pv_w + Math.max(0, b.grid_w), outW = b.ac_w + b.dc_w;
+  $("b-eta").textContent = inW > outW && est(b.to_full_min) ? "full in " + hm(b.to_full_min)
+    : outW > inW && est(b.to_empty_min) ? "empty in " + hm(b.to_empty_min) : (b.model || "Bluetti");
+  $("b-pv").textContent = b.pv_w + " W";
+  $("b-grid").textContent = b.grid_w + " W";
+  $("b-ac").textContent = b.ac_w + " W (" + yes(b.ac_on) + ")";
+  $("b-dc").textContent = b.dc_w + " W (" + yes(b.dc_on) + ")";
+}
 function showFridge(f) {
   $("f-link").textContent = f.connected ? "connected" : "searching";
   $("f-link").className = f.connected ? "ok" : "bad";

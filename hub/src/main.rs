@@ -1,7 +1,7 @@
 //! M-Pulse hub (ESP32-S3).
 //!
-//! Owns the BLE links to the BougeRV diesel heater and the BougeRV Rocky 50
-//! fridge, receives cabin readings
+//! Owns the BLE links to the BougeRV diesel heater, the BougeRV Rocky 50
+//! fridge and the Bluetti Elite 200 V2 power station, receives cabin readings
 //! from the sensor node over Wi-Fi, runs the thermostat, and serves the
 //! dashboard.
 //!
@@ -13,6 +13,7 @@
 //! silent about 11 s into every connection), while the S3 holds it, so the
 //! heater link lives here.
 
+mod bluetti;
 mod cabin;
 mod clock;
 mod control;
@@ -23,7 +24,7 @@ mod radio;
 mod state;
 mod web;
 
-use embassy_futures::join::join;
+use embassy_futures::join::join3;
 use esp32_nimble::BLEDevice;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::peripherals::Peripherals;
@@ -59,12 +60,14 @@ fn main() -> anyhow::Result<()> {
     let timers = EspTaskTimerService::new()?;
     let mut heater_timer = timers.timer_async()?;
     let mut fridge_timer = timers.timer_async()?;
+    let mut bluetti_timer = timers.timer_async()?;
     let ble = BLEDevice::take();
 
-    // Both links run on this task and take turns to search and connect.
-    let (heater, fridge) = block_on(join(
+    // The links run on this task and take turns to search and connect.
+    let (heater, fridge, bluetti) = block_on(join3(
         heater::run(ble, &mut heater_timer, state.clone()),
-        fridge::run(ble, &mut fridge_timer, state),
+        fridge::run(ble, &mut fridge_timer, state.clone()),
+        bluetti::run(ble, &mut bluetti_timer, state),
     ));
-    heater.and(fridge)
+    heater.and(fridge).and(bluetti)
 }
