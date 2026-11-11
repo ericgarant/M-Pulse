@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use m_pulse_core::actuator::Switch;
 use m_pulse_core::bluetti;
+use m_pulse_core::eco_guard::{self, EcoGuard};
 use m_pulse_core::fridge::{self, RunMode};
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
@@ -75,6 +76,15 @@ pub struct Bluetti {
     pub status_at: Option<Instant>,
 }
 
+/// The rule that puts the fridge in Eco while the Bluetti is low.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FridgeSaver {
+    pub config: eco_guard::Config,
+    pub guard: EcoGuard,
+    /// The last mode the rule asked the fridge for, and when.
+    pub last_action: Option<(RunMode, Instant)>,
+}
+
 /// Who is allowed to switch the heater.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -101,6 +111,7 @@ pub struct Hub {
     pub heater: Heater,
     pub fridge: Fridge,
     pub bluetti: Bluetti,
+    pub saver: FridgeSaver,
     pub control: Control,
     /// The hub's address on your Wi-Fi network, once joined.
     pub sta_ip: Option<String>,
@@ -116,6 +127,7 @@ impl Shared {
             heater: Heater::default(),
             fridge: Fridge::default(),
             bluetti: Bluetti::default(),
+            saver: FridgeSaver::default(),
             control: Control {
                 mode: Mode::Monitor,
                 config,
