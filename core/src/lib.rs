@@ -6,6 +6,7 @@
 pub mod actuator;
 pub mod bluetti;
 pub mod clock;
+pub mod eco_guard;
 pub mod filter;
 pub mod fridge;
 pub mod protocol;

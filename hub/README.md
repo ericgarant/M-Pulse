@@ -10,6 +10,8 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
 - keeps a third BLE link to the Bluetti Elite 200 V2 power station and reads
   its battery, inputs and outputs every 5 s, read only (see
   [Bluetti](#bluetti))
+- can put the fridge in Eco while the Bluetti is low and back to Max once it
+  recovers (the fridge saver, off after every restart)
 - receives cabin readings from the [sensor node](../sensor-node) over Wi-Fi
 - runs the thermostat on those readings
 - switches the heater on and off, either from the dashboard's On and Off
@@ -135,6 +137,20 @@ licence file is needed.
 - While the hub holds the link, the Bluetti app can only reach the station
   over the cloud, not Bluetooth.
 
+## Fridge saver
+
+Switches the fridge to Eco when the Bluetti's charge falls to the low level,
+and back to Max when it is up to the high level again (defaults 30 % and
+50 %). The logic is in [`core/src/eco_guard.rs`](../core/src/eco_guard.rs).
+
+- It is off after every restart. Turn it on and pick the levels on the
+  dashboard's Power card.
+- It acts only when the charge crosses a level, and restores Max only if it
+  was the one that set Eco. Change the mode by hand and it leaves it alone.
+- It needs a Bluetti reading under 30 s old and a fridge status under 10 s
+  old; without them it waits. A change the fridge does not take is retried
+  every 30 s, three times at most.
+
 ## Build and flash
 
 Set up the toolchain first: [../docs/mac-setup.md](../docs/mac-setup.md).
@@ -170,6 +186,11 @@ Tested on the Bluetti Elite 200 V2, alongside the heater and fridge links:
 - First read: model `Elite200V2`, 94 %, AC and DC outputs on, no load and no
   input. The station reports 5994 min to full and to empty when it has no
   estimate, so the dashboard hides that.
+- Battery voltage is in hundredths (the app's divide-by-10 is wrong for this
+  model): 39.66 V at 2.2 A out matched the 83 W AC load. Charging-status
+  code 2 means discharging.
+- Fridge saver: with the levels set to 95/100 % (charge was 91 %) the fridge
+  went to Eco within seconds; moving them to 5/10 % put it back to Max.
 
 ## Thermostat defaults
 

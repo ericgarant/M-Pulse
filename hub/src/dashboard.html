@@ -26,6 +26,8 @@ button.wide.active { background:var(--accent); }
 #h-off, #f-off { background:var(--fg); color:var(--bg); }
 #h-on { background:var(--accent); }
 .note { font-size:13px; color:var(--muted); }
+select { font:inherit; font-size:16px; padding:4px 6px; border-radius:8px; background:var(--bg); color:var(--fg); border:1px solid var(--muted); }
+h3 { font-size:15px; margin:14px 0 4px; }
 </style>
 </head>
 <body>
@@ -104,6 +106,17 @@ button.wide.active { background:var(--accent); }
     <div class="row"><span>Charger in</span><span id="b-grid">--</span></div>
     <div class="row"><span>AC out</span><span id="b-ac">--</span></div>
     <div class="row"><span>DC out (12 V, USB)</span><span id="b-dc">--</span></div>
+    <div class="row"><span>Battery</span><span id="b-volts">--</span></div>
+    <h3>Fridge saver</h3>
+    <p class="note">Puts the fridge in Eco when the Bluetti runs low, and back to Max once it has recharged.</p>
+    <div class="modes">
+      <button id="s-on" class="wide">Saver on</button>
+      <button id="s-off" class="wide">Saver off</button>
+    </div>
+    <div class="row"><span>Eco at or below</span><select id="s-low" aria-label="Eco at or below"></select></div>
+    <div class="row"><span>Max again at or above</span><select id="s-high" aria-label="Max again at or above"></select></div>
+    <div class="row"><span>Now</span><span id="s-state">--</span></div>
+    <div class="row"><span>Last change</span><span id="s-last">--</span></div>
   </section>
   <section>
     <h2>Hub</h2>
@@ -174,6 +187,7 @@ async function refresh() {
 
   showFridge(s.fridge);
   showBluetti(s.bluetti);
+  showSaver(s.saver);
 
   $("clock").textContent = s.clock || "not set";
   $("ip").textContent = s.sta_ip || "not joined";
@@ -184,7 +198,7 @@ async function refresh() {
 function showBluetti(b) {
   $("b-link").textContent = !b.connected ? "searching" : b.secure ? "connected" : "connecting";
   $("b-link").className = b.connected && b.secure ? "ok" : "bad";
-  const ids = ["b-pv", "b-grid", "b-ac", "b-dc"];
+  const ids = ["b-pv", "b-grid", "b-ac", "b-dc", "b-volts"];
   // Do not show the last reading as current once the link is down.
   if (!b.connected || b.soc === null) {
     $("b-soc").textContent = "--";
@@ -203,7 +217,37 @@ function showBluetti(b) {
   $("b-grid").textContent = b.grid_w + " W";
   $("b-ac").textContent = b.ac_w + " W (" + yes(b.ac_on) + ")";
   $("b-dc").textContent = b.dc_w + " W (" + yes(b.dc_on) + ")";
+  $("b-volts").textContent = b.volts.toFixed(1) + " V, " + b.amps.toFixed(1) + " A";
 }
+// Levels offered for the fridge saver, in 5 % steps.
+for (let p = 5; p <= 100; p += 5) {
+  if (p <= 95) $("s-low").add(new Option(p + " %", p));
+  if (p >= 10) $("s-high").add(new Option(p + " %", p));
+}
+let saverEditing = false;
+function showSaver(v) {
+  $("s-on").className = "wide" + (v.enabled ? " active" : "");
+  $("s-off").className = "wide" + (v.enabled ? "" : " active");
+  // Leave the pickers alone while someone is choosing a level.
+  if (!saverEditing) { $("s-low").value = v.low; $("s-high").value = v.high; }
+  $("s-state").textContent = !v.enabled ? "off"
+    : v.holding_eco ? "fridge held in Eco until " + v.high + " %"
+    : v.battery_low ? "battery low, waiting to recover"
+    : "watching";
+  $("s-last").textContent = v.last_action || "none";
+}
+async function saver(body) {
+  const r = await post("/api/saver", body);
+  if (!r.ok) alert(await r.text());
+  saverEditing = false;
+  refresh();
+}
+$("s-on").onclick = () => saver("on");
+$("s-off").onclick = () => saver("off");
+["s-low", "s-high"].forEach(id => {
+  $(id).onfocus = () => { saverEditing = true; };
+  $(id).onchange = () => saver("levels:" + $("s-low").value + "-" + $("s-high").value);
+});
 function showFridge(f) {
   $("f-link").textContent = f.connected ? "connected" : "searching";
   $("f-link").className = f.connected ? "ok" : "bad";

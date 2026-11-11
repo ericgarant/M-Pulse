@@ -6,6 +6,9 @@
 //!
 //! In Monitor mode that is all it does. In Auto mode it also queues the
 //! switch command that moves the heater toward the decision.
+//!
+//! The same loop runs the fridge saver: Eco while the Bluetti is low, Max
+//! again once it has recovered (see `m_pulse_core::eco_guard`).
 
 use std::thread;
 use std::time::{Duration, Instant};
@@ -15,7 +18,7 @@ use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::filter::MedianFilter;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
-use crate::state::{Mode, Shared};
+use crate::state::{FridgeCommand, Mode, Shared};
 
 /// How often the thermostat is evaluated. Matches the sensor's sample rate.
 const TICK: Duration = Duration::from_secs(5);
@@ -26,6 +29,11 @@ const FILTER_WINDOW: usize = 5;
 
 /// A heater status older than this is not acted on.
 const STATUS_MAX_AGE: Duration = Duration::from_secs(10);
+/// A fridge status older than this is not acted on (the fridge link sends a
+/// mode change only with a status this fresh anyway).
+const FRIDGE_MAX_AGE: Duration = Duration::from_secs(10);
+/// A Bluetti reading older than this is not acted on. It is read every 5 s.
+const BLUETTI_MAX_AGE: Duration = Duration::from_secs(30);
 
 /// Starts the control thread.
 pub fn spawn(state: Shared) -> anyhow::Result<()> {
@@ -50,6 +58,8 @@ fn control_loop(state: Shared) {
     let mut last_received: Option<Instant> = None;
     let mut smoothed: Option<Sample> = None;
     let mut last_decision: Option<Decision> = None;
+    // Steady clock for the fridge saver.
+    let boot = Instant::now();
 
     loop {
         let (cabin, setpoint) = {
@@ -89,6 +99,7 @@ fn control_loop(state: Shared) {
             if s.control.mode == Mode::Auto {
                 drive_heater(&mut s, decision.heat);
             }
+            save_fridge(&mut s, boot.elapsed().as_secs());
         }
 
         if last_decision != Some(decision) {
@@ -141,6 +152,32 @@ fn drive_heater(hub: &mut crate::state::Hub, want_heat: bool) {
         status.state
     );
     h.pending = Some(next);
+}
+
+/// Runs the fridge saver one step and queues the mode change it asks for.
+fn save_fridge(hub: &mut crate::state::Hub, now_s: u64) {
+    let fresh = |at: Option<Instant>, max: Duration| at.is_some_and(|t| t.elapsed() <= max);
+    let soc = (hub.bluetti.connected && fresh(hub.bluetti.status_at, BLUETTI_MAX_AGE))
+        .then(|| hub.bluetti.status.as_ref().map(|s| s.soc_pct))
+        .flatten();
+    let fridge = (hub.fridge.connected && fresh(hub.fridge.status_at, FRIDGE_MAX_AGE))
+        .then(|| hub.fridge.status.map(|s| s.mode))
+        .flatten();
+    let was_low = hub.saver.guard.low;
+    let config = hub.saver.config;
+    let Some(mode) = hub.saver.guard.update(&config, soc, fridge, now_s) else {
+        if was_low && !hub.saver.guard.low {
+            info!("Fridge saver: Bluetti back to {soc:?} %");
+        }
+        return;
+    };
+    if hub.fridge.pending.is_some() {
+        // A dashboard command goes first; the saver tries again later.
+        return;
+    }
+    info!("Fridge saver: Bluetti at {soc:?} %, switching the fridge to {mode:?}");
+    hub.fridge.pending = Some(FridgeCommand::Mode(mode));
+    hub.saver.last_action = Some((mode, Instant::now()));
 }
 
 fn report(decision: &Decision, sample: Option<Sample>) {
