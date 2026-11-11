@@ -4,7 +4,8 @@ Firmware for the Freenove ESP32 WROOM board with the DHT11. It reads the
 cabin temperature and humidity every 5 seconds and broadcasts each reading to
 the [hub](../hub) over the hub's `M-Pulse` Wi-Fi network (UDP port 4210).
 Readings older than 30 seconds are not sent, so a broken sensor looks lost to
-the hub. If the optional home Wi-Fi is configured (see the hub README), it
+the hub. The hub's thermostat is the only thing that uses these readings; the
+fridge and Bluetti features do not need this board. If the optional home Wi-Fi is configured (see the hub README), it
 tries that network first and then the hub's, until one works.
 
 ## Wiring

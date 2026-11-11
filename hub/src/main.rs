@@ -5,9 +5,10 @@
 //! from the sensor node over Wi-Fi, runs the thermostat, and serves the
 //! dashboard.
 //!
-//! After every restart the hub is in Monitor mode and sends no switch
-//! commands. The heater is switched only from the dashboard's On and Off
-//! buttons, or by the thermostat once Auto mode is chosen there.
+//! After every restart the hub is in Monitor mode and the thermostat sends
+//! no switch commands. The heater is switched only from the dashboard's On
+//! and Off buttons, by the thermostat once Auto mode is chosen there, or
+//! switched off by the low-battery stop when the Bluetti runs low.
 //!
 //! The classic ESP32 could not hold this heater's BLE link (the heater went
 //! silent about 11 s into every connection), while the S3 holds it, so the
