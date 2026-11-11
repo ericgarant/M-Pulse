@@ -112,8 +112,10 @@ fn drive_heater(hub: &mut crate::state::Hub, want_heat: bool) {
     if !h.connected || at.elapsed() > STATUS_MAX_AGE || h.pending.is_some() {
         return;
     }
-    if status.state != RunState::Off {
-        // The heater responded, so the next start gets a fresh set of tries.
+    if status.state == RunState::On {
+        // The start succeeded, so the next one gets a fresh set of tries.
+        // Starting does not count: an ignition can fail and fall back to
+        // Off without reporting a fault.
         h.start_attempts = 0;
     }
     let Some(next) = actuator::command(want_heat, &status) else {
