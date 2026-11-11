@@ -7,6 +7,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
+use m_pulse_core::actuator::Switch;
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
 
@@ -30,10 +31,26 @@ pub struct Heater {
     pub firmware: Option<String>,
     /// Whether the heater's clock was set during the current connection.
     pub clock_synced: bool,
+    /// A switch command waiting to be written by the heater link.
+    pub pending: Option<Switch>,
+    /// The last switch command written, and when.
+    pub last_sent: Option<(Switch, Instant)>,
+}
+
+/// Who is allowed to switch the heater.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    /// The hub only watches. The thermostat's decision is shown but not
+    /// acted on; the dashboard's On and Off buttons still work. This is the
+    /// mode after every restart.
+    Monitor,
+    /// The thermostat switches the heater.
+    Auto,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Control {
+    pub mode: Mode,
     pub config: Config,
     pub decision: Option<Decision>,
     /// The filtered cabin temperature the thermostat last acted on.
@@ -58,6 +75,7 @@ impl Shared {
             cabin: None,
             heater: Heater::default(),
             control: Control {
+                mode: Mode::Monitor,
                 config,
                 decision: None,
                 smoothed_c: None,

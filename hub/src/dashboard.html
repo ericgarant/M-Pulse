@@ -20,6 +20,11 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(-
 .set { display:flex; align-items:center; justify-content:space-between; }
 button { font:inherit; font-size:22px; width:52px; height:44px; border:0; border-radius:10px; background:var(--accent); color:#fff; }
 #clockbtn { width:auto; font-size:15px; padding:0 14px; }
+.modes { display:flex; gap:8px; margin:10px 0 6px; }
+button.wide { flex:1; width:auto; font-size:16px; background:var(--muted); }
+button.wide.active { background:var(--accent); }
+#h-off { background:var(--fg); color:var(--bg); }
+#h-on { background:var(--accent); }
 .note { font-size:13px; color:var(--muted); }
 </style>
 </head>
@@ -33,15 +38,28 @@ button { font:inherit; font-size:22px; width:52px; height:44px; border:0; border
     <div class="row"><span>Updated</span><span id="cage">--</span></div>
   </section>
   <section>
-    <h2>Thermostat (dry run)</h2>
+    <h2>Thermostat</h2>
     <div class="set">
       <button id="down" aria-label="Lower setpoint">−</button>
       <div class="big" id="sp">--</div>
       <button id="up" aria-label="Raise setpoint">+</button>
     </div>
-    <div class="row"><span>Would heat</span><span id="heat">--</span></div>
+    <div class="row"><span>Wants heat</span><span id="heat">--</span></div>
     <div class="row"><span>Reason</span><span id="reason">--</span></div>
-    <p class="note">Dry run: the hub decides but does not switch the heater yet.</p>
+    <div class="modes">
+      <button id="m-monitor" class="wide">Monitor only</button>
+      <button id="m-auto" class="wide">Auto</button>
+    </div>
+    <p class="note" id="modenote">--</p>
+  </section>
+  <section>
+    <h2>Manual</h2>
+    <div class="modes">
+      <button id="h-on" class="wide">Heater ON</button>
+      <button id="h-off" class="wide">Heater OFF</button>
+    </div>
+    <div class="row"><span>Last command</span><span id="last">--</span></div>
+    <p class="note">A manual command switches back to Monitor only.</p>
   </section>
   <section>
     <h2>Heater</h2>
@@ -92,6 +110,11 @@ async function refresh() {
   $("sp").textContent = c.setpoint_c.toFixed(1) + " °C";
   $("heat").textContent = c.reason ? (c.heat ? "yes" : "no") : "--";
   $("reason").textContent = c.reason || "--";
+  $("m-monitor").className = "wide" + (c.mode === "monitor" ? " active" : "");
+  $("m-auto").className = "wide" + (c.mode === "auto" ? " active" : "");
+  $("modenote").textContent = c.mode === "auto"
+    ? "Auto: the thermostat switches the heater."
+    : "Monitor only: the thermostat decides but does not switch the heater.";
 
   const h = s.heater;
   $("link").textContent = h.connected ? "connected" : "searching";
@@ -106,6 +129,7 @@ async function refresh() {
     $("err").className = h.error === null ? "" : "bad";
   }
   $("fw").textContent = h.firmware || "--";
+  $("last").textContent = h.last_command || "none";
 
   $("clock").textContent = s.clock || "not set";
   $("ip").textContent = s.sta_ip || "not joined";
@@ -121,6 +145,17 @@ function nudge(delta) {
 $("down").onclick = () => nudge(-0.5);
 $("up").onclick = () => nudge(0.5);
 $("clockbtn").onclick = sendClock;
+$("m-monitor").onclick = () => post("/api/mode", "monitor").then(refresh);
+$("m-auto").onclick = () => {
+  if (confirm("Let the thermostat switch the heater on and off?")) post("/api/mode", "auto").then(refresh);
+};
+async function heater(cmd) {
+  const r = await post("/api/heater", cmd);
+  if (!r.ok) alert(await r.text());
+  refresh();
+}
+$("h-on").onclick = () => { if (confirm("Switch the heater ON now?")) heater("on"); };
+$("h-off").onclick = () => heater("off");
 refresh();
 setInterval(refresh, 2000);
 </script>

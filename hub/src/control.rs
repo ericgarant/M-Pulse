@@ -4,16 +4,18 @@
 //! node, smooths it, and asks the thermostat state machine whether the heater
 //! should be running. The decision is published for the dashboard.
 //!
-//! This is a dry run for now. Nothing is sent to the heater.
+//! In Monitor mode that is all it does. In Auto mode it also queues the
+//! switch command that moves the heater toward the decision.
 
 use std::thread;
 use std::time::{Duration, Instant};
 
 use log::{info, warn};
+use m_pulse_core::actuator;
 use m_pulse_core::filter::MedianFilter;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
-use crate::state::Shared;
+use crate::state::{Mode, Shared};
 
 /// How often the thermostat is evaluated. Matches the sensor's sample rate.
 const TICK: Duration = Duration::from_secs(5);
@@ -21,6 +23,9 @@ const TICK: Duration = Duration::from_secs(5);
 /// Readings in the median window. Five samples at one per five seconds
 /// reacts within about 15 seconds while ignoring a stray bad reading.
 const FILTER_WINDOW: usize = 5;
+
+/// A heater status older than this is not acted on.
+const STATUS_MAX_AGE: Duration = Duration::from_secs(10);
 
 /// Starts the control thread.
 pub fn spawn(state: Shared) -> anyhow::Result<()> {
@@ -34,7 +39,7 @@ pub fn spawn(state: Shared) -> anyhow::Result<()> {
 fn control_loop(state: Shared) {
     let config = state.lock().control.config;
     info!(
-        "Thermostat (dry run): setpoint {:.1} °C, on at or below {:.1} °C, off at or above {:.1} °C",
+        "Thermostat: setpoint {:.1} °C, on at or below {:.1} °C, off at or above {:.1} °C",
         config.setpoint_c,
         config.setpoint_c - config.hysteresis_c,
         config.setpoint_c + config.hysteresis_c,
@@ -55,7 +60,7 @@ fn control_loop(state: Shared) {
         // The dashboard changes the setpoint in the shared state.
         if (setpoint - thermostat.config().setpoint_c).abs() > 0.01 {
             thermostat.set_setpoint(setpoint);
-            info!("Thermostat (dry run): setpoint now {setpoint:.1} °C");
+            info!("Thermostat: setpoint now {setpoint:.1} °C");
         }
 
         // Feed each new reading through the filter exactly once.
@@ -81,6 +86,9 @@ fn control_loop(state: Shared) {
             let mut s = state.lock();
             s.control.decision = Some(decision);
             s.control.smoothed_c = smoothed.map(|x| x.temperature_c);
+            if s.control.mode == Mode::Auto {
+                drive_heater(&mut s, decision.heat);
+            }
         }
 
         if last_decision != Some(decision) {
@@ -92,15 +100,38 @@ fn control_loop(state: Shared) {
     }
 }
 
+/// Queues the switch command that moves the heater toward `want_heat`, if
+/// the heater is connected, its status is fresh and a command is due.
+fn drive_heater(hub: &mut crate::state::Hub, want_heat: bool) {
+    let h = &mut hub.heater;
+    let (Some(status), Some(at)) = (h.status, h.status_at) else {
+        return;
+    };
+    if !h.connected || at.elapsed() > STATUS_MAX_AGE || h.pending.is_some() {
+        return;
+    }
+    let Some(next) = actuator::command(want_heat, &status) else {
+        return;
+    };
+    let last = h.last_sent.map(|(sent, when)| (sent, when.elapsed()));
+    if actuator::should_send(next, last) {
+        info!(
+            "Thermostat: heater is {:?}, queueing {next:?}",
+            status.state
+        );
+        h.pending = Some(next);
+    }
+}
+
 fn report(decision: &Decision, sample: Option<Sample>) {
     let heat = if decision.heat { "ON" } else { "OFF" };
     match sample {
         Some(s) => info!(
-            "Thermostat (dry run): heat {heat}, {:?}, cabin {:.1} °C",
+            "Thermostat: heat {heat}, {:?}, cabin {:.1} °C",
             decision.reason, s.temperature_c
         ),
         None => warn!(
-            "Thermostat (dry run): heat {heat}, {:?}, no cabin reading",
+            "Thermostat: heat {heat}, {:?}, no cabin reading",
             decision.reason
         ),
     }
