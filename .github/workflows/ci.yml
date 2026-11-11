@@ -47,6 +47,10 @@ jobs:
 
       - name: Install Rust for Xtensa
         uses: esp-rs/xtensa-toolchain@v1.7
+        # The installer looks up the latest toolchain through the GitHub
+        # API; without a token it fails when the shared rate limit runs out.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           default: true
           buildtargets: ${{ matrix.chip }}
