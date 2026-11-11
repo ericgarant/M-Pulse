@@ -6,15 +6,23 @@
 //! `[0x00, command, payload.., checksum]`, where the checksum is the low byte
 //! of the sum of all preceding bytes.
 //!
-//! Known commands that this firmware does not send yet:
+//! A known command that this firmware does not send:
 //!
-//! - `0x05`: switch, payload `1` for on and `0` for off
 //! - `0x07`: power level, payload is kilowatts times ten (14 = 1.4 kW)
 
 /// Ask for the firmware version. The app sends this right after connecting.
 pub const CMD_VERSION: u8 = 0x0E;
 /// Set the heater's clock. The app sends this once status is subscribed.
 pub const CMD_CLOCK: u8 = 0x0A;
+
+/// Switch the heater on (payload 1) or off (payload 0).
+pub const CMD_SWITCH: u8 = 0x05;
+
+/// Builds the switch command.
+pub fn switch_frame(switch: crate::actuator::Switch) -> Vec<u8> {
+    let on = matches!(switch, crate::actuator::Switch::On);
+    frame(CMD_SWITCH, &[u8::from(on)])
+}
 
 /// Builds the clock sync command: `YY MM DD hh mm ss`, two-digit year.
 pub fn clock_frame(t: &crate::clock::LocalTime) -> Vec<u8> {
@@ -69,11 +77,15 @@ pub struct Status {
     pub flame: bool,
     /// `None` when the heater reports no fault (0xFF on the wire).
     pub error: Option<u8>,
+    /// Rises to about 3.5 during warm-up with the setting at 1.4, then
+    /// eases back, so it tracks the burn rate more than the setting.
     pub live_power_kw: f32,
-    /// The heater's own temperature reading in degrees Celsius.
+    /// Byte 6 of the report. Thought to be a temperature, but it stayed at
+    /// 97 through a whole run on a DHG001, so do not build logic on it.
     pub heater_temp_c: i8,
     pub set_power_kw: f32,
     pub set_temp_c: u8,
+    /// Reads 0 while the heater is idle and 12 to 13 V while it runs.
     pub supply_volts: f32,
     pub schedule_enabled: bool,
 }
@@ -128,8 +140,9 @@ mod tests {
     fn frames_match_the_vendor_app() {
         assert_eq!(frame(CMD_VERSION, &[]), [0x00, 0x0e, 0x0e]);
         // Switch on, switch off, and 1.4 kW, as the app builds them.
-        assert_eq!(frame(0x05, &[1]), [0x00, 0x05, 0x01, 0x06]);
-        assert_eq!(frame(0x05, &[0]), [0x00, 0x05, 0x00, 0x05]);
+        use crate::actuator::Switch;
+        assert_eq!(switch_frame(Switch::On), [0x00, 0x05, 0x01, 0x06]);
+        assert_eq!(switch_frame(Switch::Off), [0x00, 0x05, 0x00, 0x05]);
         assert_eq!(frame(0x07, &[14]), [0x00, 0x07, 0x0e, 0x15]);
     }
 
