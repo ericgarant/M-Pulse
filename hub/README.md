@@ -35,6 +35,16 @@ export M_PULSE_AP_PASS="password for the M-Pulse network"   # 8+ characters
 Leave out the first two lines to use only the hub network. Without
 `M_PULSE_AP_PASS` the hub network password is `mpulse-heater`.
 
+## Opening the dashboard on a phone
+
+Join the `M-Pulse` Wi-Fi and open `http://192.168.71.1` (type the `http://`).
+
+- **Android 17 and later** block apps from reaching local devices by default.
+  If Chrome shows `ERR_TOO_MANY_RETRIES`, allow it in Settings > Apps >
+  Chrome > Permissions > Local network.
+- If the page does not load at all, turn mobile data off or tell the phone to
+  stay connected when it warns that the network has no internet.
+
 ## Build and flash
 
 Set up the toolchain first: [../docs/mac-setup.md](../docs/mac-setup.md).
