@@ -24,6 +24,11 @@ const SETPOINT_RANGE: std::ops::RangeInclusive<f32> = 5.0..=30.0;
 pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
     let mut server = EspHttpServer::new(&Configuration {
         stack_size: 10 * 1024,
+        // Browsers open several connections at once. With the default of 4,
+        // the server closed Chrome's connections under it and the page
+        // failed with ERR_TOO_MANY_RETRIES.
+        max_open_sockets: 10,
+        lru_purge_enable: true,
         ..Default::default()
     })?;
 
