@@ -12,6 +12,8 @@
 //!   or `temp:<degrees>`)
 //! - set the fridge saver (`POST /api/saver`, body `on`, `off` or
 //!   `levels:<low>-<high>`, in percent of the Bluetti's charge)
+//! - set the heater's low-battery cutoff (`POST /api/cutoff`, body `on`,
+//!   `off` or `levels:<stop>-<resume>`)
 //! - set the hub's clock from the phone when the hub has no internet time
 //!   (`POST /api/time`, body is Unix seconds)
 
@@ -24,6 +26,7 @@ use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::eco_guard;
 use m_pulse_core::fridge::RunMode;
+use m_pulse_core::heater_cutoff;
 use m_pulse_core::protocol::RunState;
 
 use crate::clock;
@@ -202,6 +205,50 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         Ok(())
     })?;
 
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/cutoff", Method::Post, move |mut req| {
+        let text = read_body(&mut req)?;
+        let changed = {
+            let mut hub = s.lock();
+            let config = hub.cutoff.config;
+            let new = match text.trim() {
+                "on" => Some(heater_cutoff::Config {
+                    enabled: true,
+                    ..config
+                }),
+                "off" => Some(heater_cutoff::Config {
+                    enabled: false,
+                    ..config
+                }),
+                other => other
+                    .strip_prefix("levels:")
+                    .and_then(|l| l.split_once('-'))
+                    .and_then(|(lo, hi)| Some((lo.parse().ok()?, hi.parse().ok()?)))
+                    .and_then(|(lo, hi)| config.with_levels(lo, hi)),
+            };
+            if let Some(c) = new {
+                hub.cutoff.config = c;
+            }
+            new
+        };
+        match changed {
+            Some(c) => {
+                warn!("Dashboard set the heater cutoff: {c:?}");
+                req.into_ok_response()?.write_all(b"ok")?;
+            }
+            None => {
+                let msg = format!(
+                    "Send on, off, or levels:<stop>-<resume>, with stop between {} and {} %, resume up to 100 % and at least {} above stop.",
+                    heater_cutoff::MIN_PCT,
+                    heater_cutoff::MAX_PCT,
+                    heater_cutoff::MIN_GAP
+                );
+                req.into_status_response(400)?.write_all(msg.as_bytes())?;
+            }
+        }
+        Ok(())
+    })?;
+
     server.fn_handler::<anyhow::Error, _>("/api/time", Method::Post, |mut req| {
         let text = read_body(&mut req)?;
         // Internet time wins; only fill in a clock that was never set.
@@ -228,6 +275,11 @@ fn manual_refusal(hub: &Hub, switch: Switch) -> Option<&'static str> {
     }
     if switch == Switch::Off {
         return None;
+    }
+    if hub.cutoff.cutoff.tripped {
+        return Some(
+            "The Bluetti battery is low, so heater starts are blocked until it recharges.",
+        );
     }
     let Some(status) = h.status else {
         return Some("No status from the heater yet.");
@@ -392,6 +444,21 @@ fn state_json(hub: &Hub) -> String {
         _ => out.push_str(",\"soc\":null"),
     }
     out.push_str("},");
+
+    let co = &hub.cutoff;
+    let _ = write!(
+        out,
+        "\"cutoff\":{{\"enabled\":{},\"stop\":{},\"resume\":{},\"tripped\":{},\"tripped_at\":{}}},",
+        co.config.enabled,
+        co.config.stop_pct,
+        co.config.resume_pct,
+        co.cutoff.tripped,
+        opt_str(
+            co.tripped_at
+                .map(|(pct, when)| format!("at {pct} %, {} min ago", when.elapsed().as_secs() / 60))
+                .as_deref()
+        )
+    );
 
     let sv = &hub.saver;
     let _ = write!(

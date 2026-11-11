@@ -137,6 +137,23 @@ licence file is needed.
 - While the hub holds the link, the Bluetti app can only reach the station
   over the cloud, not Bluetooth.
 
+## Heater low-battery stop
+
+When the Bluetti's charge falls to the stop level (default 15 %), the hub
+sends the heater its normal Off, so it runs its full cool-down and the glow
+plug is cleared properly, and refuses to start it (thermostat and the
+dashboard's On button). Starts are allowed again once the charge is back to
+the resume level (default 25 %); in Auto the thermostat may then restart the
+heater, in Monitor it stays off until switched on. The logic is in
+[`core/src/heater_cutoff.rs`](../core/src/heater_cutoff.rs).
+
+- It is on after every restart. The levels, and an off switch, are on the
+  dashboard's Power card; a red notice shows on the Thermostat card while it
+  holds the heater off.
+- A heater that is already cooling down or off is left alone. The Off is
+  repeated every 20 s while the heater still reports On or Starting.
+- A lost Bluetti link neither trips it nor clears it.
+
 ## Fridge saver
 
 Switches the fridge to Eco when the Bluetti's charge falls to the low level,
@@ -191,6 +208,9 @@ Tested on the Bluetti Elite 200 V2, alongside the heater and fridge links:
   code 2 means discharging.
 - Fridge saver: with the levels set to 95/100 % (charge was 91 %) the fridge
   went to Eco within seconds; moving them to 5/10 % put it back to Max.
+- Heater stop: with the stop level above the charge, it tripped within a
+  second and cleared when the levels were lowered. The heater was off, so
+  no Off was needed; stopping a burning heater is not yet tested live.
 
 ## Thermostat defaults
 

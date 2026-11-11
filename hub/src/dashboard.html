@@ -41,6 +41,7 @@ h3 { font-size:15px; margin:14px 0 4px; }
   </section>
   <section>
     <h2>Thermostat</h2>
+    <p class="bad" id="c-alert" hidden></p>
     <div class="set">
       <button id="down" aria-label="Lower setpoint">−</button>
       <div class="big" id="sp">--</div>
@@ -117,6 +118,15 @@ h3 { font-size:15px; margin:14px 0 4px; }
     <div class="row"><span>Max again at or above</span><select id="s-high" aria-label="Max again at or above"></select></div>
     <div class="row"><span>Now</span><span id="s-state">--</span></div>
     <div class="row"><span>Last change</span><span id="s-last">--</span></div>
+    <h3>Heater low-battery stop</h3>
+    <p class="note">Stops the heater cleanly (with its full cool-down) when the Bluetti runs low, and blocks starts until it has recharged.</p>
+    <div class="modes">
+      <button id="c-on" class="wide">Stop on</button>
+      <button id="c-off" class="wide">Stop off</button>
+    </div>
+    <div class="row"><span>Stop at or below</span><select id="c-stop" aria-label="Stop the heater at or below"></select></div>
+    <div class="row"><span>Allow starts at or above</span><select id="c-resume" aria-label="Allow heater starts at or above"></select></div>
+    <div class="row"><span>Now</span><span id="c-state">--</span></div>
   </section>
   <section>
     <h2>Hub</h2>
@@ -188,6 +198,7 @@ async function refresh() {
   showFridge(s.fridge);
   showBluetti(s.bluetti);
   showSaver(s.saver);
+  showCutoff(s.cutoff);
 
   $("clock").textContent = s.clock || "not set";
   $("ip").textContent = s.sta_ip || "not joined";
@@ -247,6 +258,33 @@ $("s-off").onclick = () => saver("off");
 ["s-low", "s-high"].forEach(id => {
   $(id).onfocus = () => { saverEditing = true; };
   $(id).onchange = () => saver("levels:" + $("s-low").value + "-" + $("s-high").value);
+});
+for (let p = 5; p <= 100; p += 5) {
+  if (p <= 50) $("c-stop").add(new Option(p + " %", p));
+  if (p >= 10) $("c-resume").add(new Option(p + " %", p));
+}
+let cutoffEditing = false;
+function showCutoff(c) {
+  $("c-on").className = "wide" + (c.enabled ? " active" : "");
+  $("c-off").className = "wide" + (c.enabled ? "" : " active");
+  if (!cutoffEditing) { $("c-stop").value = c.stop; $("c-resume").value = c.resume; }
+  $("c-state").textContent = !c.enabled ? "off" : c.tripped ? "heater stopped, battery low" : "watching";
+  $("c-state").className = c.enabled && c.tripped ? "bad" : "";
+  $("c-alert").hidden = !(c.enabled && c.tripped);
+  $("c-alert").textContent = "Bluetti battery low (" + (c.tripped_at || "") +
+    "): the heater was stopped and cannot start until the battery is back to " + c.resume + " %.";
+}
+async function cutoff(body) {
+  const r = await post("/api/cutoff", body);
+  if (!r.ok) alert(await r.text());
+  cutoffEditing = false;
+  refresh();
+}
+$("c-on").onclick = () => cutoff("on");
+$("c-off").onclick = () => { if (confirm("Turn off the low-battery stop? The heater could drain the Bluetti.")) cutoff("off"); };
+["c-stop", "c-resume"].forEach(id => {
+  $(id).onfocus = () => { cutoffEditing = true; };
+  $(id).onchange = () => cutoff("levels:" + $("c-stop").value + "-" + $("c-resume").value);
 });
 function showFridge(f) {
   $("f-link").textContent = f.connected ? "connected" : "searching";

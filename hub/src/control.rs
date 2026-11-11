@@ -7,6 +7,10 @@
 //! In Monitor mode that is all it does. In Auto mode it also queues the
 //! switch command that moves the heater toward the decision.
 //!
+//! Before any of that, the low-battery cutoff: while the Bluetti is low it
+//! sends the heater its normal Off (a clean stop with the full cool-down)
+//! and keeps the thermostat from starting it.
+//!
 //! The same loop runs the fridge saver: Eco while the Bluetti is low, Max
 //! again once it has recovered (see `m_pulse_core::eco_guard`).
 
@@ -16,6 +20,7 @@ use std::time::{Duration, Instant};
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::filter::MedianFilter;
+use m_pulse_core::heater_cutoff;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
 use crate::state::{FridgeCommand, Mode, Shared};
@@ -96,7 +101,8 @@ fn control_loop(state: Shared) {
             let mut s = state.lock();
             s.control.decision = Some(decision);
             s.control.smoothed_c = smoothed.map(|x| x.temperature_c);
-            if s.control.mode == Mode::Auto {
+            let tripped = guard_heater(&mut s);
+            if s.control.mode == Mode::Auto && !tripped {
                 drive_heater(&mut s, decision.heat);
             }
             save_fridge(&mut s, boot.elapsed().as_secs());
@@ -154,13 +160,69 @@ fn drive_heater(hub: &mut crate::state::Hub, want_heat: bool) {
     h.pending = Some(next);
 }
 
+/// The Bluetti's charge, if a reading under `BLUETTI_MAX_AGE` is in.
+fn bluetti_soc(hub: &crate::state::Hub) -> Option<u8> {
+    let b = &hub.bluetti;
+    let fresh = b.status_at.is_some_and(|t| t.elapsed() <= BLUETTI_MAX_AGE);
+    (b.connected && fresh)
+        .then(|| b.status.as_ref().map(|s| s.soc_pct))
+        .flatten()
+}
+
+/// Runs the low-battery cutoff one step: while tripped, queues the heater's
+/// Off command if it is burning or starting. Returns whether it is tripped.
+fn guard_heater(hub: &mut crate::state::Hub) -> bool {
+    let soc = bluetti_soc(hub);
+    let was = hub.cutoff.cutoff.tripped;
+    let config = hub.cutoff.config;
+    let tripped = hub.cutoff.cutoff.update(&config, soc);
+    if tripped && !was {
+        let at = soc.unwrap_or(0);
+        warn!(
+            "Heater cutoff: Bluetti at {at} %, stopping the heater until it is back to {} %",
+            config.resume_pct
+        );
+        hub.cutoff.tripped_at = Some((at, Instant::now()));
+    } else if was && !tripped {
+        info!("Heater cutoff: cleared (Bluetti at {soc:?} %)");
+    }
+    if !tripped {
+        return false;
+    }
+
+    let h = &mut hub.heater;
+    // A start waiting to be sent is dropped.
+    if h.pending == Some(Switch::On) {
+        h.pending = None;
+    }
+    let (Some(status), Some(at)) = (h.status, h.status_at) else {
+        return true;
+    };
+    if !h.connected || at.elapsed() > STATUS_MAX_AGE || !heater_cutoff::needs_stop(&status) {
+        return true;
+    }
+    let sent_off_recently = matches!(
+        h.last_sent,
+        Some((Switch::Off, when)) if when.elapsed() < heater_cutoff::RESEND_OFF_AFTER
+    );
+    if h.pending.is_none() && !sent_off_recently {
+        warn!(
+            "Heater cutoff: heater is {:?}, sending Off for a clean stop",
+            status.state
+        );
+        h.pending = Some(Switch::Off);
+    }
+    true
+}
+
 /// Runs the fridge saver one step and queues the mode change it asks for.
 fn save_fridge(hub: &mut crate::state::Hub, now_s: u64) {
-    let fresh = |at: Option<Instant>, max: Duration| at.is_some_and(|t| t.elapsed() <= max);
-    let soc = (hub.bluetti.connected && fresh(hub.bluetti.status_at, BLUETTI_MAX_AGE))
-        .then(|| hub.bluetti.status.as_ref().map(|s| s.soc_pct))
-        .flatten();
-    let fridge = (hub.fridge.connected && fresh(hub.fridge.status_at, FRIDGE_MAX_AGE))
+    let soc = bluetti_soc(hub);
+    let fresh = hub
+        .fridge
+        .status_at
+        .is_some_and(|t| t.elapsed() <= FRIDGE_MAX_AGE);
+    let fridge = (hub.fridge.connected && fresh)
         .then(|| hub.fridge.status.map(|s| s.mode))
         .flatten();
     let was_low = hub.saver.guard.low;
