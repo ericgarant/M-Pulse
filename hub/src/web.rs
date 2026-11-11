@@ -240,7 +240,7 @@ fn state_json(hub: &Hub) -> String {
         "\"control\":{{\"start_failed\":{},\"mode\":\"{}\",\"setpoint_c\":{:.1},\"hysteresis_c\":{:.1},\"smoothed_c\":{},\
          \"heat\":{},\"reason\":{}}},",
         hub.heater.start_attempts >= actuator::MAX_START_ATTEMPTS
-            && hub.heater.status.is_some_and(|st| st.state == RunState::Off),
+            && hub.heater.status.is_some_and(|st| st.state != RunState::On),
         match c.mode {
             Mode::Monitor => "monitor",
             Mode::Auto => "auto",
