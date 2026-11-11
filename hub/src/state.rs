@@ -35,6 +35,9 @@ pub struct Heater {
     pub pending: Option<Switch>,
     /// The last switch command written, and when.
     pub last_sent: Option<(Switch, Instant)>,
+    /// Start commands the thermostat has sent without the heater leaving
+    /// Off. Auto stops trying at `actuator::MAX_START_ATTEMPTS`.
+    pub start_attempts: u8,
 }
 
 /// Who is allowed to switch the heater.

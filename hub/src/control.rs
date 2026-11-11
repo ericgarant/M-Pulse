@@ -11,8 +11,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use log::{info, warn};
-use m_pulse_core::actuator;
+use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::filter::MedianFilter;
+use m_pulse_core::protocol::RunState;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
 use crate::state::{Mode, Shared};
@@ -103,6 +104,7 @@ fn control_loop(state: Shared) {
 /// Queues the switch command that moves the heater toward `want_heat`, if
 /// the heater is connected, its status is fresh and a command is due.
 fn drive_heater(hub: &mut crate::state::Hub, want_heat: bool) {
+    let (min_on, min_off) = (hub.control.config.min_on, hub.control.config.min_off);
     let h = &mut hub.heater;
     let (Some(status), Some(at)) = (h.status, h.status_at) else {
         return;
@@ -110,17 +112,31 @@ fn drive_heater(hub: &mut crate::state::Hub, want_heat: bool) {
     if !h.connected || at.elapsed() > STATUS_MAX_AGE || h.pending.is_some() {
         return;
     }
+    if status.state != RunState::Off {
+        // The heater responded, so the next start gets a fresh set of tries.
+        h.start_attempts = 0;
+    }
     let Some(next) = actuator::command(want_heat, &status) else {
         return;
     };
     let last = h.last_sent.map(|(sent, when)| (sent, when.elapsed()));
-    if actuator::should_send(next, last) {
-        info!(
-            "Thermostat: heater is {:?}, queueing {next:?}",
-            status.state
-        );
-        h.pending = Some(next);
+    if !actuator::should_send(next, last, min_on, min_off) {
+        return;
     }
+    if next == Switch::On {
+        if h.start_attempts >= actuator::MAX_START_ATTEMPTS {
+            return;
+        }
+        h.start_attempts += 1;
+        if h.start_attempts == actuator::MAX_START_ATTEMPTS {
+            warn!("Thermostat: last start attempt; giving up if the heater stays off");
+        }
+    }
+    info!(
+        "Thermostat: heater is {:?}, queueing {next:?}",
+        status.state
+    );
+    h.pending = Some(next);
 }
 
 fn report(decision: &Decision, sample: Option<Sample>) {

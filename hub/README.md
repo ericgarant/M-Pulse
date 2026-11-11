@@ -78,6 +78,10 @@ change from the dashboard lasts until the hub restarts.
 - In Auto mode, a lost sensor (no reading for 2 minutes) switches the heater
   off.
 - The hub never starts a heater that reports a fault or is still in its
-  shutdown cycle, and it respects the minimum on and off times.
+  shutdown cycle, and never stops one in the middle of its start-up.
+- Auto waits the minimum on and off times after any switch, including one
+  made with the manual buttons, and gives up after 3 start attempts.
+- Anyone on the `M-Pulse` network can use the dashboard. Set your own
+  `M_PULSE_AP_PASS`.
 - The hub restarts in Monitor mode. After a power cut it will not resume
   Auto by itself.

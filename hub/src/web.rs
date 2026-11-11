@@ -17,7 +17,8 @@ use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer,
 use esp_idf_svc::http::Method;
 use esp_idf_svc::io::Write;
 use log::{info, warn};
-use m_pulse_core::actuator::Switch;
+use m_pulse_core::actuator::{self, Switch};
+use m_pulse_core::protocol::RunState;
 
 use crate::clock;
 use crate::state::{Hub, Mode, Shared};
@@ -81,7 +82,12 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
                 return Ok(());
             }
         };
-        s.lock().control.mode = mode;
+        {
+            let mut hub = s.lock();
+            hub.control.mode = mode;
+            // Choosing a mode is also how a failed start is retried.
+            hub.heater.start_attempts = 0;
+        }
         warn!("Dashboard set the mode to {mode:?}");
         req.into_ok_response()?.write_all(b"ok")?;
         Ok(())
@@ -98,21 +104,24 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
                 return Ok(());
             }
         };
-        let queued = {
+        let refusal = {
             let mut hub = s.lock();
             // A manual command takes the thermostat out of the loop.
             hub.control.mode = Mode::Monitor;
-            if hub.heater.connected {
+            let refusal = manual_refusal(&hub, switch);
+            if refusal.is_none() {
                 hub.heater.pending = Some(switch);
             }
-            hub.heater.connected
+            refusal
         };
-        if queued {
-            warn!("Dashboard asked to switch the heater {switch:?}");
-            req.into_ok_response()?.write_all(b"ok")?;
-        } else {
-            req.into_status_response(409)?
-                .write_all(b"heater is not connected")?;
+        match refusal {
+            None => {
+                warn!("Dashboard asked to switch the heater {switch:?}");
+                req.into_ok_response()?.write_all(b"ok")?;
+            }
+            Some(why) => {
+                req.into_status_response(409)?.write_all(why.as_bytes())?;
+            }
         }
         Ok(())
     })?;
@@ -131,6 +140,30 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
 
     info!("Dashboard server started");
     Ok(server)
+}
+
+/// Why a manual command cannot be sent right now, if it cannot. Off is
+/// always allowed while connected. On is refused while the heater reports a
+/// fault or is not fully off (starting, running or cooling down).
+fn manual_refusal(hub: &Hub, switch: Switch) -> Option<&'static str> {
+    let h = &hub.heater;
+    if !h.connected {
+        return Some("The heater is not connected.");
+    }
+    if switch == Switch::Off {
+        return None;
+    }
+    let Some(status) = h.status else {
+        return Some("No status from the heater yet.");
+    };
+    if status.error.is_some() {
+        return Some("The heater reports a fault. Clear it at the heater first.");
+    }
+    match status.state {
+        RunState::Off => None,
+        RunState::ShuttingDown => Some("The heater is cooling down. Wait until it is off."),
+        RunState::On | RunState::Starting => Some("The heater is already on."),
+    }
 }
 
 fn read_body(req: &mut Request<&mut EspHttpConnection>) -> anyhow::Result<String> {
@@ -204,8 +237,10 @@ fn state_json(hub: &Hub) -> String {
     let c = &hub.control;
     let _ = write!(
         out,
-        "\"control\":{{\"mode\":\"{}\",\"setpoint_c\":{:.1},\"hysteresis_c\":{:.1},\"smoothed_c\":{},\
+        "\"control\":{{\"start_failed\":{},\"mode\":\"{}\",\"setpoint_c\":{:.1},\"hysteresis_c\":{:.1},\"smoothed_c\":{},\
          \"heat\":{},\"reason\":{}}},",
+        hub.heater.start_attempts >= actuator::MAX_START_ATTEMPTS
+            && hub.heater.status.is_some_and(|st| st.state == RunState::Off),
         match c.mode {
             Mode::Monitor => "monitor",
             Mode::Auto => "auto",
