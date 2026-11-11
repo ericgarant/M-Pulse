@@ -32,7 +32,27 @@ and tests on any computer with `cargo test`.
   low (on by default), and can put the fridge in Eco until it has recharged
   (off until you turn it on).
 
+- **Dashboard.** The hub serves one page for the camper's Android tablet
+  and your phone: join the hub's `M-Pulse` Wi-Fi (password `mpulse-heater`
+  unless you set your own in `wifi.env`) and open http://192.168.71.1. It
+  needs no internet. It has Climate, Fridge, Power and Battery rules cards,
+  alerts at the top, and dark, red Night and light themes.
+
 Details, defaults and what has been tested are in [hub/README.md](hub/README.md).
+
+## Next steps
+
+Open items, roughly in order:
+
+- Try the low-battery stop on a burning heater. So far it has only tripped
+  with the heater off.
+- Read the Bluetti while it charges from solar and the charger, and under a
+  DC load, to check those readings and the sign of the charger input.
+- Try the redesigned dashboard on the tablet and phone with live data.
+- Add buttons to switch the Bluetti's AC and DC outputs. The hub only reads
+  the Bluetti today.
+- Remember the setpoint, mode and battery-rule levels across a power cut.
+  Today a restart puts the hub in Monitor only with default settings.
 
 ## Getting started
 
