@@ -79,44 +79,76 @@ Join the `M-Pulse` Wi-Fi and open `http://192.168.71.1` (type the `http://`).
 
 ## Using the dashboard
 
-- **Cabin** shows the latest reading from the sensor node and its age.
-- **Thermostat** changes the setpoint in 0.5 °C steps and chooses the mode:
-  - *Monitor only* (the mode after every restart): the thermostat decides and
-    shows its reason, but does not switch the heater.
-  - *Auto*: the thermostat switches the heater. Pressing Auto again also
-    retries after 3 failed starts.
+The page is built for the camper's tablet and works on a phone too: on a
+tablet the cards sit side by side, and on a phone they stack, with a tab bar
+at the bottom to jump between them. Everything is inside the one page the
+hub serves, so it needs no internet.
 
-  A red notice appears at the top of this card while the low-battery stop is
-  holding the heater off.
-- **Manual** switches the heater on or off now. Any manual button press puts
-  the hub back in Monitor only, so the thermostat does not undo it. Heater ON
-  is refused while the heater reports a fault, is not fully off, or the
-  low-battery stop is holding it off.
-- **Heater** shows the link and what the heater reports. *Igniting* means it
-  has accepted a start but is not yet burning steadily (that takes about
-  4 to 5 minutes); *Running* means it has a flame and the glow plug is off.
-  The details show `--` while the link is down.
-
-- **Fridge** shows the temperature inside, the target, the mode, the input
-  voltage, the battery protection level and the panel lock. **+** and **−**
-  change the target by 1 degree; **Eco** and **Max** change the mode;
-  **Fridge ON** and **Fridge OFF** switch it (Off asks first). A red note
-  appears when the fridge has stayed more than 4 °C above its target for
-  30 minutes: check the lid and the power.
+- **Top bar**: a dot for each link (heater, fridge, Bluetti): green when
+  connected, amber while connecting, red while searching. Tap one to jump to
+  its card. The logo pulses each time fresh data arrives. The buttons on the
+  right change the theme (dark, a dim red *Night* theme for after dark, and
+  light; each device remembers its choice) and go full screen.
+- **Alerts** appear in a strip under the top bar: the low-battery stop
+  holding the heater off, the fridge warm alert, a heater that did not start
+  after 3 tries, a cabin sensor that is missing or more than 2 minutes old,
+  and a hub the page cannot reach. When the hub cannot be reached, the cards
+  also fade until it answers again.
+- **Climate**:
+  - The dial shows the cabin temperature against a 5 to 30 °C scale, with
+    the target as a knob and the comfort band (target ± 1 °C, where the
+    thermostat holds its state) as a lighter stretch of track. Humidity and
+    the reading's age sit in the middle.
+  - **+** and **−** change the target in 0.5 °C steps. Hold a button to
+    keep stepping. Quick taps add up and go to the hub as one change; the
+    target shows amber until the hub has it.
+  - The heater panel shows what the heater is doing (Off, Starting,
+    Igniting, Running, Cooling down, Fault or Searching) with an animated
+    flame, and which of its parts (flame, glow plug, fuel pump, fan) are on.
+    *Igniting* means it has accepted a start but is not yet burning steadily
+    (that takes about 4 to 5 minutes); *Running* means it has a flame and the
+    glow plug is off. Below it is the thermostat's reason in plain words.
+  - *Monitor only* (the mode after every restart): the thermostat decides
+    but does not switch the heater. *Auto* (asks first): the thermostat
+    switches the heater. Pressing Auto again also retries after 3 failed
+    starts.
+  - **Heater ON** (asks first) and **Heater OFF** switch the heater now. Any
+    manual press puts the hub back in Monitor only, so the thermostat does
+    not undo it. Heater ON is refused while the heater reports a fault, is
+    not fully off, or the low-battery stop is holding it off; the reason
+    shows in a note at the bottom of the screen.
+  - *Heater details* opens the raw readings: link, state, parts, power,
+    the heater's own set temperature, supply voltage, error code, firmware
+    and last command.
+- **Fridge** shows the temperature inside in a ring that frosts over while
+  the fridge runs and turns red with the warm alert (more than 4 °C above its
+  target for 30 minutes: check the lid and the power). **+** and **−**
+  change the target by 1 degree, and quick taps go out as one change;
+  **Eco** / **Max** change the mode; the **Power** switch turns it on, or off
+  after asking. *Fridge details* has the input voltage, battery protection
+  level, panel lock and last command.
 - **Power** shows the Bluetti: charge, time to full or empty when the
-  station has an estimate, solar and charger input, AC and DC output with
-  whether each is switched on, and battery voltage and current. Nothing on
-  this card switches the Bluetti. Below the readings:
-  - *Fridge saver*: **Saver on** / **Saver off**, the two levels, what it is
-    doing now and its last change.
-  - *Heater low-battery stop*: **Stop on** / **Stop off** (Off asks first),
-    the two levels and what it is doing now.
+  station has an estimate (otherwise the net watts), and a flow picture with
+  solar and charger input on the left and AC and DC output on the right. The
+  lines animate while power flows, and the battery's colour follows its
+  charge (green, amber at 50 % and below, red at 20 % and below). Nothing on
+  this card switches the Bluetti. *Battery details* has the voltage and
+  current.
+- **Battery rules**:
+  - *Heater low-battery stop*: a switch (turning it off asks first), the
+    stop and restart levels, and what it is doing now.
+  - *Fridge saver*: a switch, the Eco and Max levels, what it is doing now
+    and its last change.
 
-  Levels are picked in 5 % steps and apply at once. Like the setpoint, they
-  go back to the defaults when the hub restarts.
-- **Hub** shows the hub's clock and its address on another Wi-Fi, if joined.
+  Levels change in 5 % steps with **+** and **−** and go to the hub a
+  moment after you stop tapping. Raising one level past the other moves the
+  other too, to keep the 5 % gap the hub needs. Like the setpoint, they go
+  back to the defaults when the hub restarts.
+- **Footer**: the hub's clock and its address on another Wi-Fi, if joined.
+  The page sets the hub's clock from the device's time when the hub has no
+  internet time.
 
-The Heater, Fridge and Power cards show `--` in place of readings while
+The Climate, Fridge and Power cards show `--` in place of readings while
 their link is down, never the last values.
 
 ## Fridge
