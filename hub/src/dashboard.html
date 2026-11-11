@@ -23,14 +23,14 @@ button { font:inherit; font-size:22px; width:52px; height:44px; border:0; border
 .modes { display:flex; gap:8px; margin:10px 0 6px; }
 button.wide { flex:1; width:auto; font-size:16px; background:var(--muted); }
 button.wide.active { background:var(--accent); }
-#h-off { background:var(--fg); color:var(--bg); }
+#h-off, #f-off { background:var(--fg); color:var(--bg); }
 #h-on { background:var(--accent); }
 .note { font-size:13px; color:var(--muted); }
 </style>
 </head>
 <body>
 <main>
-  <h1>M-Pulse heater</h1>
+  <h1>M-Pulse</h1>
   <section>
     <h2>Cabin</h2>
     <div class="big" id="cabin">--</div>
@@ -73,6 +73,29 @@ button.wide.active { background:var(--accent); }
     <div class="row"><span>Firmware</span><span id="fw">--</span></div>
   </section>
   <section>
+    <h2>Fridge</h2>
+    <p class="bad" id="f-alert" hidden>The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power.</p>
+    <div class="set">
+      <button id="f-down" aria-label="Lower fridge target">−</button>
+      <div><div class="big" id="f-temp">--</div><div class="note" id="f-set">target --</div></div>
+      <button id="f-up" aria-label="Raise fridge target">+</button>
+    </div>
+    <div class="modes">
+      <button id="f-eco" class="wide">Eco</button>
+      <button id="f-max" class="wide">Max</button>
+    </div>
+    <div class="modes">
+      <button id="f-on" class="wide">Fridge ON</button>
+      <button id="f-off" class="wide">Fridge OFF</button>
+    </div>
+    <div class="row"><span>Link</span><span id="f-link">--</span></div>
+    <div class="row"><span>Power</span><span id="f-power">--</span></div>
+    <div class="row"><span>Input</span><span id="f-volts">--</span></div>
+    <div class="row"><span>Battery protection</span><span id="f-prot">--</span></div>
+    <div class="row"><span>Panel lock</span><span id="f-lock">--</span></div>
+    <div class="row"><span>Last command</span><span id="f-last">--</span></div>
+  </section>
+  <section>
     <h2>Hub</h2>
     <div class="row"><span>Clock</span><span id="clock">--</span></div>
     <div class="row"><span>On your Wi-Fi</span><span id="ip">--</span></div>
@@ -82,7 +105,7 @@ button.wide.active { background:var(--accent); }
 <script>
 const $ = id => document.getElementById(id);
 const yes = b => b ? "on" : "off";
-let setpoint = null, sentClock = false;
+let setpoint = null, sentClock = false, fridge = null;
 
 function post(path, body) {
   return fetch(path, { method: "POST", body: String(body) });
@@ -139,11 +162,56 @@ async function refresh() {
   $("fw").textContent = h.firmware || "--";
   $("last").textContent = h.last_command || "none";
 
+  showFridge(s.fridge);
+
   $("clock").textContent = s.clock || "not set";
   $("ip").textContent = s.sta_ip || "not joined";
   $("clockbtn").hidden = !!s.clock;
   if (!s.clock && !sentClock) sendClock();
 }
+
+function showFridge(f) {
+  $("f-link").textContent = f.connected ? "connected" : "searching";
+  $("f-link").className = f.connected ? "ok" : "bad";
+  $("f-last").textContent = f.last_command || "none";
+  $("f-alert").hidden = !f.warm_alert;
+  // Do not show the last reading as current once the link is down.
+  fridge = f.connected && f.power !== null ? f : null;
+  const ids = ["f-power", "f-volts", "f-prot", "f-lock"];
+  if (!fridge) {
+    $("f-temp").textContent = "--";
+    $("f-set").textContent = "target --";
+    ids.forEach(id => $(id).textContent = "--");
+    $("f-eco").className = $("f-max").className = "wide";
+    return;
+  }
+  const u = " °" + f.unit;
+  $("f-temp").textContent = f.temp + u;
+  $("f-set").textContent = "target " + f.set_temp + u;
+  $("f-power").textContent = f.power ? "on" : "off";
+  $("f-volts").textContent = f.volts.toFixed(1) + " V";
+  $("f-prot").textContent = f.protection;
+  $("f-lock").textContent = f.locked ? "locked" : "unlocked";
+  $("f-eco").className = "wide" + (f.mode === "Eco" ? " active" : "");
+  $("f-max").className = "wide" + (f.mode === "Max" ? " active" : "");
+}
+async function fridgeCmd(cmd) {
+  const r = await post("/api/fridge", cmd);
+  if (!r.ok) alert(await r.text());
+  // The fridge answers within a poll or two.
+  setTimeout(refresh, 2500);
+}
+function fridgeNudge(delta) {
+  if (!fridge) return;
+  const t = Math.min(fridge.max_temp, Math.max(fridge.min_temp, fridge.set_temp + delta));
+  if (t !== fridge.set_temp) fridgeCmd("temp:" + t);
+}
+$("f-down").onclick = () => fridgeNudge(-1);
+$("f-up").onclick = () => fridgeNudge(1);
+$("f-eco").onclick = () => fridgeCmd("eco");
+$("f-max").onclick = () => fridgeCmd("max");
+$("f-on").onclick = () => fridgeCmd("on");
+$("f-off").onclick = () => { if (confirm("Switch the fridge OFF? Food will warm up.")) fridgeCmd("off"); };
 
 function nudge(delta) {
   if (setpoint === null) return;
