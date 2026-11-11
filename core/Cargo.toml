@@ -7,3 +7,8 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# Bluetti link: ECDH/ECDSA key exchange and AES-CBC. Pure Rust, so it builds
+# for the ESP32 and tests on any computer.
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "ecdh", "arithmetic"] }
+aes = "0.8"
+md-5 = { version = "0.10", default-features = false }

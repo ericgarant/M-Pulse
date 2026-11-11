@@ -4,6 +4,7 @@
 //! tests on an ordinary computer with `cargo test`.
 
 pub mod actuator;
+pub mod bluetti;
 pub mod clock;
 pub mod filter;
 pub mod fridge;
