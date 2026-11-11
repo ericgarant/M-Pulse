@@ -9,12 +9,12 @@ and no cloud.
 
 | Folder | Board | Purpose | Status |
 | --- | --- | --- | --- |
-| [`hub/`](hub/) | Freenove ESP32-S3 media kit | Holds the BLE link to the BougeRV diesel heater, runs the thermostat, switches the heater, serves the dashboard | Phase 1, tested on the heater |
+| [`hub/`](hub/) | Freenove ESP32-S3 media kit | Holds the BLE links to the BougeRV diesel heater and Rocky 50 fridge, runs the thermostat, switches the heater, controls the fridge, serves the dashboard | Heater tested; fridge in testing |
 | [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) | Reads a DHT11 and sends cabin readings to the hub over Wi-Fi | Phase 1, tested with the hub |
 
 [`core/`](core/) holds the logic that does not depend on hardware: the
 thermostat state machine, the rules for when to switch the heater, sensor
-smoothing, local time, the heater's wire format and the sensor node's packet
+smoothing, local time, the heater's and fridge's wire formats and the sensor node's packet
 format. It builds and tests on any computer with `cargo test`.
 
 ## Getting started
