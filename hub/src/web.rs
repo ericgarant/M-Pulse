@@ -329,10 +329,11 @@ fn state_json(hub: &Hub) -> String {
         Some(c) => {
             let _ = write!(
                 out,
-                "\"cabin\":{{\"temp_c\":{:.1},\"rh\":{:.0},\"age_s\":{}}},",
+                "\"cabin\":{{\"temp_c\":{:.1},\"rh\":{:.0},\"age_s\":{},\"source\":\"{}\"}},",
                 c.temperature_c,
                 c.humidity_pct,
-                c.received_at.elapsed().as_secs()
+                c.received_at.elapsed().as_secs(),
+                c.source.as_str()
             );
         }
         None => out.push_str("\"cabin\":null,"),

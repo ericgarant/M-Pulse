@@ -15,15 +15,30 @@ use m_pulse_core::heater_cutoff::{self, Cutoff};
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
 
-/// The latest cabin reading from the sensor node.
+/// Where a cabin reading came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// The DHT11 wired to the hub itself.
+    Local,
+    /// The Wi-Fi sensor node.
+    Remote,
+}
+
+impl Source {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Source::Local => "hub",
+            Source::Remote => "node",
+        }
+    }
+}
+
+/// The latest cabin reading, from the hub's own sensor or the sensor node.
 #[derive(Clone, Copy, Debug)]
 pub struct Cabin {
     pub temperature_c: f32,
     pub humidity_pct: f32,
-    /// Packet sequence number from the sensor node. Stored for diagnostics;
-    /// nothing reads it yet.
-    #[allow(dead_code)]
-    pub seq: u32,
+    pub source: Source,
     pub received_at: Instant,
 }
 
