@@ -51,6 +51,12 @@ pins pointing down; pins are numbered 1 to 4 from left to right.
 The data pin is set in `src/main.rs` (`peripherals.pins.gpio4`). GPIO4 is
 free on every ESP32-S3 module: it is not a strapping, flash, PSRAM or USB pin.
 
+The DHT11 sends its bits as pulses a few tens of microseconds long, which a
+Bluetooth interrupt can easily stretch. The hub therefore reads it on the
+processor's second core, away from the radio, with interrupts held off for
+the 5 ms each read takes. Before this, every read failed once the Bluetti
+link was up.
+
 The hub reads the sensor every 5 s. While it has a reading less than 30 s
 old it ignores the [sensor node](../sensor-node), so the node is only a
 backup and does not need to be running. If the hub's sensor stops answering,
