@@ -328,6 +328,9 @@ details[open] .kv { animation: rise .35s var(--ease); }
 :root[data-theme="night"] .batt .pct { color: var(--fg); }
 .batt .bolt { position: absolute; top: 10px; left: 50%; margin-left: -9px; width: 18px; height: 18px; color: var(--heat2); z-index: 1; opacity: 0; transition: opacity .4s; }
 .batt.charging .bolt { opacity: 1; animation: blink 1.6s ease-in-out infinite; }
+.outs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 16px; }
+@media (max-width: 480px) { .outs { grid-template-columns: minmax(0, 1fr); } }
+.switch.locked { opacity: .55; }
 .pwr-sum { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
 .pwr-sum .big { font-size: 54px; }
 .pwr-sum .eta { font-size: 14px; color: var(--muted); text-align: right; }
@@ -575,7 +578,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
     </details>
   </section>
 
-  <!-- Power: the Bluetti, read only -->
+  <!-- Power: the Bluetti, with its AC and DC output switches -->
   <section class="card" id="power" aria-labelledby="h-power">
     <div class="card-h">
       <div class="ic go"><svg class="i"><use href="#i-bolt"/></svg></div>
@@ -597,7 +600,10 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
       <div class="wire out" id="w-dc" style="grid-column:4;grid-row:2"></div>
       <div class="node out" id="n-dc" style="grid-column:5;grid-row:2"><svg class="i"><use href="#i-dc"/></svg><span class="n">DC out</span><span class="w" id="b-dc">--</span><span class="sw" id="b-dcsw">--</span></div>
     </div>
-    <p class="note">Read only: nothing here switches the Bluetti.</p>
+    <div class="outs">
+      <div class="pwr"><span class="l"><svg class="i"><use href="#i-outlet"/></svg>AC outlets</span><button class="switch" id="b-acbtn" role="switch" aria-checked="false" aria-label="Bluetti AC outlets"></button></div>
+      <div class="pwr"><span class="l"><svg class="i"><use href="#i-dc"/></svg>DC outputs</span><button class="switch" id="b-dcbtn" role="switch" aria-checked="false" aria-label="Bluetti DC outputs"></button></div>
+    </div>
     <details>
       <summary><svg class="i"><use href="#i-chev"/></svg>Battery details</summary>
       <dl class="kv">
@@ -605,6 +611,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
         <dt>Model</dt><dd id="b-model">--</dd>
         <dt>Battery</dt><dd id="b-volts">--</dd>
         <dt>DC out covers</dt><dd>12 V and USB</dd>
+        <dt>Last command</dt><dd id="b-last">--</dd>
       </dl>
     </details>
   </section>
@@ -924,6 +931,38 @@ $("f-pwr").onclick = async () => {
   $("f-pwr").classList.add("busy");
   fridgeCmd(fridge.power ? "off" : "on");
 };
+/* ---------- Bluetti outputs ---------- */
+let bluetti = null;
+// The state each switch was asked for, until the station reports it.
+const outPend = { ac: null, dc: null };
+const OUT_TEXT = {
+  ac: { name: "AC outlets", off: "Everything plugged into the Bluetti's AC outlets loses power until you switch them back on." },
+  dc: { name: "DC outputs", off: "Everything on the Bluetti's 12 V and USB outputs loses power until you switch them back on. If the fridge or the hub run from them, they go off too." },
+};
+async function outputCmd(key, on) {
+  const btn = $("b-" + key + "btn");
+  outPend[key] = { on, until: Date.now() + 10000 };
+  btn.classList.add("busy");
+  btn.setAttribute("aria-checked", on);
+  try {
+    const r = await post("/api/bluetti", key + ":" + (on ? "on" : "off"));
+    if (!r.ok) { outPend[key] = null; await failed(r); }
+  } catch (e) { outPend[key] = null; toast("Could not reach the hub.", "bad"); }
+  // The hub sends it at once and reads the station straight after.
+  setTimeout(refresh, 1500);
+}
+["ac", "dc"].forEach(key => {
+  $("b-" + key + "btn").onclick = async () => {
+    buzz();
+    if (!bluetti) { toast("The Bluetti is not connected.", "bad"); return; }
+    const on = !bluetti[key + "_on"];
+    const t = OUT_TEXT[key];
+    if (!on && bluetti["keep_" + key]) { toast("This hub is set to keep the " + t.name + " on.", "bad"); return; }
+    if (!on && !(await ask({ title: "Switch the " + t.name + " OFF?", body: t.off, yes: t.name + " OFF", icon: "warn", danger: true }))) return;
+    outputCmd(key, on);
+  };
+});
+
 // A few flakes drifting down inside the ring.
 (function snow() {
   if (reduce) return;
@@ -1166,6 +1205,15 @@ function renderPower(b) {
     nodes.forEach(([v, w, n]) => { $(v).textContent = "--"; $(w).classList.remove("live"); $(n).classList.remove("live"); });
     ["b-acsw", "b-dcsw"].forEach(id => setText(id, "--", "sw"));
     setText("b-volts", "--"); setText("b-model", "--");
+    bluetti = null;
+    ["ac", "dc"].forEach(key => {
+      const btn = $("b-" + key + "btn");
+      outPend[key] = null;
+      btn.classList.remove("busy");
+      btn.setAttribute("aria-checked", "false");
+      btn.disabled = true;
+    });
+    setText("b-last", b.last_command || "--");
     badge.textContent = b.connected ? "Connecting" : "Searching";
     badge.className = "badge warn";
     return;
@@ -1193,6 +1241,18 @@ function renderPower(b) {
   });
   setText("b-acsw", yes(b.ac_on), "sw" + (b.ac_on ? " on" : ""));
   setText("b-dcsw", yes(b.dc_on), "sw" + (b.dc_on ? " on" : ""));
+  bluetti = b;
+  ["ac", "dc"].forEach(key => {
+    const btn = $("b-" + key + "btn"), on = b[key + "_on"], p = outPend[key];
+    btn.disabled = false;
+    btn.classList.toggle("locked", !!b["keep_" + key]);
+    // Hold the asked-for position until the station reports it or 10 s pass.
+    if (p && p.on !== on && Date.now() < p.until) return;
+    outPend[key] = null;
+    btn.classList.remove("busy");
+    btn.setAttribute("aria-checked", on);
+  });
+  setText("b-last", b.last_command || "--");
   setText("b-volts", b.volts.toFixed(1) + " V, " + b.amps.toFixed(1) + " A");
   setText("b-model", b.model || "Bluetti");
   badge.textContent = inW > outW ? "Charging" : outW > inW ? "Discharging" : "Idle";

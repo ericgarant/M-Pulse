@@ -82,7 +82,14 @@ pub struct Fridge {
     pub warm_alert: bool,
 }
 
-/// The Bluetti power station, read only.
+/// A dashboard request to switch one of the Bluetti's outputs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutputCommand {
+    pub output: bluetti::Output,
+    pub on: bool,
+}
+
+/// The Bluetti power station.
 #[derive(Clone, Debug, Default)]
 pub struct Bluetti {
     pub connected: bool,
@@ -90,6 +97,10 @@ pub struct Bluetti {
     pub secure: bool,
     pub status: Option<bluetti::Status>,
     pub status_at: Option<Instant>,
+    /// An output switch waiting to be written by the Bluetti link.
+    pub pending: Option<OutputCommand>,
+    /// The last output switch written, whether the station took it, and when.
+    pub last_sent: Option<(OutputCommand, bool, Instant)>,
 }
 
 /// The rule that puts the fridge in Eco while the Bluetti is low.

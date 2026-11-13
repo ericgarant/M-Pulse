@@ -1,4 +1,4 @@
-//! Bluetti Elite 200 V2 power station BLE client (read only).
+//! Bluetti Elite 200 V2 power station BLE client.
 //!
 //! Keeps a lasting link to the power station: finds it, connects, runs the
 //! encrypted key exchange the station requires, then reads the app's home
@@ -6,8 +6,9 @@
 //! shared state. If the link drops, the exchange fails or the station goes
 //! quiet, it reconnects.
 //!
-//! Only "read registers" requests are written. Nothing here switches an
-//! output or changes a setting.
+//! Besides those reads, the only thing written is an AC or DC output switch
+//! the dashboard asked for (see `web`). It is sent once, never retried, and
+//! dropped if the link goes down first. No other setting is changed.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -21,7 +22,7 @@ use log::{error, info, warn};
 use m_pulse_core::bluetti::{self, Channel, Event, Status, HOME_COUNT, HOME_START};
 
 use crate::radio;
-use crate::state::Shared;
+use crate::state::{OutputCommand, Shared};
 
 /// Every Bluetti advertises this service.
 const BLUETTI_SERVICE: BleUuid = BleUuid::from_uuid16(0xFF00);
@@ -44,6 +45,8 @@ const POLL_EVERY: Duration = Duration::from_secs(5);
 const REPLY_TIMEOUT: Duration = Duration::from_secs(4);
 /// This many missed replies in a row closes the link and rebuilds it.
 const MAX_MISSES: u8 = 4;
+/// How often the wait between reads looks for a dashboard command.
+const COMMAND_CHECK: Duration = Duration::from_millis(100);
 
 /// Notifications waiting for the link task. The NimBLE callback cannot
 /// write, so it only queues; the task answers the key exchange.
@@ -78,6 +81,8 @@ pub async fn run(
             let mut s = state.lock();
             s.bluetti.connected = false;
             s.bluetti.secure = false;
+            // Never send a switch late, after the link has been rebuilt.
+            s.bluetti.pending = None;
         }
         timer.after(RETRY_PAUSE).await?;
     }
@@ -233,9 +238,56 @@ async fn stay_connected(
         if misses >= MAX_MISSES {
             anyhow::bail!("{MAX_MISSES} replies missed");
         }
-        timer.after(POLL_EVERY).await?;
+
+        // Wait for the next read, but send a dashboard command as soon as
+        // one arrives, then read straight away so the page shows the result.
+        let next_read = Instant::now() + POLL_EVERY;
+        while client.connected() && Instant::now() < next_read {
+            let queued = state.lock().bluetti.pending.take();
+            if let Some(command) = queued {
+                switch_output(client, &inbox, &mut channel, timer, state, command).await?;
+                break;
+            }
+            timer.after(COMMAND_CHECK).await?;
+        }
     }
     anyhow::bail!("link lost")
+}
+
+/// Writes one output switch and checks the station's echo.
+async fn switch_output(
+    client: &mut BLEClient,
+    inbox: &Inbox,
+    channel: &mut Channel,
+    timer: &mut EspAsyncTimer,
+    state: &Shared,
+    command: OutputCommand,
+) -> anyhow::Result<()> {
+    let OutputCommand { output, on } = command;
+    let request = output.switch_request(on);
+    warn!("Bluetti command {command:?}: writing {request:02x?}");
+    let sealed = channel
+        .seal(&request, random())
+        .ok_or_else(|| anyhow::anyhow!("channel lost its key"))?;
+    write(client, &sealed).await?;
+    let taken = match wait_reply(inbox, channel, timer).await? {
+        Some(reply) => match output.switch_reply(&reply, on) {
+            Ok(()) => {
+                info!("Bluetti took {command:?}");
+                true
+            }
+            Err(err) => {
+                warn!("Bluetti refused {command:?} ({err:?}): {reply:02x?}");
+                false
+            }
+        },
+        None => {
+            warn!("No Bluetti answer to {command:?}");
+            false
+        }
+    };
+    state.lock().bluetti.last_sent = Some((command, taken, Instant::now()));
+    Ok(())
 }
 
 /// Feeds queued notifications to the channel and returns what came of them.

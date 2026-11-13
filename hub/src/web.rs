@@ -14,25 +14,41 @@
 //!   `levels:<low>-<high>`, in percent of the Bluetti's charge)
 //! - set the heater's low-battery cutoff (`POST /api/cutoff`, body `on`,
 //!   `off` or `levels:<stop>-<resume>`)
+//! - switch the Bluetti's outputs (`POST /api/bluetti`, body `ac:on`,
+//!   `ac:off`, `dc:on` or `dc:off`); see [`output_refusal`] for when the hub
+//!   says no
 //! - set the hub's clock from the phone when the hub has no internet time
 //!   (`POST /api/time`, body is Unix seconds)
 
 use std::fmt::Write as _;
+use std::time::Duration;
 
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer, Request};
 use esp_idf_svc::http::Method;
 use esp_idf_svc::io::Write;
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
+use m_pulse_core::bluetti::Output;
 use m_pulse_core::eco_guard;
 use m_pulse_core::fridge::RunMode;
 use m_pulse_core::heater_cutoff;
 use m_pulse_core::protocol::RunState;
 
 use crate::clock;
-use crate::state::{FridgeCommand, Hub, Mode, Shared};
+use crate::state::{FridgeCommand, Hub, Mode, OutputCommand, Shared};
 
 const PAGE: &str = include_str!("dashboard.html");
+
+/// Bluetti outputs the dashboard may never switch off, because something that
+/// must stay up runs from them (for example the hub itself). Set at build
+/// time: `M_PULSE_BLUETTI_KEEP_ON` is `ac`, `dc` or `ac,dc`; empty by default.
+const KEEP_ON: &str = match option_env!("M_PULSE_BLUETTI_KEEP_ON") {
+    Some(v) => v,
+    None => "",
+};
+
+/// An output switch needs a Bluetti reading at most this old.
+const BLUETTI_FRESH: Duration = Duration::from_secs(30);
 
 /// Lowest and highest setpoint the dashboard may ask for.
 const SETPOINT_RANGE: std::ops::RangeInclusive<f32> = 5.0..=30.0;
@@ -157,6 +173,35 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         } else {
             req.into_status_response(409)?
                 .write_all(b"The fridge is not connected.")?;
+        }
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/bluetti", Method::Post, move |mut req| {
+        let text = read_body(&mut req)?;
+        let Some(command) = parse_output_command(text.trim()) else {
+            req.into_status_response(400)?
+                .write_all(b"body must be ac:on, ac:off, dc:on or dc:off")?;
+            return Ok(());
+        };
+        let refusal = {
+            let mut hub = s.lock();
+            let refusal = output_refusal(&hub, command);
+            if refusal.is_none() {
+                hub.bluetti.pending = Some(command);
+            }
+            refusal
+        };
+        match refusal {
+            None => {
+                warn!("Dashboard asked the Bluetti for {command:?}");
+                req.into_ok_response()?.write_all(b"ok")?;
+            }
+            Some(why) => {
+                warn!("Dashboard asked the Bluetti for {command:?}; refused: {why}");
+                req.into_status_response(409)?.write_all(why.as_bytes())?;
+            }
         }
         Ok(())
     })?;
@@ -294,6 +339,76 @@ fn manual_refusal(hub: &Hub, switch: Switch) -> Option<&'static str> {
     }
 }
 
+fn parse_output_command(text: &str) -> Option<OutputCommand> {
+    let (output, on) = text.split_once(':')?;
+    let output = match output {
+        "ac" => Output::Ac,
+        "dc" => Output::Dc,
+        _ => return None,
+    };
+    let on = match on {
+        "on" => true,
+        "off" => false,
+        _ => return None,
+    };
+    Some(OutputCommand { output, on })
+}
+
+/// Whether the build marked this output as one to keep on.
+fn kept_on(output: Output) -> bool {
+    let name = match output {
+        Output::Ac => "ac",
+        Output::Dc => "dc",
+    };
+    KEEP_ON
+        .split(',')
+        .any(|part| part.trim().eq_ignore_ascii_case(name))
+}
+
+/// Why an output switch cannot be sent right now, if it cannot.
+///
+/// - The link must be up and encrypted, with a reading under 30 s old.
+/// - An output listed in `M_PULSE_BLUETTI_KEEP_ON` is never switched off.
+/// - The DC outputs are not switched off while the heater is starting,
+///   running or cooling down: if it runs from them, losing power mid-cycle
+///   leaves the glow plug and burner without their proper shutdown.
+fn output_refusal(hub: &Hub, command: OutputCommand) -> Option<&'static str> {
+    let b = &hub.bluetti;
+    if !b.connected || !b.secure {
+        return Some("The Bluetti is not connected.");
+    }
+    let fresh = b.status.is_some() && b.status_at.is_some_and(|at| at.elapsed() < BLUETTI_FRESH);
+    if !fresh {
+        return Some("No recent reading from the Bluetti yet. Try again in a few seconds.");
+    }
+    if command.on {
+        return None;
+    }
+    if kept_on(command.output) {
+        return Some(match command.output {
+            Output::Ac => {
+                "This hub is set to keep the AC outlets on, so it will not switch them off."
+            }
+            Output::Dc => {
+                "This hub is set to keep the DC outputs on, so it will not switch them off."
+            }
+        });
+    }
+    if command.output == Output::Dc {
+        let burning = hub.heater.connected
+            && hub
+                .heater
+                .status
+                .is_some_and(|st| st.state != RunState::Off);
+        if burning {
+            return Some(
+                "The heater is on or cooling down. Switch it off and wait until it is fully off before switching the DC outputs off.",
+            );
+        }
+    }
+    None
+}
+
 fn parse_fridge_command(text: &str) -> Option<FridgeCommand> {
     match text {
         "on" => Some(FridgeCommand::Power(true)),
@@ -419,6 +534,28 @@ fn state_json(hub: &Hub) -> String {
         out,
         "\"bluetti\":{{\"connected\":{},\"secure\":{}",
         b.connected, b.secure
+    );
+    let _ = write!(
+        out,
+        ",\"keep_ac\":{},\"keep_dc\":{},\"last_command\":{}",
+        kept_on(Output::Ac),
+        kept_on(Output::Dc),
+        opt_str(
+            b.last_sent
+                .map(|(c, taken, when)| {
+                    format!(
+                        "{} {}, {}, {} s ago",
+                        match c.output {
+                            Output::Ac => "AC",
+                            Output::Dc => "DC",
+                        },
+                        if c.on { "on" } else { "off" },
+                        if taken { "taken" } else { "not confirmed" },
+                        when.elapsed().as_secs()
+                    )
+                })
+                .as_deref()
+        )
     );
     match (&b.status, b.status_at) {
         (Some(st), Some(at)) => {
