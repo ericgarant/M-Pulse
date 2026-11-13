@@ -1,5 +1,9 @@
 # Sensor node (ESP32)
 
+Optional now: the hub reads its own DHT11 (see
+[../hub/README.md](../hub/README.md#cabin-sensor)) and uses this node only as
+a backup when that sensor stops answering.
+
 Firmware for the Freenove ESP32 WROOM board with the DHT11. It reads the
 cabin temperature and humidity every 5 seconds and broadcasts each reading to
 the [hub](../hub) over the hub's `M-Pulse` Wi-Fi network (UDP port 4210).

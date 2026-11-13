@@ -9,8 +9,8 @@ and no cloud.
 
 | Folder | Board | Purpose | Status |
 | --- | --- | --- | --- |
-| [`hub/`](hub/) | Freenove ESP32-S3 media kit | Holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Tested on all three; the low-battery heater stop has not yet been tried on a burning heater |
-| [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) | Reads a DHT11 and sends cabin readings to the hub over Wi-Fi | Phase 1, tested with the hub |
+| [`hub/`](hub/) | ESP32-S3 module with a DHT11 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Tested on all three; the low-battery heater stop has not yet been tried on a burning heater |
+| [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) | Optional backup: reads a DHT11 and sends cabin readings to the hub over Wi-Fi | Phase 1, tested with the hub; no longer needed once the hub has its own DHT11 |
 
 [`core/`](core/) holds the logic that does not depend on hardware: the
 thermostat state machine, the rules for when to switch the heater, the two
@@ -21,7 +21,8 @@ and tests on any computer with `cargo test`.
 
 ## What it does today
 
-- **Heater thermostat.** The sensor node reads the cabin temperature; the hub
+- **Heater thermostat.** The hub reads the cabin temperature from its own
+  DHT11 (the sensor node is an optional backup), and
   switches the BougeRV diesel heater around a setpoint, with a deadband and
   minimum on and off times to protect the glow plug.
 - **Fridge.** The dashboard shows the Rocky 50 and changes its target, mode
