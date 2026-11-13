@@ -27,8 +27,9 @@ and tests on any computer with `cargo test`.
   minimum on and off times to protect the glow plug.
 - **Fridge.** The dashboard shows the Rocky 50 and changes its target, mode
   and power. A notice appears if it stays warm.
-- **Power.** The dashboard shows the Bluetti's charge, inputs and outputs.
-  The hub only reads the Bluetti; it does not switch its outputs.
+- **Power.** The dashboard shows the Bluetti's charge, inputs and outputs,
+  and has switches for its AC outlets and DC outputs. Switching one off
+  asks first.
 - **Low battery.** The hub stops the heater cleanly when the Bluetti runs
   low (on by default), and can put the fridge in Eco until it has recharged
   (off until you turn it on).
@@ -49,7 +50,8 @@ In use:
   GPIO4 and a 10k pull-up. Wiring is in
   [hub/README.md](hub/README.md#cabin-sensor).
 - **Appliances it talks to over BLE**: BougeRV diesel heater (DHG001),
-  BougeRV Rocky 50 fridge, Bluetti Elite 200 V2 power station (read only).
+  BougeRV Rocky 50 fridge, Bluetti Elite 200 V2 power station (readings and the AC and DC output
+  switches).
 - **Screens**: the camper's Android tablet and a phone, both through the
   dashboard in a browser. There is no app to install.
 
@@ -93,8 +95,9 @@ Open items, roughly in order:
 - Try the redesigned dashboard on the tablet and phone with live data.
 - Remember the setpoint, mode and battery-rule levels across a power cut.
   Today a restart puts the hub in Monitor only with default settings.
-- Add buttons to switch the Bluetti's AC and DC outputs. The hub only reads
-  the Bluetti today.
+- Try the new AC and DC output switches on the Bluetti (PR #16). The
+  register addresses come from other Elite V2 models and have not yet been
+  confirmed on the Elite 200 V2.
 - Later: the MaxxAir fans and the ceiling LEDs.
 
 ## Getting started

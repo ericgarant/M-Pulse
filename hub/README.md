@@ -12,8 +12,8 @@ It:
   reads it every 2 s, and lets the dashboard change it (see
   [Fridge](#fridge))
 - keeps a third BLE link to the Bluetti Elite 200 V2 power station and reads
-  its battery, inputs and outputs every 5 s, read only (see
-  [Bluetti](#bluetti))
+  its battery, inputs and outputs every 5 s, and switches its AC and DC
+  outputs when you ask on the dashboard (see [Bluetti](#bluetti))
 - stops the heater cleanly when the Bluetti runs low and blocks starts until
   it has recharged (see [Heater low-battery stop](#heater-low-battery-stop),
   on after every restart)
@@ -161,9 +161,14 @@ hub serves, so it needs no internet.
   station has an estimate (otherwise the net watts), and a flow picture with
   solar and charger input on the left and AC and DC output on the right. The
   lines animate while power flows, and the battery's colour follows its
-  charge (green, amber at 50 % and below, red at 20 % and below). Nothing on
-  this card switches the Bluetti. *Battery details* has the voltage and
-  current.
+  charge (green, amber at 50 % and below, red at 20 % and below). Under it,
+  the **AC outlets** and **DC outputs** switches turn those outputs on, or
+  off after asking. A switch shows the new position straight away and
+  settles on what the Bluetti reports within a few seconds. The hub refuses
+  some Offs (see [Bluetti output switches](#bluetti-output-switches)); the
+  reason shows in a note at the bottom of the screen. *Battery details* has
+  the voltage and current, and the last switch command and whether the
+  Bluetti took it.
 - **Battery rules**:
   - *Heater low-battery stop*: a switch (turning it off asks first), the
     stop and restart levels, and what it is doing now.
@@ -224,14 +229,41 @@ licence file is needed.
   hears back, and the hub ignores the repeats.
 - The hub reads 62 registers from register 100 (the app's home screen)
   every 5 s: charge %, battery voltage and current, solar and charger
-  input, AC and DC output, and whether the AC and DC outputs are on. It
-  writes nothing else, so it cannot switch the Bluetti's outputs. Four
+  input, AC and DC output, and whether the AC and DC outputs are on. Four
   missed replies in a row close the link and rebuild it.
 - Battery voltage is in hundredths of a volt on this model (the app divides
   by 10). The station reports 5994 minutes to full or empty when it has no
   estimate, and the dashboard hides that.
 - While the hub holds the link, the Bluetti app can only reach the station
   over the cloud, not Bluetooth.
+
+### Bluetti output switches
+
+The dashboard's AC and DC switches write 1 (on) or 0 (off) to register 2011
+(AC) or 2012 (DC), as one Modbus "write single register" inside the
+encrypted channel. The station echoes the request back, and the hub reads
+the home block straight after, so the dashboard shows the result within a
+couple of seconds. The wire format is in
+[`core/src/bluetti.rs`](../core/src/bluetti.rs).
+
+- The addresses are the ones `bluetti-bt-lib` uses for the Elite 30 V2 and
+  Elite 100 V2, the same protocol family. They have not yet been tried on
+  the Elite 200 V2 (see [Tested](#tested)).
+- A command is sent once and never retried. It is dropped if the link goes
+  down before it is sent.
+- The hub only sends one with a Bluetti reading under 30 s old.
+- **DC off is refused while the heater is starting, running or cooling
+  down.** If the heater runs from the Bluetti's 12 V output, cutting it
+  mid-cycle skips the cool-down that protects the glow plug.
+- To make sure an output that something important runs from (the hub, the
+  fridge, the tablet) is never switched off from the dashboard, list it at
+  build time in `wifi.env` and reflash:
+
+  ```sh
+  export M_PULSE_BLUETTI_KEEP_ON="dc"   # or "ac", or "ac,dc"
+  ```
+
+  That output can still be switched on, and its switch shows dimmed.
 
 ## Heater low-battery stop
 
@@ -356,6 +388,10 @@ Tested on the current hub (bare S3 module, PR #13):
 
 Not yet tested:
 
+- **The Bluetti's AC and DC switches.** The register addresses are borrowed
+  from other Elite V2 models. If the station does not take a command, the
+  dashboard's *Last command* says "not confirmed" and the switch moves back
+  within 10 s.
 - **The heater, fridge and Bluetti links on the current hub.** The devices
   were out of range when it was flashed. This also checks the shorter
   Bluetooth search time from PR #12, which has not yet been tried with the
@@ -406,7 +442,10 @@ They live in `Config::default()` in `../core/src/heater_cutoff.rs` and
 - The low-battery stop needs the hub's links to both the Bluetti and the
   heater. It has not yet been tried on a burning heater (see
   [Tested](#tested)), so do not rely on it alone to protect the Bluetti.
-- The hub only reads the Bluetti. It never switches its outputs.
+- The hub switches the Bluetti's AC or DC outputs only when you press a
+  switch on the dashboard. Nothing automatic does it. Turning one off asks
+  first, and DC off is refused while the heater is not fully off. Use
+  `M_PULSE_BLUETTI_KEEP_ON` for any output the hub itself runs from.
 - In Auto mode, a lost sensor (no reading for 2 minutes) switches the heater
   off once it is burning steadily.
 - The hub never starts a heater that reports a fault or is still in its

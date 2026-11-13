@@ -27,6 +27,14 @@
 //!
 //! Registers are 16-bit big-endian words. 32-bit values span two registers,
 //! low word first. The app's home screen reads a block from register 100.
+//!
+//! ## Output switches
+//!
+//! The AC outlets and the DC outputs are switched by writing 1 (on) or 0
+//! (off) to registers 2011 and 2012 with "write single register" (function
+//! 6); the station echoes the request back. These are the addresses
+//! `bluetti-bt-lib` uses for the Elite 30 V2 and Elite 100 V2, the same
+//! protocol family as the Elite 200 V2.
 
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use md5::{Digest, Md5};
@@ -423,6 +431,68 @@ pub fn read_reply(reply: &[u8], count: u16) -> Result<&[u8], Error> {
     Ok(&reply[3..3 + want])
 }
 
+/// "Write single register" (function 6): `value` into `register`.
+pub fn write_request(register: u16, value: u16) -> Vec<u8> {
+    let mut out = vec![0x01, 0x06];
+    out.extend_from_slice(&register.to_be_bytes());
+    out.extend_from_slice(&value.to_be_bytes());
+    let crc = crc16(&out);
+    out.extend_from_slice(&crc.to_le_bytes());
+    out
+}
+
+/// Checks the reply to [`write_request`]: the station echoes the request.
+pub fn write_reply(reply: &[u8], register: u16, value: u16) -> Result<(), Error> {
+    if reply.len() >= 5 && reply[1] == 0x86 {
+        return Err(Error::Exception(reply[2]));
+    }
+    if reply == write_request(register, value).as_slice() {
+        Ok(())
+    } else {
+        Err(Error::BadReply)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Output switches
+
+/// One of the station's switchable outputs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Output {
+    /// The AC outlets (inverter).
+    Ac,
+    /// The DC outputs: 12 V, USB and the car port.
+    Dc,
+}
+
+impl Output {
+    /// The control register that switches this output.
+    pub fn register(self) -> u16 {
+        match self {
+            Output::Ac => 2011,
+            Output::Dc => 2012,
+        }
+    }
+
+    /// The request that switches this output on or off.
+    pub fn switch_request(self, on: bool) -> Vec<u8> {
+        write_request(self.register(), u16::from(on))
+    }
+
+    /// Checks the station's answer to [`Output::switch_request`].
+    pub fn switch_reply(self, reply: &[u8], on: bool) -> Result<(), Error> {
+        write_reply(reply, self.register(), u16::from(on))
+    }
+
+    /// Whether this output is on, according to a home-block reading.
+    pub fn is_on(self, status: &Status) -> bool {
+        match self {
+            Output::Ac => status.ac_on,
+            Output::Dc => status.dc_on,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Home data
 
@@ -701,6 +771,36 @@ mod tests {
         let signer = SigningKey::from_slice(&CLIENT_SIGNING_KEY).unwrap();
         let sig: Signature = signer.sign(b"abc");
         assert!(signer.verifying_key().verify(b"abc", &sig).is_ok());
+    }
+
+    #[test]
+    fn write_request_is_modbus_function_6() {
+        // 01 06 07DB 0001 + CRC, checked against a reference Modbus CRC.
+        let req = Output::Ac.switch_request(true);
+        assert_eq!(&req[..6], &[0x01, 0x06, 0x07, 0xDB, 0x00, 0x01]);
+        assert_eq!(req.len(), 8);
+        assert_eq!(
+            crc16(&req),
+            0,
+            "a frame with its CRC appended checks to zero"
+        );
+        let off = Output::Dc.switch_request(false);
+        assert_eq!(&off[..6], &[0x01, 0x06, 0x07, 0xDC, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn write_reply_must_echo_the_request() {
+        let req = Output::Dc.switch_request(true);
+        assert_eq!(Output::Dc.switch_reply(&req, true), Ok(()));
+        // An echo of a different value or register is not ours.
+        assert_eq!(Output::Dc.switch_reply(&req, false), Err(Error::BadReply));
+        assert_eq!(Output::Ac.switch_reply(&req, true), Err(Error::BadReply));
+        // A Modbus exception (function 6 | 0x80).
+        assert_eq!(
+            Output::Dc.switch_reply(&[0x01, 0x86, 0x02, 0xC3, 0xA1], true),
+            Err(Error::Exception(2))
+        );
+        assert_eq!(Output::Dc.switch_reply(&[], true), Err(Error::BadReply));
     }
 
     #[test]
