@@ -121,10 +121,7 @@ fn read_with_retries(pin: &mut PinDriver<'static, InputOutput>) -> Option<(f32, 
     for attempt in 1..=READ_ATTEMPTS {
         match dht11::blocking::read(&mut DhtDelay, pin) {
             Ok(raw) => {
-                return Some((
-                    f32::from(raw.temperature),
-                    f32::from(raw.relative_humidity),
-                ));
+                return Some((f32::from(raw.temperature), f32::from(raw.relative_humidity)));
             }
             Err(err) => {
                 log::debug!("DHT11: read attempt {attempt}/{READ_ATTEMPTS} failed: {err:?}");
