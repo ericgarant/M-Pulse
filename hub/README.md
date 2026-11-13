@@ -247,8 +247,8 @@ couple of seconds. The wire format is in
 [`core/src/bluetti.rs`](../core/src/bluetti.rs).
 
 - The addresses are the ones `bluetti-bt-lib` uses for the Elite 30 V2 and
-  Elite 100 V2, the same protocol family. They have not yet been tried on
-  the Elite 200 V2 (see [Tested](#tested)).
+  Elite 100 V2, the same protocol family. They work on the Elite 200 V2
+  too (see [Tested](#tested)).
 - A command is sent once and never retried. It is dropped if the link goes
   down before it is sent.
 - The hub only sends one with a Bluetti reading under 30 s old.
@@ -379,6 +379,11 @@ Tested for the heater low-battery stop:
 - With the stop level set above the charge it tripped within a second, and
   it cleared when the levels were lowered.
 
+Tested for the Bluetti output switches (PR #16), on the current hub:
+
+- From the dashboard, the AC and DC switches both worked: the Elite 200 V2
+  followed them.
+
 Tested on the current hub (bare S3 module, PR #13):
 
 - Booted, started the dashboard server, and received the sensor node's
@@ -388,12 +393,8 @@ Tested on the current hub (bare S3 module, PR #13):
 
 Not yet tested:
 
-- **The Bluetti's AC and DC switches.** The register addresses are borrowed
-  from other Elite V2 models. If the station does not take a command, the
-  dashboard's *Last command* says "not confirmed" and the switch moves back
-  within 10 s.
-- **The heater, fridge and Bluetti links on the current hub.** The devices
-  were out of range when it was flashed. This also checks the shorter
+- **The heater and fridge links on the current hub.** They were out of
+  range when it was flashed. The Bluetti link works on it. This also checks the shorter
   Bluetooth search time from PR #12, which has not yet been tried with the
   devices switched on.
 - Handing over to the sensor node when the hub's DHT11 stops answering.
