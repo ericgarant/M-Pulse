@@ -9,7 +9,7 @@ and no cloud.
 
 | Folder | Board | Purpose | Status |
 | --- | --- | --- | --- |
-| [`hub/`](hub/) | Bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on GPIO4 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Cabin sensor tested on this module. The heater, fridge and Bluetti links were tested on the earlier S3 hub (the Freenove media kit) and still need a check on this one in the camper |
+| [`hub/`](hub/) | Bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on GPIO4 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Cabin sensor, Bluetti link and the Bluetti AC/DC switches tested on this module. The heater and fridge links were tested on the earlier S3 hub (the Freenove media kit) and still need a check on this one in the camper |
 | [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) with a DHT11 | Retired from the camper. The firmware stays as an optional backup: the hub uses its readings only if its own DHT11 stops answering | Tested with the hub before the hub had its own sensor; the handover has not been tested |
 
 [`core/`](core/) holds the logic that does not depend on hardware: the
@@ -84,8 +84,8 @@ dashboard is only a remote control: closing it changes nothing.
 
 Open items, roughly in order:
 
-- Take the new hub to the camper and check that it connects to the heater,
-  fridge and Bluetti, all three at once. They were tested on the earlier
+- Take the new hub to the camper and check that it connects to the heater
+  and fridge alongside the Bluetti, all three at once. They were tested on the earlier
   board, and the shorter Bluetooth search time from PR #12 has not yet been
   tried with the devices switched on.
 - Try the low-battery stop on a burning heater. So far it has only tripped
@@ -95,9 +95,6 @@ Open items, roughly in order:
 - Try the redesigned dashboard on the tablet and phone with live data.
 - Remember the setpoint, mode and battery-rule levels across a power cut.
   Today a restart puts the hub in Monitor only with default settings.
-- Try the new AC and DC output switches on the Bluetti (PR #16). The
-  register addresses come from other Elite V2 models and have not yet been
-  confirmed on the Elite 200 V2.
 - Later: the MaxxAir fans and the ceiling LEDs.
 
 ## Getting started
