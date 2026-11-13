@@ -1,7 +1,10 @@
 # Hub (ESP32-S3)
 
 Firmware for an ESP32-S3 board (any S3 module with 4 MB flash or more; it
-uses no screen or PSRAM). It:
+uses no screen or PSRAM). The hub in the camper is a bare S3 module with
+16 MB flash and no PSRAM, with the cabin DHT11 wired to it. It replaced the
+Freenove ESP32-S3 media kit, the first hub, whose screen was never used.
+It:
 
 - keeps a BLE link to the BougeRV diesel heater (`BougeRV-DHG001`) and
   reconnects if it drops
@@ -57,9 +60,9 @@ sees the sensor as lost after 2 minutes and keeps the heater off.
 
 ## Networks
 
-The hub runs its own Wi-Fi network, `M-Pulse`. The sensor node and your phone
-join it, so everything works in the camper with no router. This is the tested
-setup.
+The hub runs its own Wi-Fi network, `M-Pulse`. The tablet and your phone
+(and the sensor node, if you still run it) join it, so everything works in
+the camper with no router. This is the tested setup.
 
 To set your own password for that network, put it in `wifi.env` at the top of
 the repository. Git ignores this file, so the password stays on your computer:
@@ -68,8 +71,8 @@ the repository. Git ignores this file, so the password stays on your computer:
 export M_PULSE_AP_PASS="password for the M-Pulse network"   # 8+ characters
 ```
 
-Without it the password is `mpulse-heater`. Flash both boards from the same
-`wifi.env`, or the sensor node cannot join.
+Without it the password is `mpulse-heater`. If you run the sensor node,
+flash it from the same `wifi.env`, or it cannot join.
 
 ### Joining another Wi-Fi (optional, untested)
 
@@ -78,12 +81,14 @@ internet time and to show the dashboard there. It is built in but has not been
 tested, and it has trade-offs:
 
 - While the hub is on another network, its own network moves to that
-  network's channel, so phones and the sensor node may drop off briefly when
-  it joins.
-- If the sensor node joins that network too and the hub is not on it, the
-  readings stop reaching the hub. Auto then treats the sensor as lost.
+  network's channel, so the tablet, phones and the sensor node may drop off
+  briefly when it joins.
+- If the sensor node joins that network too and the hub is not on it, its
+  backup readings stop reaching the hub. This only matters if the hub's own
+  DHT11 has failed.
 
-To try it, add these lines to `wifi.env` and rebuild both boards:
+To try it, add these lines to `wifi.env` and rebuild the hub (and the
+sensor node, if you use it):
 
 ```sh
 export M_PULSE_WIFI_SSID="your network"
@@ -292,6 +297,11 @@ the hub's JSON. The page only talks to the routes listed at the top of
 
 ## Tested
 
+The heater, fridge, Bluetti and dashboard tests below were run on the first
+hub, the Freenove ESP32-S3 media kit. The current hub is a different S3
+module running the same firmware; so far only its cabin sensor and the
+dashboard server have been checked (see the end of this section).
+
 Tested on the BougeRV DHG001 heater:
 
 - Manual ON and OFF from the dashboard, including a full start (flame after
@@ -337,8 +347,20 @@ Tested for the heater low-battery stop:
 - With the stop level set above the charge it tripped within a second, and
   it cleared when the levels were lowered.
 
+Tested on the current hub (bare S3 module, PR #13):
+
+- Booted, started the dashboard server, and received the sensor node's
+  readings before the DHT11 was moved over.
+- With the DHT11 on GPIO4: first reading 2 s after boot (22 °C, 21 % RH),
+  then fresh readings every few seconds, and the thermostat acted on them.
+
 Not yet tested:
 
+- **The heater, fridge and Bluetti links on the current hub.** The devices
+  were out of range when it was flashed. This also checks the shorter
+  Bluetooth search time from PR #12, which has not yet been tried with the
+  devices switched on.
+- Handing over to the sensor node when the hub's DHT11 stops answering.
 - **Stopping a burning heater with the low-battery stop.** The heater was
   off in the test above, so no Off was sent. The Off command itself is the
   one the dashboard's Heater OFF button sends, which is tested.

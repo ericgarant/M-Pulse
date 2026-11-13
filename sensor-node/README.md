@@ -1,8 +1,10 @@
 # Sensor node (ESP32)
 
-Optional now: the hub reads its own DHT11 (see
-[../hub/README.md](../hub/README.md#cabin-sensor)) and uses this node only as
-a backup when that sensor stops answering.
+**Retired from the camper.** The hub now reads its own DHT11 (see
+[../hub/README.md](../hub/README.md#cabin-sensor)). This firmware is kept as
+an optional backup: if the hub's sensor stops answering for 30 s, the hub
+uses this node's readings instead, and the dashboard shows "sensor node"
+under the cabin temperature. You do not need to build or run it.
 
 Firmware for the Freenove ESP32 WROOM board with the DHT11. It reads the
 cabin temperature and humidity every 5 seconds and broadcasts each reading to
@@ -24,7 +26,8 @@ numbered 1 to 4 from left to right.
 | 3 | not connected |
 | 4 (GND) | `GND` |
 
-The data pin is set in `src/main.rs` (`peripherals.pins.gpio21`).
+The data pin is set in `src/main.rs` (`peripherals.pins.gpio21`). The hub
+uses `GPIO4` for its own DHT11; the two boards are wired differently.
 
 ## Build and flash
 
