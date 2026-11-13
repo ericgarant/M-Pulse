@@ -1,6 +1,7 @@
 # Hub (ESP32-S3)
 
-Firmware for the Freenove ESP32-S3 media kit board. It:
+Firmware for an ESP32-S3 board (any S3 module with 4 MB flash or more; it
+uses no screen or PSRAM). It:
 
 - keeps a BLE link to the BougeRV diesel heater (`BougeRV-DHG001`) and
   reconnects if it drops
@@ -15,7 +16,9 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
   on after every restart)
 - can put the fridge in Eco while the Bluetti is low and back to Max once it
   recovers (see [Fridge saver](#fridge-saver), off after every restart)
-- receives cabin readings from the [sensor node](../sensor-node) over Wi-Fi
+- reads the cabin temperature and humidity from its own DHT11 (see
+  [Cabin sensor](#cabin-sensor)), and falls back to readings from the
+  [sensor node](../sensor-node) over Wi-Fi if that sensor stops answering
 - runs the thermostat on those readings
 - switches the heater on and off, either from the dashboard's On and Off
   buttons or by the thermostat in Auto mode. After every restart the hub is
@@ -29,6 +32,28 @@ Firmware for the Freenove ESP32-S3 media kit board. It:
 The heater link lives here because the classic ESP32 could not hold it: the
 heater went silent about 11 s into every connection. The S3 and a Mac both
 hold the same link indefinitely.
+
+## Cabin sensor
+
+The DHT11 is wired to the hub. Hold it with the grille facing you and the
+pins pointing down; pins are numbered 1 to 4 from left to right.
+
+| DHT11 pin | Connects to |
+| --- | --- |
+| 1 (VCC) | `3.3V` on the board |
+| 2 (DATA) | `GPIO4`, plus a 10k resistor to `3.3V` |
+| 3 | not connected |
+| 4 (GND) | `GND` |
+
+The data pin is set in `src/main.rs` (`peripherals.pins.gpio4`). GPIO4 is
+free on every ESP32-S3 module: it is not a strapping, flash, PSRAM or USB pin.
+
+The hub reads the sensor every 5 s. While it has a reading less than 30 s
+old it ignores the [sensor node](../sensor-node), so the node is only a
+backup and does not need to be running. If the hub's sensor stops answering,
+the node's readings take over within about 30 s, and the dashboard adds
+"sensor node" under the cabin temperature. With neither, the thermostat
+sees the sensor as lost after 2 minutes and keeps the heater off.
 
 ## Networks
 
@@ -256,7 +281,7 @@ espflash flash --monitor --partition-table partitions.csv target/xtensa-esp32s3-
 
 With more than one board or phone plugged into the Mac, espflash asks which
 port to use. The hub is the one listed as `USB Single Serial` (on this Mac,
-`/dev/cu.usbmodem5AB90751111`); pass it with `--port` to skip the question.
+`/dev/cu.usbmodem5C940471791`); pass it with `--port` to skip the question.
 The dashboard page is built into the firmware, so changing it means
 reflashing the hub. After a flash the hub is back in Monitor only.
 
