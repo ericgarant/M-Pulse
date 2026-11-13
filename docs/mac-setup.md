@@ -33,8 +33,10 @@ Open a new Terminal window after installing Rust so `cargo` is on your PATH.
 
 ## 3. Install the ESP32 Rust toolchain
 
-Both boards (the ESP32 and the ESP32-S3) use the Xtensa architecture, which
-needs Espressif's build of the Rust compiler. `espup` installs it.
+The hub (ESP32-S3) and the optional backup sensor node (classic ESP32) both
+use the Xtensa architecture, which needs Espressif's build of the Rust
+compiler. `espup` installs it. If you only build the hub, `--targets esp32s3`
+is enough.
 
 ```sh
 cargo install espup espflash ldproxy --locked
@@ -54,7 +56,7 @@ source ~/.zshrc
 Plug the board in with a USB-C data cable, then:
 
 ```sh
-cd hub            # or sensor-node
+cd hub            # or sensor-node, only if you use the backup sensor
 cargo run --release
 ```
 
@@ -72,11 +74,13 @@ password; build with it loaded (`source ../wifi.env`) when you have one.
 
 ## Troubleshooting
 
-- **No serial port found.** The Freenove ESP32 WROOM board uses a CH340 USB
-  serial chip, which recent macOS versions support. The ESP32-S3 media kit
-  uses a CH343, which needs WCH's CH34x driver (wch-ic.com). If nothing shows up
-  under `ls /dev/cu.*`, try another cable first, because many USB-C cables are
-  charge-only.
+- **No serial port found.** The hub shows up as `USB Single Serial`, a
+  `/dev/cu.usbmodem...` port (see the hub README for the one on this Mac).
+  That name comes from a WCH CH343 USB serial chip; if the port never
+  appears, install WCH's CH34x driver (wch-ic.com). The sensor node's
+  Freenove ESP32 WROOM board uses a CH340, which recent macOS versions
+  support. If nothing shows up under `ls /dev/cu.*`, try another cable
+  first, because many USB-C cables are charge-only.
 - **"Failed to connect" while flashing.** Hold the `BOOT` button on the board
   while espflash prints "Connecting...", then release it.
 - **`error: toolchain 'esp' is not installed`.** Run `espup install --targets

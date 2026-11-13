@@ -9,8 +9,8 @@ and no cloud.
 
 | Folder | Board | Purpose | Status |
 | --- | --- | --- | --- |
-| [`hub/`](hub/) | ESP32-S3 module with a DHT11 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Tested on all three; the low-battery heater stop has not yet been tried on a burning heater |
-| [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) | Optional backup: reads a DHT11 and sends cabin readings to the hub over Wi-Fi | Phase 1, tested with the hub; no longer needed once the hub has its own DHT11 |
+| [`hub/`](hub/) | Bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on GPIO4 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Cabin sensor tested on this module. The heater, fridge and Bluetti links were tested on the earlier S3 hub (the Freenove media kit) and still need a check on this one in the camper |
+| [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) with a DHT11 | Retired from the camper. The firmware stays as an optional backup: the hub uses its readings only if its own DHT11 stops answering | Tested with the hub before the hub had its own sensor; the handover has not been tested |
 
 [`core/`](core/) holds the logic that does not depend on hardware: the
 thermostat state machine, the rules for when to switch the heater, the two
@@ -41,19 +41,61 @@ and tests on any computer with `cargo test`.
 
 Details, defaults and what has been tested are in [hub/README.md](hub/README.md).
 
+## Hardware
+
+In use:
+
+- **Hub**: a bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on
+  GPIO4 and a 10k pull-up. Wiring is in
+  [hub/README.md](hub/README.md#cabin-sensor).
+- **Appliances it talks to over BLE**: BougeRV diesel heater (DHG001),
+  BougeRV Rocky 50 fridge, Bluetti Elite 200 V2 power station (read only).
+- **Screens**: the camper's Android tablet and a phone, both through the
+  dashboard in a browser. There is no app to install.
+
+Retired:
+
+- **Freenove ESP32-S3 media kit**: the first hub. Its screen was never used,
+  and the firmware no longer depends on anything on that board.
+- **Freenove ESP32 WROOM sensor node**: replaced by the hub's own DHT11. Its
+  firmware is kept as a backup (see [sensor-node/](sensor-node/)).
+
+Not yet connected: the MaxxAir fans and the ceiling LEDs.
+
+## How it fits together
+
+```
+Tablet / phone ── Wi-Fi "M-Pulse" ──┐
+  (dashboard at 192.168.71.1)       │
+                                    ▼
+                        Hub (ESP32-S3 + DHT11) ── BLE ──> BougeRV diesel heater
+                                    ▲          ── BLE ──> Rocky 50 fridge
+                                    │          ── BLE ──> Bluetti Elite 200 V2
+Sensor node (backup) ── UDP 4210 ───┘
+```
+
+The hub runs its own Wi-Fi network and needs no router or internet. All
+decisions (thermostat, low-battery rules) are made on the hub, so the
+dashboard is only a remote control: closing it changes nothing.
+
 ## Next steps
 
 Open items, roughly in order:
 
+- Take the new hub to the camper and check that it connects to the heater,
+  fridge and Bluetti, all three at once. They were tested on the earlier
+  board, and the shorter Bluetooth search time from PR #12 has not yet been
+  tried with the devices switched on.
 - Try the low-battery stop on a burning heater. So far it has only tripped
   with the heater off.
 - Read the Bluetti while it charges from solar and the charger, and under a
   DC load, to check those readings and the sign of the charger input.
 - Try the redesigned dashboard on the tablet and phone with live data.
-- Add buttons to switch the Bluetti's AC and DC outputs. The hub only reads
-  the Bluetti today.
 - Remember the setpoint, mode and battery-rule levels across a power cut.
   Today a restart puts the hub in Monitor only with default settings.
+- Add buttons to switch the Bluetti's AC and DC outputs. The hub only reads
+  the Bluetti today.
+- Later: the MaxxAir fans and the ceiling LEDs.
 
 ## Getting started
 
