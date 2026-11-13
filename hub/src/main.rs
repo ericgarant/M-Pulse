@@ -1,9 +1,9 @@
 //! M-Pulse hub (ESP32-S3).
 //!
 //! Owns the BLE links to the BougeRV diesel heater, the BougeRV Rocky 50
-//! fridge and the Bluetti Elite 200 V2 power station, receives cabin readings
-//! from the sensor node over Wi-Fi, runs the thermostat, and serves the
-//! dashboard.
+//! fridge and the Bluetti Elite 200 V2 power station, reads the cabin from its
+//! own DHT11 (falling back to the sensor node over Wi-Fi), runs the
+//! thermostat, and serves the dashboard.
 //!
 //! After every restart the hub is in Monitor mode and the thermostat sends
 //! no switch commands. The heater is switched only from the dashboard's On
@@ -18,6 +18,7 @@ mod bluetti;
 mod cabin;
 mod clock;
 mod control;
+mod dht;
 mod fridge;
 mod heater;
 mod net;
@@ -54,6 +55,9 @@ fn main() -> anyhow::Result<()> {
     // the life of the firmware.
     let _sntp = EspSntp::new_default()?;
 
+    // DHT11 DATA is wired to GPIO4, with a 10k pull-up to 3.3V. GPIO4 is
+    // free on any ESP32-S3 module: not a strapping, flash, PSRAM or USB pin.
+    dht::spawn(peripherals.pins.gpio4, state.clone())?;
     cabin::spawn(state.clone())?;
     control::spawn(state.clone())?;
     let _server = web::start(state.clone())?;

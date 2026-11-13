@@ -1041,7 +1041,7 @@ function renderClimate(s) {
   if (cab) {
     tween($("cab-t"), cab.temp_c, 1);
     $("cab-rh").textContent = cab.rh + " %";
-    $("cab-age").textContent = "Updated " + ago(cab.age_s);
+    $("cab-age").textContent = "Updated " + ago(cab.age_s) + (cab.source === "node" ? " · sensor node" : "");
   } else {
     blank("cab-t");
     $("cab-rh").textContent = "--";
