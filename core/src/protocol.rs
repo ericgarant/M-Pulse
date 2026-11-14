@@ -23,8 +23,9 @@ pub const CMD_POWER: u8 = 0x07;
 
 /// Lowest and highest power the hub will ask for, in tenths of a kW.
 ///
-/// The heater's own limits are not known yet: the only setting read back so
-/// far is 1.4 kW, and the new LCD remote shows up to 4.7 kW. These bounds
+/// Tested on a DHG001 (firmware 1.1.2) on 14 Nov 2026: 1.4 to 1.5 kW was
+/// accepted and read back in the next report. The heater's own limits are
+/// not known yet; the new LCD remote shows up to 4.7 kW. These bounds
 /// keep a dashboard mistake from sending something wild; the heater's
 /// status report (`set_power_kw`) shows what it actually accepted.
 pub const POWER_MIN_X10: u8 = 10;
@@ -97,15 +98,20 @@ pub struct Status {
     pub flame: bool,
     /// `None` when the heater reports no fault (0xFF on the wire).
     pub error: Option<u8>,
-    /// Rises to about 3.5 during warm-up with the setting at 1.4, then
-    /// eases back, so it tracks the burn rate more than the setting.
+    /// Byte 5 divided by ten. Named as live power by the vendor app, but it
+    /// is not kW: it rises to about 3.5 during warm-up with the setting at
+    /// 1.4, and on 14 Nov 2026 climbed steadily from 0.8 to 3.1 at a 1.8 kW
+    /// setting. It behaves like a warming temperature. Shown only in the
+    /// dashboard's details.
     pub live_power_kw: f32,
-    /// Byte 6 of the report. Thought to be a temperature, but it stayed at
-    /// 97 through a whole run on a DHG001, so do not build logic on it.
+    /// Byte 6 of the report. Thought to be a temperature, but it stays at
+    /// 97 to 99 whether the heater is off or burning, so do not build logic
+    /// on it.
     pub heater_temp_c: i8,
     pub set_power_kw: f32,
     pub set_temp_c: u8,
-    /// Reads 0 while the heater is idle and 12 to 13 V while it runs.
+    /// Reads 0 while the heater is idle and 12 to 13 V while it runs (12.0
+    /// to 12.4 V with the glow plug on, 12.8 to 13.0 V after ignition).
     pub supply_volts: f32,
     pub schedule_enabled: bool,
 }
@@ -138,6 +144,10 @@ impl Status {
             error: (data[3] != 0xFF).then_some(data[3]),
             live_power_kw: f32::from(data[5] as i8) * 0.1,
             heater_temp_c: data[6] as i8,
+            // Bytes 7 to 10 and 15 to 18 stayed 0 through a whole burn, so
+            // the altitude and efficiency the LCD remote shows are not in
+            // this report. Byte 4 moves (67 to 124 while burning): maybe fan
+            // or pump speed, not decoded.
             set_power_kw: f32::from(data[12]) * 0.1,
             set_temp_c: data[13],
             supply_volts: f32::from(data[14]) * 0.2,
