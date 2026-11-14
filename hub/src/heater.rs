@@ -132,7 +132,6 @@ pub async fn run(
             // A command must never fire late, after a reconnect.
             s.heater.pending = None;
             s.heater.pending_power = None;
-            s.heater.burning_since = None;
         }
         timer.after(RETRY_PAUSE).await?;
     }
@@ -357,6 +356,8 @@ async fn handshake(
             // Log changes only; the heater repeats itself every second. The
             // raw bytes are logged too, so undecoded fields can be matched
             // against the LCD remote from a log.
+            // The previous distinct report in this connection, if any.
+            let previous = last;
             if last != Some(status) || last_raw != raw {
                 info!("Heater: {status:?} raw {}", describe(data));
                 last = Some(status);
@@ -368,6 +369,9 @@ async fn handshake(
                 s.heater.burning_since = None;
             } else if s.heater.burning_since.is_none() {
                 s.heater.burning_since = Some(Instant::now());
+                // Burning in the first report of the connection: it lit
+                // before the hub was watching.
+                s.heater.burning_before_seen = previous.is_none();
             }
             s.heater.status_at = Some(Instant::now());
             s.heater.raw_status = raw;

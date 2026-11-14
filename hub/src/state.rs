@@ -63,9 +63,14 @@ pub struct Heater {
     /// does not decode yet (altitude, efficiency, the heater's own mode
     /// are thought to be in there) can be compared with the LCD remote.
     pub raw_status: Option<[u8; 20]>,
-    /// When the heater was first seen burning steadily in this connection,
-    /// for the dashboard's run timer. Cleared when it stops or the link drops.
+    /// When the hub first saw the heater burning steadily, for the
+    /// dashboard's burning time. Kept across a dropped link, so a reconnect
+    /// mid-burn does not restart the count; cleared by the first report
+    /// that shows the heater not burning.
     pub burning_since: Option<Instant>,
+    /// The heater was already burning in the first report the hub got (for
+    /// example after a hub restart), so the real burning time is longer.
+    pub burning_before_seen: bool,
     /// Start commands the thermostat has sent without the heater reaching
     /// On. Auto stops trying at `actuator::MAX_START_ATTEMPTS`.
     pub start_attempts: u8,
