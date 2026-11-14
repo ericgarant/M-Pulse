@@ -539,7 +539,7 @@ fn state_json(hub: &Hub) -> String {
                 out,
                 ",\"age_s\":{},\"running\":{},\"state\":\"{:?}\",\"fan\":{},\"pump\":{},\"glow\":{},\"flame\":{},\
                  \"error\":{},\"power_kw\":{:.1},\"set_power_kw\":{:.1},\"set_temp_c\":{},\
-                 \"heater_temp_c\":{},\"volts\":{:.1},\"timer\":{},\"burning_s\":{}",
+                 \"heater_temp_c\":{},\"volts\":{:.1},\"burning_s\":{},\"burning_before_seen\":{}",
                 at.elapsed().as_secs(),
                 actuator::is_running(&st),
                 st.state,
@@ -553,9 +553,9 @@ fn state_json(hub: &Hub) -> String {
                 st.set_temp_c,
                 st.heater_temp_c,
                 st.supply_volts,
-                st.schedule_enabled,
                 h.burning_since
-                    .map_or("null".to_string(), |t| t.elapsed().as_secs().to_string())
+                    .map_or("null".to_string(), |t| t.elapsed().as_secs().to_string()),
+                h.burning_before_seen
             );
         }
         _ => out.push_str(",\"state\":null"),
