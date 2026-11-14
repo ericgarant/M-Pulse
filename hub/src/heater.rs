@@ -6,10 +6,11 @@
 //! once the hub knows the time, and publishes every status report. If the
 //! link drops, it reconnects.
 //!
-//! Besides the version request and the clock sync, the only command written
-//! to the heater is the on/off switch, and only when another part of the hub
-//! queues one in the shared state: the dashboard's On and Off buttons, or the
-//! thermostat in Auto mode. This code never sends the power command.
+//! Besides the version request and the clock sync, two commands are written
+//! to the heater, and only when another part of the hub queues one in the
+//! shared state: the on/off switch (the dashboard's On and Off buttons, or
+//! the thermostat in Auto mode) and the power level (the dashboard's + and -
+//! buttons only; the thermostat never changes the power).
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -129,6 +130,7 @@ pub async fn run(
             s.heater.clock_synced = false;
             // A command must never fire late, after a reconnect.
             s.heater.pending = None;
+            s.heater.pending_power = None;
         }
         timer.after(RETRY_PAUSE).await?;
     }
@@ -242,6 +244,25 @@ async fn stay_connected(
             state.lock().heater.last_sent = Some((switch, Instant::now()));
         }
 
+        let queued = state.lock().heater.pending_power.take();
+        if let Some(kw_x10) = queued {
+            // The web handler already checked the range; this is the last
+            // guard before anything reaches the heater.
+            match protocol::power_frame(kw_x10) {
+                Some(frame) => {
+                    warn!(
+                        "Setting heater power to {}.{} kW: writing {}",
+                        kw_x10 / 10,
+                        kw_x10 % 10,
+                        describe(&frame)
+                    );
+                    write_command(client, &frame).await?;
+                    state.lock().heater.last_power_sent = Some((kw_x10, Instant::now()));
+                }
+                None => warn!("Dropped out-of-range power level {kw_x10}"),
+            }
+        }
+
         let last_status = state.lock().heater.status_at.unwrap_or(subscribed_at);
         if last_status.elapsed() > STATUS_SILENCE_LIMIT {
             anyhow::bail!("no status for {} s", STATUS_SILENCE_LIMIT.as_secs());
@@ -327,16 +348,22 @@ async fn handshake(
     let status_chr = service.get_characteristic(CHAR_STATUS).await?;
     let publish = state.clone();
     let mut last: Option<Status> = None;
+    let mut last_raw: Option<[u8; 20]> = None;
     status_chr.on_notify(move |data| match Status::parse(data) {
         Some(status) => {
-            // Log changes only; the heater repeats itself every second.
-            if last != Some(status) {
-                info!("Heater: {status:?}");
+            let raw: Option<[u8; 20]> = data.try_into().ok();
+            // Log changes only; the heater repeats itself every second. The
+            // raw bytes are logged too, so undecoded fields can be matched
+            // against the LCD remote from a log.
+            if last != Some(status) || last_raw != raw {
+                info!("Heater: {status:?} raw {}", describe(data));
                 last = Some(status);
+                last_raw = raw;
             }
             let mut s = publish.lock();
             s.heater.status = Some(status);
             s.heater.status_at = Some(Instant::now());
+            s.heater.raw_status = raw;
         }
         None => warn!("STATUS (unrecognised) {}", describe(data)),
     });

@@ -54,6 +54,15 @@ pub struct Heater {
     pub pending: Option<Switch>,
     /// The last switch command written, and when.
     pub last_sent: Option<(Switch, Instant)>,
+    /// A power level, in tenths of a kW, waiting to be written by the heater
+    /// link. Only the dashboard's + and - buttons set it.
+    pub pending_power: Option<u8>,
+    /// The last power level written (tenths of a kW), and when.
+    pub last_power_sent: Option<(u8, Instant)>,
+    /// The latest status report exactly as received, so the bytes the hub
+    /// does not decode yet (altitude, efficiency, the heater's own mode
+    /// are thought to be in there) can be compared with the LCD remote.
+    pub raw_status: Option<[u8; 20]>,
     /// Start commands the thermostat has sent without the heater reaching
     /// On. Auto stops trying at `actuator::MAX_START_ATTEMPTS`.
     pub start_attempts: u8,

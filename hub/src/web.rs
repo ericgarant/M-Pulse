@@ -8,6 +8,10 @@
 //!   `monitor`)
 //! - switch the heater by hand (`POST /api/heater`, body `on` or `off`),
 //!   which also drops back to Monitor mode so the thermostat does not undo it
+//! - set the heater's burn power (`POST /api/power`, body in kW such as
+//!   `2.3`), like the + and - buttons on the heater's LCD remote; this does
+//!   not change the mode, because the thermostat only ever switches the
+//!   heater on and off
 //! - change the fridge (`POST /api/fridge`, body `on`, `off`, `eco`, `max`
 //!   or `temp:<degrees>`)
 //! - set the fridge saver (`POST /api/saver`, body `on`, `off` or
@@ -32,7 +36,7 @@ use m_pulse_core::bluetti::Output;
 use m_pulse_core::eco_guard;
 use m_pulse_core::fridge::RunMode;
 use m_pulse_core::heater_cutoff;
-use m_pulse_core::protocol::RunState;
+use m_pulse_core::protocol::{self, RunState};
 
 use crate::clock;
 use crate::state::{FridgeCommand, Hub, Mode, OutputCommand, Shared};
@@ -142,6 +146,40 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         match refusal {
             None => {
                 warn!("Dashboard asked to switch the heater {switch:?}");
+                req.into_ok_response()?.write_all(b"ok")?;
+            }
+            Some(why) => {
+                req.into_status_response(409)?.write_all(why.as_bytes())?;
+            }
+        }
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/power", Method::Post, move |mut req| {
+        let text = read_body(&mut req)?;
+        let Some(kw_x10) = parse_power(text.trim()) else {
+            let msg = format!(
+                "power must be a number of kW from {}.{} to {}.{}",
+                protocol::POWER_MIN_X10 / 10,
+                protocol::POWER_MIN_X10 % 10,
+                protocol::POWER_MAX_X10 / 10,
+                protocol::POWER_MAX_X10 % 10
+            );
+            req.into_status_response(400)?.write_all(msg.as_bytes())?;
+            return Ok(());
+        };
+        let refusal = {
+            let mut hub = s.lock();
+            let refusal = power_refusal(&hub);
+            if refusal.is_none() {
+                hub.heater.pending_power = Some(kw_x10);
+            }
+            refusal
+        };
+        match refusal {
+            None => {
+                warn!("Dashboard asked for heater power {kw_x10} (tenths of a kW)");
                 req.into_ok_response()?.write_all(b"ok")?;
             }
             Some(why) => {
@@ -339,6 +377,34 @@ fn manual_refusal(hub: &Hub, switch: Switch) -> Option<&'static str> {
     }
 }
 
+/// Parses a power level in kW (`2.3`) into tenths of a kW, if it is within
+/// the range the hub allows.
+fn parse_power(text: &str) -> Option<u8> {
+    let kw: f32 = text.parse().ok()?;
+    if !kw.is_finite() {
+        return None;
+    }
+    let x10 = (kw * 10.0).round();
+    let range = f32::from(protocol::POWER_MIN_X10)..=f32::from(protocol::POWER_MAX_X10);
+    // In range, so the cast cannot truncate.
+    range.contains(&x10).then_some(x10 as u8)
+}
+
+/// Why a power change cannot be sent right now, if it cannot.
+fn power_refusal(hub: &Hub) -> Option<&'static str> {
+    let h = &hub.heater;
+    if !h.connected {
+        return Some("The heater is not connected.");
+    }
+    let Some(status) = h.status else {
+        return Some("No status from the heater yet.");
+    };
+    if status.error.is_some() {
+        return Some("The heater reports a fault. Clear it at the heater first.");
+    }
+    None
+}
+
 fn parse_output_command(text: &str) -> Option<OutputCommand> {
     let (output, on) = text.split_once(':')?;
     let output = match output {
@@ -491,6 +557,32 @@ fn state_json(hub: &Hub) -> String {
         }
         _ => out.push_str(",\"state\":null"),
     }
+    let _ = write!(
+        out,
+        ",\"power_min_kw\":{:.1},\"power_max_kw\":{:.1},\"pending_power_kw\":{},\"last_power\":{},\"raw\":{}",
+        f32::from(protocol::POWER_MIN_X10) / 10.0,
+        f32::from(protocol::POWER_MAX_X10) / 10.0,
+        h.pending_power
+            .map_or("null".to_string(), |p| format!("{:.1}", f32::from(p) / 10.0)),
+        opt_str(
+            h.last_power_sent
+                .map(|(p, when)| format!(
+                    "{:.1} kW {} s ago",
+                    f32::from(p) / 10.0,
+                    when.elapsed().as_secs()
+                ))
+                .as_deref()
+        ),
+        opt_str(
+            h.raw_status
+                .map(|r| r
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect::<Vec<_>>()
+                    .join(" "))
+                .as_deref()
+        )
+    );
     out.push_str("},");
 
     let f = &hub.fridge;
