@@ -6,9 +6,9 @@
 //! `[0x00, command, payload.., checksum]`, where the checksum is the low byte
 //! of the sum of all preceding bytes.
 //!
-//! A known command that this firmware does not send:
-//!
-//! - `0x07`: power level, payload is kilowatts times ten (14 = 1.4 kW)
+//! The power level command (`0x07`, kilowatts times ten) is also from the
+//! vendor app. The hub sends it only when someone presses + or - on the
+//! dashboard; the thermostat never changes the power.
 
 /// Ask for the firmware version. The app sends this right after connecting.
 pub const CMD_VERSION: u8 = 0x0E;
@@ -17,6 +17,26 @@ pub const CMD_CLOCK: u8 = 0x0A;
 
 /// Switch the heater on (payload 1) or off (payload 0).
 pub const CMD_SWITCH: u8 = 0x05;
+
+/// Set the burn power. Payload is kilowatts times ten (14 = 1.4 kW).
+pub const CMD_POWER: u8 = 0x07;
+
+/// Lowest and highest power the hub will ask for, in tenths of a kW.
+///
+/// The heater's own limits are not known yet: the only setting read back so
+/// far is 1.4 kW, and the new LCD remote shows up to 4.7 kW. These bounds
+/// keep a dashboard mistake from sending something wild; the heater's
+/// status report (`set_power_kw`) shows what it actually accepted.
+pub const POWER_MIN_X10: u8 = 10;
+pub const POWER_MAX_X10: u8 = 50;
+
+/// Builds the power level command for `kw_x10` tenths of a kW, or `None` if
+/// it is outside [`POWER_MIN_X10`]..=[`POWER_MAX_X10`].
+pub fn power_frame(kw_x10: u8) -> Option<Vec<u8>> {
+    (POWER_MIN_X10..=POWER_MAX_X10)
+        .contains(&kw_x10)
+        .then(|| frame(CMD_POWER, &[kw_x10]))
+}
 
 /// Builds the switch command.
 pub fn switch_frame(switch: crate::actuator::Switch) -> Vec<u8> {
@@ -144,6 +164,16 @@ mod tests {
         assert_eq!(switch_frame(Switch::On), [0x00, 0x05, 0x01, 0x06]);
         assert_eq!(switch_frame(Switch::Off), [0x00, 0x05, 0x00, 0x05]);
         assert_eq!(frame(0x07, &[14]), [0x00, 0x07, 0x0e, 0x15]);
+        assert_eq!(power_frame(14), Some(vec![0x00, 0x07, 0x0e, 0x15]));
+    }
+
+    #[test]
+    fn power_frame_refuses_out_of_range() {
+        assert_eq!(power_frame(POWER_MIN_X10 - 1), None);
+        assert_eq!(power_frame(POWER_MAX_X10 + 1), None);
+        assert_eq!(power_frame(0), None);
+        assert!(power_frame(POWER_MIN_X10).is_some());
+        assert!(power_frame(POWER_MAX_X10).is_some());
     }
 
     #[test]

@@ -245,6 +245,25 @@ main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-te
 .part.pump.on svg { animation: drip 1s ease-in-out infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes drip { 50% { transform: translateY(2px); } }
+.hpow { display: grid; gap: 10px; padding: 14px; border-radius: 18px; background: var(--bg2); border: 1px solid var(--line); }
+.hpow-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.hpow .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.hpow .big { font-size: 40px; margin-top: 4px; }
+.hpow-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+/* The power bar, like the colour arc on the heater's LCD remote. */
+.pbar { position: relative; height: 12px; border-radius: 99px; background: var(--card2); }
+.pbar .fill { position: absolute; inset: 0; border-radius: 99px; background: linear-gradient(90deg, #4cc9f0, #5fd68a 35%, #ffd43b 65%, #ff5d5d);
+  clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0 round 99px); transition: clip-path .9s var(--ease); }
+:root[data-theme="night"] .pbar .fill { background: var(--heat); }
+.pbar .mark { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--fg); left: var(--s, 0%); transition: left .5s var(--ease), opacity .3s; }
+.pbar .mark.none { opacity: 0; }
+.pscale { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--faint); margin-top: -4px; }
+.pset { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pset .sp { text-align: center; flex: 1; }
+.pset .v { font-size: 26px; font-weight: 600; color: var(--heat); transition: transform .2s var(--ease), color .3s; }
+.pset .sp.pending .v { color: var(--warn); }
+.pset .btn.round { width: 48px; height: 48px; }
+.pset .btn:disabled { opacity: .4; pointer-events: none; }
 .why { display: flex; align-items: center; gap: 10px; font-size: 14.5px; padding: 10px 14px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--line); }
 .why .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); flex: none; transition: background .3s; }
 .why.heat .dot { background: var(--heat); box-shadow: 0 0 0 4px var(--glow-heat); }
@@ -505,6 +524,19 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
           <div class="part pump" id="p-pump"><svg class="i"><use href="#i-drop"/></svg>Pump</div>
           <div class="part fan" id="p-fan"><svg class="i"><use href="#i-fan"/></svg>Fan</div>
         </div>
+        <div class="hpow" id="hpow" aria-label="Heater power">
+          <div class="hpow-top">
+            <div><div class="lbl">Burn power now</div><div class="big"><span class="num" id="pw-live">--</span><span class="unit">kW</span></div></div>
+            <div class="hpow-meta"><span class="badge" id="pw-volts" title="Supply voltage the heater reports">-- V</span></div>
+          </div>
+          <div class="pbar" id="pbar"><div class="fill"></div><div class="mark none" title="Power setting"></div></div>
+          <div class="pscale"><span id="pw-min">--</span><span id="pw-max">--</span></div>
+          <div class="pset">
+            <button class="btn round" id="pw-down" aria-label="Lower the heater power"><svg class="i"><use href="#i-minus"/></svg></button>
+            <div class="sp" id="pw-box"><div class="lbl">Power setting</div><div class="v"><span id="pw-sp">--</span> kW</div></div>
+            <button class="btn round" id="pw-up" aria-label="Raise the heater power"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
         <div class="why" id="why"><i class="dot"></i><div><span>Thermostat:</span> <b id="reason">--</b></div></div>
         <div class="ctl-label">Who switches the heater</div>
         <div class="seg heat" id="mode" role="radiogroup" aria-label="Thermostat mode" style="--n:2" data-i="-1">
@@ -530,6 +562,10 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
         <dt>Power (live / set)</dt><dd id="power-kw">--</dd>
         <dt>Heater set temperature</dt><dd id="htemp">--</dd>
         <dt>Supply</dt><dd id="volts">--</dd>
+        <dt>Heater clock</dt><dd id="hclock">--</dd>
+        <dt>Last power change</dt><dd id="plast">--</dd>
+        <dt>Altitude / efficiency</dt><dd id="unk">not read from the heater yet</dd>
+        <dt>Raw status</dt><dd id="raw" style="font-family:ui-monospace,monospace;font-size:12px;word-break:break-all">--</dd>
         <dt>Error</dt><dd id="err">--</dd>
         <dt>Firmware</dt><dd id="fw">--</dd>
         <dt>Last command</dt><dd id="last">--</dd>
@@ -890,6 +926,36 @@ $("h-on").onclick = async () => {
 };
 $("h-off").onclick = () => { buzz(); heater("off"); };
 
+/* ---------- Heater power: like + and - on the LCD remote ---------- */
+// Quick taps add up, then one send. Changing the power never switches the
+// heater on or off, so it leaves the thermostat mode alone.
+const pwPend = { v: null, timer: null, until: 0 };
+function pwNudge(delta) {
+  const h = last && last.heater;
+  if (!h || !h.connected || !h.state) { toast("The heater is not connected.", "bad"); return; }
+  const base = pwPend.v ?? h.set_power_kw;
+  const v = Math.min(h.power_max_kw, Math.max(h.power_min_kw, Math.round((base + delta) * 10) / 10));
+  if (Math.abs(v - base) < 0.01) return;
+  pwPend.v = v; pwPend.until = Infinity;
+  $("pw-sp").textContent = v.toFixed(1);
+  $("pw-box").classList.add("pending");
+  bump($("pw-box").querySelector(".v"));
+  clearTimeout(pwPend.timer);
+  pwPend.timer = setTimeout(async () => {
+    pwPend.timer = null;
+    try {
+      const r = await post("/api/power", v.toFixed(1));
+      if (!r.ok) { pwPend.v = null; await failed(r); }
+      else toast("Power " + v.toFixed(1) + " kW sent to the heater");
+    } catch (e) { pwPend.v = null; toast("Could not reach the hub.", "bad"); }
+    // The heater confirms in its next status report, about a second later.
+    pwPend.until = Date.now() + 5000;
+    refresh();
+  }, 600);
+}
+hold($("pw-down"), () => pwNudge(-0.1));
+hold($("pw-up"), () => pwNudge(0.1));
+
 /* ---------- Fridge ---------- */
 const ftPend = { v: null, timer: null, until: 0 };
 async function fridgeCmd(cmd) {
@@ -1143,6 +1209,37 @@ function renderHeater(h, co) {
     setText("volts", h.volts.toFixed(1) + " V");
     setText("err", h.error === null ? "none" : "code " + h.error, h.error === null ? "" : "bad");
   }
+  // Power panel.
+  const lo = h.power_min_kw, hi = h.power_max_kw, pct = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+  setText("pw-min", lo.toFixed(1)); setText("pw-max", hi.toFixed(1) + " kW");
+  const bar = $("pbar"), mark = bar.querySelector(".mark");
+  if (live) {
+    tween($("pw-live"), Math.max(0, h.power_kw), 1);
+    bar.style.setProperty("--p", pct(Math.max(0, h.power_kw)).toFixed(1) + "%");
+    if (pwPend.v !== null && !pwPend.timer && (Math.abs(h.set_power_kw - pwPend.v) < 0.05 || Date.now() > pwPend.until)) {
+      if (Math.abs(h.set_power_kw - pwPend.v) >= 0.05) toast("The heater kept " + h.set_power_kw.toFixed(1) + " kW.", "bad");
+      pwPend.v = null;
+    }
+    const sp = pwPend.v ?? h.set_power_kw;
+    mark.classList.remove("none");
+    bar.style.setProperty("--s", pct(sp).toFixed(1) + "%");
+    $("pw-sp").textContent = sp.toFixed(1);
+    $("pw-box").classList.toggle("pending", pwPend.v !== null);
+    const vb = $("pw-volts");
+    vb.textContent = h.volts > 0.5 ? h.volts.toFixed(1) + " V" : "0 V (idle)";
+    vb.className = "badge" + (h.volts > 0.5 && h.volts < 11.5 ? " warn" : "");
+  } else {
+    blank("pw-live");
+    bar.style.setProperty("--p", "0%");
+    mark.classList.add("none");
+    $("pw-sp").textContent = "--";
+    $("pw-volts").textContent = "-- V"; $("pw-volts").className = "badge";
+    pwPend.v = null;
+  }
+  ["pw-down", "pw-up"].forEach(id => $(id).disabled = !live || h.error !== null);
+  setText("hclock", h.connected ? (h.clock_synced ? "set by the hub" : "waiting for the hub's time") : "--");
+  setText("plast", h.last_power || "none");
+  setText("raw", live && h.raw ? h.raw : "--");
   setText("fw", h.firmware || "--");
   setText("last", h.last_command || "none");
   $("ch-heater").className = "chip " + (!h.connected ? "bad" : h.state ? "ok" : "wait");
