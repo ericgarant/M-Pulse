@@ -144,10 +144,9 @@ hub serves, so it needs no internet.
     *Igniting* means it has accepted a start but is not yet burning steadily
     (that takes about 4 to 5 minutes); *Running* means it has a flame and the
     glow plug is off.
-  - The power panel mirrors the heater's new LCD remote: the burn power
-    right now in kW, the supply voltage, a colour bar with a tick at the
-    power setting, and **+** / **−** that change the setting in 0.1 kW
-    steps (hold to keep stepping; quick taps go out as one change). The
+  - The power panel mirrors the heater's new LCD remote: the power setting
+    in kW with a colour bar, the supply voltage, and **+** / **−** that
+    change the setting in 0.1 kW steps (hold to keep stepping; quick taps go out as one change). The
     setting shows amber until the heater reports it back. The hub allows
     1.0 to 5.0 kW; the heater's own limits are not known yet, so a toast
     says so if the heater keeps a different value. Changing the power never
@@ -216,32 +215,28 @@ does with each, against the DHG001's BLE protocol:
 | On/Off | Heater ON / OFF, and Auto | command `0x05`, tested |
 | Fuel pump, air blower, ignition electrode, heater core | Pump, Fan, Glow and Flame tiles | run byte bits, tested |
 | Heater status | Off / Starting / Igniting / Running / Cooling down / Fault | run byte, tested |
-| Power level (kW) and heating power bar | Power panel, live kW and the colour bar | status byte 5, tested |
-| + and − | Power setting + / − | command `0x07` (kW × 10), **from the vendor app, never sent by the hub before this change** |
-| Voltage | Badge in the power panel | status byte 14 × 0.2 V, tested (reads 0 while idle) |
+| Power level (kW) and heating power bar | Power panel: the power setting and the colour bar | status byte 12, tested |
+| + and − | Power setting + / − | command `0x07` (kW × 10), tested on the hub 14 Nov 2026 (1.4 → 1.5 kW read back) |
+| Voltage | Badge in the power panel | status byte 14 × 0.2 V, tested while burning (reads 0 while idle) |
 | Clock | The hub sets the heater's clock on every connection | command `0x0A`, tested |
 | Heating mode (MANUAL) | Auto / Monitor only: the hub's thermostat replaces the heater's own modes | the heater's own mode byte is **not decoded** |
-| Altitude | Not shown | **not decoded** |
-| EFF (combustion efficiency) | Not shown | **not decoded** |
+| Altitude | Not shown | **not reported over BLE**: every spare status byte stayed 0 through a burn |
+| EFF (combustion efficiency) | Not shown | **not reported over BLE**, same check |
 | SET | Not needed: settings live on the dashboard | |
 
-Still to check in the camper, with the heater running and the dashboard's
-*Heater details* open:
+Burn test, 14 Nov 2026 (DHG001, heater firmware 1.1.2, 2½ minutes of
+reports from start to steady flame):
 
-1. **Power + / −**: step the setting and watch it come back from the heater
-   (it turns from amber to orange). Try the ends, 1.0 and 5.0 kW, and note
-   what the heater keeps; the hub's limits should then be set to the
-   heater's real ones (`POWER_MIN_X10` / `POWER_MAX_X10` in
-   `core/src/protocol.rs`).
-2. **Altitude, efficiency, mode**: these are probably among the status bytes
-   the hub does not decode (4, 7 to 10, 15 to 18). Note the raw status line
-   next to what the LCD remote shows, then change one thing on the remote
-   (for example its altitude or mode) and note the line again. The hub also
-   logs the raw bytes whenever they change. Only after that can they go on
-   the dashboard.
-3. If Eric's heater is the newer 2026 model rather than the DHG001, check
-   first that it still advertises as `BougeRV…` and uses the same service;
-   the protocol could differ.
+- Status byte 5, which the vendor app calls live power, is not kW: it
+  climbed from 0.8 to 3.1 with the setting at 1.8 kW. It is shown only in
+  *Heater details*, as "Byte 5".
+- Bytes 7 to 10 and 15 to 18 stayed 0, so altitude and efficiency are not
+  in the report. The remote probably works them out itself.
+- Byte 4 moved between 67 and 124 while burning; maybe fan or pump speed.
+
+Still open: the heater's real power limits (the hub allows 1.0 to 5.0 kW;
+change `POWER_MIN_X10` / `POWER_MAX_X10` in `core/src/protocol.rs` once
+they are known).
 
 ## Fridge
 
