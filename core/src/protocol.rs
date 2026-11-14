@@ -113,6 +113,9 @@ pub struct Status {
     /// Reads 0 while the heater is idle and 12 to 13 V while it runs (12.0
     /// to 12.4 V with the glow plug on, 12.8 to 13.0 V after ignition).
     pub supply_volts: f32,
+    /// The heater's own timer (byte 11, bit 1), as the vendor app reads it.
+    /// It was set on every report seen so far, idle and burning, so whether
+    /// a schedule is actually armed is not confirmed.
     pub schedule_enabled: bool,
 }
 

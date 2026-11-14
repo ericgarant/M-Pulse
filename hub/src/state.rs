@@ -63,6 +63,9 @@ pub struct Heater {
     /// does not decode yet (altitude, efficiency, the heater's own mode
     /// are thought to be in there) can be compared with the LCD remote.
     pub raw_status: Option<[u8; 20]>,
+    /// When the heater was first seen burning steadily in this connection,
+    /// for the dashboard's run timer. Cleared when it stops or the link drops.
+    pub burning_since: Option<Instant>,
     /// Start commands the thermostat has sent without the heater reaching
     /// On. Auto stops trying at `actuator::MAX_START_ATTEMPTS`.
     pub start_attempts: u8,
