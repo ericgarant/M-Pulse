@@ -144,6 +144,9 @@ hub serves, so it needs no internet.
     *Igniting* means it has accepted a start but is not yet burning steadily
     (that takes about 4 to 5 minutes); *Running* means it has a flame and the
     glow plug is off.
+  - While the heater burns, the panel shows how long it has been burning
+    (counted by the hub from when it first saw a steady flame on this
+    connection, so a hub restart starts the count again).
   - The power panel mirrors the heater's new LCD remote: the power setting
     in kW with a colour bar, the supply voltage, and **+** / **−** that
     change the setting in 0.1 kW steps (hold to keep stepping; quick taps go out as one change). The
@@ -219,6 +222,7 @@ does with each, against the DHG001's BLE protocol:
 | + and − | Power setting + / − | command `0x07` (kW × 10), tested on the hub 14 Nov 2026 (1.4 → 1.5 kW read back) |
 | Voltage | Badge in the power panel | status byte 14 × 0.2 V, tested while burning (reads 0 while idle) |
 | Clock | The hub sets the heater's clock on every connection | command `0x0A`, tested |
+| Timer (bell next to the clock) | "Timer on" badge in the power panel, and "Burning for" run time on the heater card | status byte 11 bit 1, as the vendor app reads it; it was on in every report so far, so its meaning is **not confirmed**. The hub cannot read or set the timer's times |
 | Heating mode (MANUAL) | Auto / Monitor only: the hub's thermostat replaces the heater's own modes | the heater's own mode byte is **not decoded** |
 | Altitude | Not shown | **not reported over BLE**: every spare status byte stayed 0 through a burn |
 | EFF (combustion efficiency) | Not shown | **not reported over BLE**, same check |
