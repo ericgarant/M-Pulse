@@ -20,6 +20,7 @@ use esp32_nimble::utilities::BleUuid;
 use esp32_nimble::{uuid128, BLEAddress, BLEClient, BLEDevice, BLEError, BLEScan};
 use esp_idf_svc::timer::EspAsyncTimer;
 use log::{error, info, warn};
+use m_pulse_core::actuator;
 use m_pulse_core::protocol::{self, Status};
 
 use crate::state::Shared;
@@ -131,6 +132,7 @@ pub async fn run(
             // A command must never fire late, after a reconnect.
             s.heater.pending = None;
             s.heater.pending_power = None;
+            s.heater.burning_since = None;
         }
         timer.after(RETRY_PAUSE).await?;
     }
@@ -362,6 +364,11 @@ async fn handshake(
             }
             let mut s = publish.lock();
             s.heater.status = Some(status);
+            if !actuator::is_running(&status) {
+                s.heater.burning_since = None;
+            } else if s.heater.burning_since.is_none() {
+                s.heater.burning_since = Some(Instant::now());
+            }
             s.heater.status_at = Some(Instant::now());
             s.heater.raw_status = raw;
         }

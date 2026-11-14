@@ -246,7 +246,7 @@ main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-te
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes drip { 50% { transform: translateY(2px); } }
 .hpow { display: grid; gap: 10px; padding: 14px; border-radius: 18px; background: var(--bg2); border: 1px solid var(--line); }
-.hpow-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.hpow-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .hpow .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
 .hpow .big { font-size: 40px; margin-top: 4px; }
 .hpow-meta { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -255,12 +255,10 @@ main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-te
 .pbar .fill { position: absolute; inset: 0; border-radius: 99px; background: linear-gradient(90deg, #4cc9f0, #5fd68a 35%, #ffd43b 65%, #ff5d5d);
   clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0 round 99px); transition: clip-path .9s var(--ease); }
 :root[data-theme="night"] .pbar .fill { background: var(--heat); }
-.pbar .mark { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--fg); left: var(--s, 0%); transition: left .5s var(--ease), opacity .3s; }
-.pbar .mark.none { opacity: 0; }
 .pscale { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--faint); margin-top: -4px; }
 .pset { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .pset .sp { text-align: center; flex: 1; }
-.pset .v { font-size: 26px; font-weight: 600; color: var(--heat); transition: transform .2s var(--ease), color .3s; }
+.pset .v { font-size: 34px; font-weight: 600; color: var(--heat); transition: transform .2s var(--ease), color .3s; }
 .pset .sp.pending .v { color: var(--warn); }
 .pset .btn.round { width: 48px; height: 48px; }
 .pset .btn:disabled { opacity: .4; pointer-events: none; }
@@ -453,6 +451,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5v.01"/></symbol>
@@ -526,16 +525,16 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
         </div>
         <div class="hpow" id="hpow" aria-label="Heater power">
           <div class="hpow-top">
-            <div><div class="lbl">Burn power now</div><div class="big"><span class="num" id="pw-live">--</span><span class="unit">kW</span></div></div>
-            <div class="hpow-meta"><span class="badge" id="pw-volts" title="Supply voltage the heater reports">-- V</span></div>
+            <div class="lbl">Heater power</div>
+            <div class="hpow-meta"><span class="badge" id="pw-timer" title="The heater's own timer, as the heater reports it" hidden><svg class="i"><use href="#i-clock"/></svg>Timer on</span><span class="badge" id="pw-volts" title="Supply voltage the heater reports">-- V</span></div>
           </div>
-          <div class="pbar" id="pbar"><div class="fill"></div><div class="mark none" title="Power setting"></div></div>
-          <div class="pscale"><span id="pw-min">--</span><span id="pw-max">--</span></div>
           <div class="pset">
             <button class="btn round" id="pw-down" aria-label="Lower the heater power"><svg class="i"><use href="#i-minus"/></svg></button>
-            <div class="sp" id="pw-box"><div class="lbl">Power setting</div><div class="v"><span id="pw-sp">--</span> kW</div></div>
+            <div class="sp" id="pw-box"><div class="v"><span id="pw-sp">--</span> kW</div></div>
             <button class="btn round" id="pw-up" aria-label="Raise the heater power"><svg class="i"><use href="#i-plus"/></svg></button>
           </div>
+          <div class="pbar" id="pbar"><div class="fill"></div></div>
+          <div class="pscale"><span id="pw-min">--</span><span id="pw-max">--</span></div>
         </div>
         <div class="why" id="why"><i class="dot"></i><div><span>Thermostat:</span> <b id="reason">--</b></div></div>
         <div class="ctl-label">Who switches the heater</div>
@@ -559,10 +558,13 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
         <dt>Link</dt><dd id="link">--</dd>
         <dt>State</dt><dd id="state">--</dd>
         <dt>Flame / glow / pump / fan</dt><dd id="parts">--</dd>
-        <dt>Power (live / set)</dt><dd id="power-kw">--</dd>
+        <dt>Power setting</dt><dd id="power-kw">--</dd>
+        <dt>Byte 5 (warm-up reading)</dt><dd id="b5">--</dd>
         <dt>Heater set temperature</dt><dd id="htemp">--</dd>
         <dt>Supply</dt><dd id="volts">--</dd>
         <dt>Heater clock</dt><dd id="hclock">--</dd>
+        <dt>Heater timer</dt><dd id="htimer">--</dd>
+        <dt>Burning for</dt><dd id="hburn">--</dd>
         <dt>Last power change</dt><dd id="plast">--</dd>
         <dt>Altitude / efficiency</dt><dd id="unk">not read from the heater yet</dd>
         <dt>Raw status</dt><dd id="raw" style="font-family:ui-monospace,monospace;font-size:12px;word-break:break-all">--</dd>
@@ -1181,12 +1183,17 @@ function heaterView(h, co) {
   if (h.error !== null) return ["fault", "Fault", "Code " + h.error + ". Clear it at the heater."];
   switch (h.state) {
     // The heater says "On" seconds after a start, minutes before it burns.
-    case "On": return h.running ? ["run", "Running", h.power_kw.toFixed(1) + " kW, heater set to " + h.set_temp_c + " °C"]
+    case "On": return h.running ? ["run", "Running", (h.burning_s != null ? "For " + dur(h.burning_s) + " · " : "") + h.set_power_kw.toFixed(1) + " kW"]
                                 : ["ignite", "Igniting", "Warming up, about 4 to 5 minutes"];
     case "Starting": return ["ignite", "Starting", "Start accepted"];
     case "ShuttingDown": return ["cool", "Cooling down", "The fan runs until the burner is cool"];
     default: return ["off", "Off", co.enabled && co.tripped ? "Held off: Bluetti battery low" : "Ready"];
   }
+}
+// Run time: minutes under an hour, then hours and minutes.
+function dur(s) {
+  const m = Math.floor(s / 60);
+  return m < 60 ? m + " min" : Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min";
 }
 function renderHeater(h, co) {
   const [k, t, sub] = heaterView(h, co);
@@ -1200,11 +1207,14 @@ function renderHeater(h, co) {
   // After the link drops the hub still holds the last status; do not show
   // it as if it were current.
   if (!live) {
-    ["state", "parts", "power-kw", "htemp", "volts", "err"].forEach(id => setText(id, "--", ""));
+    ["state", "parts", "power-kw", "b5", "htemp", "volts", "err"].forEach(id => setText(id, "--", ""));
   } else {
     setText("state", h.state === "On" ? (h.running ? "Running" : "Igniting") : h.state);
     setText("parts", [h.flame, h.glow, h.pump, h.fan].map(yes).join(" / "));
-    setText("power-kw", h.power_kw.toFixed(1) + " / " + h.set_power_kw.toFixed(1) + " kW");
+    setText("power-kw", h.set_power_kw.toFixed(1) + " kW");
+    // Was shown as live power, but it climbs through warm-up well past the
+    // setting (0.8 to 3.1 at 1.8 kW), so it is not kW. Kept for decoding.
+    setText("b5", h.power_kw.toFixed(1));
     setText("htemp", h.set_temp_c + " °C");
     setText("volts", h.volts.toFixed(1) + " V");
     setText("err", h.error === null ? "none" : "code " + h.error, h.error === null ? "" : "bad");
@@ -1212,33 +1222,32 @@ function renderHeater(h, co) {
   // Power panel.
   const lo = h.power_min_kw, hi = h.power_max_kw, pct = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
   setText("pw-min", lo.toFixed(1)); setText("pw-max", hi.toFixed(1) + " kW");
-  const bar = $("pbar"), mark = bar.querySelector(".mark");
+  const bar = $("pbar");
   if (live) {
-    tween($("pw-live"), Math.max(0, h.power_kw), 1);
-    bar.style.setProperty("--p", pct(Math.max(0, h.power_kw)).toFixed(1) + "%");
     if (pwPend.v !== null && !pwPend.timer && (Math.abs(h.set_power_kw - pwPend.v) < 0.05 || Date.now() > pwPend.until)) {
       if (Math.abs(h.set_power_kw - pwPend.v) >= 0.05) toast("The heater kept " + h.set_power_kw.toFixed(1) + " kW.", "bad");
       pwPend.v = null;
     }
     const sp = pwPend.v ?? h.set_power_kw;
-    mark.classList.remove("none");
-    bar.style.setProperty("--s", pct(sp).toFixed(1) + "%");
+    bar.style.setProperty("--p", Math.max(4, pct(sp)).toFixed(1) + "%");
     $("pw-sp").textContent = sp.toFixed(1);
     $("pw-box").classList.toggle("pending", pwPend.v !== null);
+    $("pw-timer").hidden = !h.timer;
     const vb = $("pw-volts");
     vb.textContent = h.volts > 0.5 ? h.volts.toFixed(1) + " V" : "0 V (idle)";
     vb.className = "badge" + (h.volts > 0.5 && h.volts < 11.5 ? " warn" : "");
   } else {
-    blank("pw-live");
     bar.style.setProperty("--p", "0%");
-    mark.classList.add("none");
     $("pw-sp").textContent = "--";
     $("pw-volts").textContent = "-- V"; $("pw-volts").className = "badge";
+    $("pw-timer").hidden = true;
     pwPend.v = null;
   }
   ["pw-down", "pw-up"].forEach(id => $(id).disabled = !live || h.error !== null);
   setText("hclock", h.connected ? (h.clock_synced ? "set by the hub" : "waiting for the hub's time") : "--");
   setText("plast", h.last_power || "none");
+  setText("htimer", live ? (h.timer ? "on (as the heater reports it)" : "off") : "--");
+  setText("hburn", live && h.burning_s != null ? dur(h.burning_s) : "--");
   setText("raw", live && h.raw ? h.raw : "--");
   setText("fw", h.firmware || "--");
   setText("last", h.last_command || "none");
