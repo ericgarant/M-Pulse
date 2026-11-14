@@ -143,7 +143,18 @@ hub serves, so it needs no internet.
     flame, and which of its parts (flame, glow plug, fuel pump, fan) are on.
     *Igniting* means it has accepted a start but is not yet burning steadily
     (that takes about 4 to 5 minutes); *Running* means it has a flame and the
-    glow plug is off. Below it is the thermostat's reason in plain words.
+    glow plug is off.
+  - The power panel mirrors the heater's new LCD remote: the burn power
+    right now in kW, the supply voltage, a colour bar with a tick at the
+    power setting, and **+** / **−** that change the setting in 0.1 kW
+    steps (hold to keep stepping; quick taps go out as one change). The
+    setting shows amber until the heater reports it back. The hub allows
+    1.0 to 5.0 kW; the heater's own limits are not known yet, so a toast
+    says so if the heater keeps a different value. Changing the power never
+    switches the heater on or off and leaves Auto / Monitor alone, so the
+    thermostat's glow-plug protections (minimum run and rest times,
+    deadband) are untouched. Below it is the thermostat's reason in plain
+    words.
   - *Monitor only* (the mode after every restart): the thermostat decides
     but does not switch the heater. *Auto* (asks first): the thermostat
     switches the heater. Pressing Auto again also retries after 3 failed
@@ -154,8 +165,11 @@ hub serves, so it needs no internet.
     not fully off, or the low-battery stop is holding it off; the reason
     shows in a note at the bottom of the screen.
   - *Heater details* opens the raw readings: link, state, parts, power,
-    the heater's own set temperature, supply voltage, error code, firmware
-    and last command.
+    the heater's own set temperature, supply voltage, whether the hub has
+    set the heater's clock, the last power change, error code, firmware,
+    last command, and the raw 20-byte status report. The raw bytes are
+    there to find the altitude and combustion efficiency the LCD remote
+    shows, which the hub cannot decode yet (see below).
 - **Fridge** shows the temperature inside in a ring that frosts over while
   the fridge runs and turns red with the warm alert (more than 4 °C above its
   target for 30 minutes: check the lid and the power). **+** and **−**
@@ -191,6 +205,43 @@ hub serves, so it needs no internet.
 
 The Climate, Fridge and Power cards show `--` in place of readings while
 their link is down, never the last values.
+
+## Heater LCD remote features
+
+BougeRV's new LCD remote for the diesel heater shows 15 things. What the hub
+does with each, against the DHG001's BLE protocol:
+
+| Remote | Hub | From |
+|---|---|---|
+| On/Off | Heater ON / OFF, and Auto | command `0x05`, tested |
+| Fuel pump, air blower, ignition electrode, heater core | Pump, Fan, Glow and Flame tiles | run byte bits, tested |
+| Heater status | Off / Starting / Igniting / Running / Cooling down / Fault | run byte, tested |
+| Power level (kW) and heating power bar | Power panel, live kW and the colour bar | status byte 5, tested |
+| + and − | Power setting + / − | command `0x07` (kW × 10), **from the vendor app, never sent by the hub before this change** |
+| Voltage | Badge in the power panel | status byte 14 × 0.2 V, tested (reads 0 while idle) |
+| Clock | The hub sets the heater's clock on every connection | command `0x0A`, tested |
+| Heating mode (MANUAL) | Auto / Monitor only: the hub's thermostat replaces the heater's own modes | the heater's own mode byte is **not decoded** |
+| Altitude | Not shown | **not decoded** |
+| EFF (combustion efficiency) | Not shown | **not decoded** |
+| SET | Not needed: settings live on the dashboard | |
+
+Still to check in the camper, with the heater running and the dashboard's
+*Heater details* open:
+
+1. **Power + / −**: step the setting and watch it come back from the heater
+   (it turns from amber to orange). Try the ends, 1.0 and 5.0 kW, and note
+   what the heater keeps; the hub's limits should then be set to the
+   heater's real ones (`POWER_MIN_X10` / `POWER_MAX_X10` in
+   `core/src/protocol.rs`).
+2. **Altitude, efficiency, mode**: these are probably among the status bytes
+   the hub does not decode (4, 7 to 10, 15 to 18). Note the raw status line
+   next to what the LCD remote shows, then change one thing on the remote
+   (for example its altitude or mode) and note the line again. The hub also
+   logs the raw bytes whenever they change. Only after that can they go on
+   the dashboard.
+3. If Eric's heater is the newer 2026 model rather than the DHG001, check
+   first that it still advertises as `BougeRV…` and uses the same service;
+   the protocol could differ.
 
 ## Fridge
 
