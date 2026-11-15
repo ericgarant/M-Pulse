@@ -898,11 +898,11 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "m-pulse-core"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "m-pulse-sensor-node"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "dht-sensor",

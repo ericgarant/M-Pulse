@@ -1,6 +1,6 @@
 [package]
 name = "m-pulse-sensor-node"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.82"
 description = "M-Pulse sensor node (ESP32): DHT11 cabin readings sent to the hub over Wi-Fi"

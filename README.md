@@ -9,7 +9,7 @@ and no cloud.
 
 | Folder | Board | Purpose | Status |
 | --- | --- | --- | --- |
-| [`hub/`](hub/) | Bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on GPIO4 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Cabin sensor, Bluetti link and the Bluetti AC/DC switches tested on this module. The heater and fridge links were tested on the earlier S3 hub (the Freenove media kit) and still need a check on this one in the camper |
+| [`hub/`](hub/) | Bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on GPIO4 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Runs v1.0.0. Cabin sensor, Bluetti link and the Bluetti AC/DC switches tested on this module. The heater and fridge links were tested on the earlier S3 hub (the Freenove media kit) and still need a check on this one in the camper |
 | [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) with a DHT11 | Retired from the camper. The firmware stays as an optional backup: the hub uses its readings only if its own DHT11 stops answering | Tested with the hub before the hub had its own sensor; the handover has not been tested |
 
 [`core/`](core/) holds the logic that does not depend on hardware: the
@@ -38,9 +38,17 @@ and tests on any computer with `cargo test`.
   and your phone: join the hub's `M-Pulse` Wi-Fi (password `mpulse-heater`
   unless you set your own in `wifi.env`) and open http://192.168.71.1. It
   needs no internet. It has Climate, Fridge, Power and Battery rules cards,
-  alerts at the top, and dark, red Night and light themes.
+  live status chips and alerts at the top, four-hour trend charts of the
+  cabin temperature and the Bluetti's charge, and dark, red Night and light
+  themes.
 
 Details, defaults and what has been tested are in [hub/README.md](hub/README.md).
+
+## Releases
+
+The current release is **v1.0.0** (15 Nov 2026), the first one: the hub, its
+dashboard and the shared core logic as described here. What changed in each
+release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Hardware
 
@@ -92,7 +100,12 @@ Open items, roughly in order:
   with the heater off.
 - Read the Bluetti while it charges from solar and the charger, and under a
   DC load, to check those readings and the sign of the charger input.
-- Try the redesigned dashboard on the tablet and phone with live data.
+- Try the dashboard on the tablet and phone with live data, including the
+  trend charts filling over four hours.
+- Check the v1.0.0 fixes in the camper: hand-start the heater and then pick
+  Auto with the cabin inside the comfort band (it should keep burning), and
+  switch the fridge Off then quickly to Eco or Max (both should stick). See
+  [CHANGELOG.md](CHANGELOG.md).
 - Remember the setpoint, mode and battery-rule levels across a power cut.
   Today a restart puts the hub in Monitor only with default settings.
 - Later: the MaxxAir fans and the ceiling LEDs.
