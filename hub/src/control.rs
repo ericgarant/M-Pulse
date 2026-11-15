@@ -12,6 +12,11 @@
 //! sends the heater its normal Off (a clean stop with the full cool-down)
 //! and keeps the thermostat from starting it.
 //!
+//! The fuel reserve works the same way: the loop keeps the fuel estimate
+//! (see `m_pulse_core::fuel`) up to date from the heater's reports, saves it
+//! to flash, and once the tank is down to the reserve stops the heater
+//! cleanly and keeps it from starting.
+//!
 //! The same loop runs the fridge saver: Eco while the Bluetti is low, Max
 //! again once it has recovered (see `m_pulse_core::eco_guard`), and records
 //! one point a minute for the dashboard's trend charts.
@@ -22,11 +27,13 @@ use std::time::{Duration, Instant};
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::filter::MedianFilter;
+use m_pulse_core::fuel::{Meter, Saved, Seen};
 use m_pulse_core::heater_cutoff;
 use m_pulse_core::history;
 use m_pulse_core::protocol::RunState;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
+use crate::fuel_store::FuelStore;
 use crate::state::{FridgeCommand, Mode, Shared};
 
 /// How often the thermostat is evaluated. Matches the sensor's sample rate.
@@ -45,15 +52,16 @@ const FRIDGE_MAX_AGE: Duration = Duration::from_secs(10);
 const BLUETTI_MAX_AGE: Duration = Duration::from_secs(30);
 
 /// Starts the control thread.
-pub fn spawn(state: Shared) -> anyhow::Result<()> {
+pub fn spawn(state: Shared, fuel_store: Option<FuelStore>) -> anyhow::Result<()> {
     thread::Builder::new()
         .name("thermostat".into())
-        .stack_size(6 * 1024)
-        .spawn(move || control_loop(state))?;
+        // 8 kB: the fuel gauge's flash writes run on this thread too.
+        .stack_size(8 * 1024)
+        .spawn(move || control_loop(state, fuel_store))?;
     Ok(())
 }
 
-fn control_loop(state: Shared) {
+fn control_loop(state: Shared, mut fuel_store: Option<FuelStore>) {
     let config = state.lock().control.config;
     info!(
         "Thermostat: setpoint {:.1} °C, on at or below {:.1} °C, off at or above {:.1} °C",
@@ -71,6 +79,11 @@ fn control_loop(state: Shared) {
     // Steady clock for the fridge saver and the history.
     let boot = Instant::now();
     let mut next_point = boot;
+    // The fuel estimate: what the loop has seen of the heater, when it last
+    // looked, and the copy last written to flash.
+    let mut meter = Meter::default();
+    let mut last_step = Instant::now();
+    let mut last_saved: Option<Saved> = None;
 
     loop {
         let (cabin, setpoint, mode, heater_now) = {
@@ -121,20 +134,38 @@ fn control_loop(state: Shared) {
             smoothed = None;
         }
 
-        {
+        let fuel_now = {
             let mut s = state.lock();
             s.control.decision = Some(decision);
             s.control.smoothed_c = smoothed.map(|x| x.temperature_c);
+            let elapsed = last_step.elapsed();
+            last_step = Instant::now();
+            let reserve = guard_fuel(&mut s, &mut meter, elapsed);
             let tripped = guard_heater(&mut s);
-            if s.control.mode == Mode::Auto && !tripped {
+            if s.control.mode == Mode::Auto && !tripped && !reserve {
                 drive_heater(&mut s, decision.heat);
             }
             save_fridge(&mut s, boot.elapsed().as_secs());
+            let fuel_now = Saved {
+                config: s.fuel.config,
+                gauge: s.fuel.gauge,
+            };
             if Instant::now() >= next_point {
                 next_point += Duration::from_secs(history::STEP_S);
                 let point = trend_point(&s);
                 drop(s);
                 state.history().push(point);
+            }
+            fuel_now
+        };
+
+        // Written outside the lock: a flash write takes a few milliseconds.
+        if let Some(store) = fuel_store.as_mut() {
+            if last_saved.is_none_or(|last| fuel_now.worth_saving(&last)) {
+                match store.save(&fuel_now) {
+                    Ok(()) => last_saved = Some(fuel_now),
+                    Err(err) => warn!("Fuel gauge: could not save: {err}"),
+                }
             }
         }
 
@@ -244,17 +275,22 @@ fn guard_heater(hub: &mut crate::state::Hub) -> bool {
     if !tripped {
         return false;
     }
+    hold_off(&mut hub.heater, "Heater cutoff");
+    true
+}
 
-    let h = &mut hub.heater;
-    // A start waiting to be sent is dropped.
+/// Keeps the heater off for a safety rule (`rule` names it in the log):
+/// drops a start waiting to be sent, and queues the normal Off, so the
+/// heater runs its full cool-down, while it is burning or starting.
+fn hold_off(h: &mut crate::state::Heater, rule: &str) {
     if h.pending == Some(Switch::On) {
         h.pending = None;
     }
     let (Some(status), Some(at)) = (h.status, h.status_at) else {
-        return true;
+        return;
     };
     if !h.connected || at.elapsed() > STATUS_MAX_AGE || !heater_cutoff::needs_stop(&status) {
-        return true;
+        return;
     }
     let sent_off_recently = matches!(
         h.last_sent,
@@ -262,11 +298,51 @@ fn guard_heater(hub: &mut crate::state::Hub) -> bool {
     );
     if h.pending.is_none() && !sent_off_recently {
         warn!(
-            "Heater cutoff: heater is {:?}, sending Off for a clean stop",
+            "{rule}: heater is {:?}, sending Off for a clean stop",
             status.state
         );
         h.pending = Some(Switch::Off);
     }
+}
+
+/// Runs the fuel estimate one step over `elapsed`, and the reserve: while
+/// the tank is at the reserve, keeps the heater off. Returns whether the
+/// reserve holds the heater off.
+fn guard_fuel(hub: &mut crate::state::Hub, meter: &mut Meter, elapsed: Duration) -> bool {
+    let h = &hub.heater;
+    let fresh = h.connected && h.status_at.is_some_and(|at| at.elapsed() <= STATUS_MAX_AGE);
+    let seen = Seen::from_status(h.status.as_ref().filter(|_| fresh));
+
+    let config = hub.fuel.config;
+    let gauge = &mut hub.fuel.gauge;
+    let (was_low, was_uncertain) = (gauge.low(&config), gauge.uncertain);
+    meter.step(gauge, seen, elapsed);
+    let gauge = *gauge;
+    if gauge.uncertain && !was_uncertain {
+        warn!("Fuel gauge: some burning may have gone uncounted; the estimate is uncertain until the next fill-up");
+    }
+    if gauge.low(&config) && !was_low {
+        warn!(
+            "Fuel gauge: low, about {:.2} L left ({:.0} %)",
+            gauge.level_l.unwrap_or(0.0),
+            gauge.percent(&config).unwrap_or(0.0)
+        );
+    }
+
+    if !gauge.at_reserve(&config) {
+        if hub.fuel.reserve_since.take().is_some() {
+            info!("Fuel reserve: cleared, heater starts allowed again");
+        }
+        return false;
+    }
+    if hub.fuel.reserve_since.is_none() {
+        warn!(
+            "Fuel reserve: tank down to {} %, stopping the heater and blocking starts until it is refilled",
+            config.reserve_pct
+        );
+        hub.fuel.reserve_since = Some(Instant::now());
+    }
+    hold_off(&mut hub.heater, "Fuel reserve");
     true
 }
 

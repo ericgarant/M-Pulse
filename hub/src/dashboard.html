@@ -113,15 +113,15 @@ svg.i { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-wi
 
 /* ---------- Layout ---------- */
 main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "climate" "fridge" "power" "rules"; }
+  grid-template-areas: "climate" "fuel" "fridge" "power" "rules"; }
 @media (min-width: 720px) {
-  main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "climate climate" "fridge power" "rules rules"; }
+  main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "climate climate" "fuel fuel" "fridge power" "rules rules"; }
 }
 @media (min-width: 1100px) {
-  main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-areas: "climate fridge" "climate power" "rules rules"; }
+  main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-areas: "climate fridge" "climate power" "climate fuel" "rules rules"; }
   #climate { align-self: stretch; }
 }
-#climate { grid-area: climate; } #fridge { grid-area: fridge; } #power { grid-area: power; } #rules { grid-area: rules; }
+#climate { grid-area: climate; } #fridge { grid-area: fridge; } #power { grid-area: power; } #rules { grid-area: rules; } #fuel { grid-area: fuel; }
 
 .card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow);
   animation: rise .6s var(--ease) both; transition: opacity .4s, filter .4s; min-width: 0; }
@@ -398,6 +398,30 @@ details[open] .kv { animation: rise .35s var(--ease); }
 .pwr-sum .eta { font-size: 14px; color: var(--muted); text-align: right; }
 .pwr-sum .eta b { display: block; font-size: 18px; color: var(--fg); }
 
+/* ---------- Fuel ---------- */
+.fuel-sum { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.fuel-sum .big { font-size: 54px; }
+.fuel-sum .eta { font-size: 14px; color: var(--muted); text-align: right; }
+.fuel-sum .eta b { display: block; font-size: 18px; color: var(--fg); }
+.tank { position: relative; height: 22px; border-radius: 11px; background: var(--bg2); border: 1px solid var(--line); overflow: hidden; margin: 14px 0 4px; }
+.tank .fl { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--go) 70%, #000), var(--go)); transition: width .9s var(--ease), background .4s; }
+.tank.low .fl { background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 70%, #000), var(--warn)); }
+.tank.res .fl { background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 70%, #000), var(--bad)); }
+.tank.unknown .fl { width: 0 !important; }
+.tank .mk { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--warn); opacity: .8; }
+.tank .mk.res { background: var(--bad); }
+.tank-k { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--faint); }
+.fill { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 14px; }
+.field { height: 52px; width: 100%; min-width: 0; border-radius: 16px; padding: 0 14px; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg2); border: 1px solid var(--line2); }
+.field::placeholder { color: var(--faint); }
+.field:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+.fset { display: grid; gap: 10px; padding: 2px 2px 8px; }
+.fset .lvl .field { width: 110px; height: 50px; }
+.fset .lvl .in { display: flex; gap: 8px; align-items: center; }
+.fset .lvl .btn { height: 50px; }
+#fu-note.wn { color: var(--warn); }
+#fu-note.bd { color: var(--bad); }
+
 /* ---------- Rules ---------- */
 .rules { display: grid; gap: 14px; }
 @media (min-width: 720px) { .rules { grid-template-columns: 1fr 1fr; } }
@@ -425,7 +449,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 .tabs { display: none; }
 @media (max-width: 719px) {
   body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
-  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; z-index: 25; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 25; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
     height: 64px; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border: 1px solid var(--line2); box-shadow: 0 10px 30px #0006; }
   .tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 650; color: var(--faint); text-decoration: none; border-radius: 16px; transition: color .3s, background .3s; }
@@ -712,6 +736,45 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
     </details>
   </section>
 
+  <!-- Fuel: estimated from burn time and power, see core/src/fuel.rs -->
+  <section class="card" id="fuel" aria-labelledby="h-fuel">
+    <div class="card-h">
+      <div class="ic heat"><svg class="i"><use href="#i-drop"/></svg></div>
+      <h2 id="h-fuel">Heater fuel</h2>
+      <span class="badge" id="fu-badge">--</span>
+    </div>
+    <div class="fuel-sum">
+      <div class="big"><span class="num" id="fu-l">--</span><span class="unit">L</span> <span class="unit" id="fu-pct"></span></div>
+      <div class="eta" id="fu-eta">--</div>
+    </div>
+    <div class="tank" id="fu-tank" role="img" aria-label="Fuel level">
+      <div class="fl" id="fu-fl"></div><i class="mk" id="fu-mkw"></i><i class="mk res" id="fu-mkr"></i>
+    </div>
+    <div class="tank-k"><span>Empty</span><span id="fu-cap">--</span></div>
+    <p class="note" id="fu-note">--</p>
+    <div class="fill">
+      <input class="field" id="fu-added" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Litres added (optional)" aria-label="Litres added at this fill-up">
+      <button class="btn heat" id="fu-full">Tank full</button>
+    </div>
+    <p class="note">After filling to the top, enter how many litres went in: the hub compares it with its estimate and learns this heater's real burn rate.</p>
+    <details>
+      <summary><svg class="i"><use href="#i-chev"/></svg>Fuel settings</summary>
+      <div class="fset">
+        <div class="lvl"><span>Warn at or below</span><div class="stepper" id="fu-warn"><button aria-label="Lower the fuel warning">−</button><output>--</output><button aria-label="Raise the fuel warning">+</button></div></div>
+        <div class="lvl"><span>Reserve at or below</span><div class="stepper" id="fu-res"><button aria-label="Lower the fuel reserve">−</button><output>--</output><button aria-label="Raise the fuel reserve">+</button></div></div>
+        <div class="pwr"><span class="l">Reserve stops the heater</span><button class="switch" id="fu-stopsw" role="switch" aria-checked="false" aria-label="Fuel reserve stops the heater"></button></div>
+        <div class="lvl"><span>Set the level by hand</span><div class="in"><input class="field" id="fu-level" type="number" inputmode="decimal" min="0" step="0.1" placeholder="L" aria-label="Litres in the tank"><button class="btn" id="fu-setlevel">Set</button></div></div>
+        <div class="lvl"><span>Tank size</span><div class="in"><input class="field" id="fu-tanksz" type="number" inputmode="decimal" min="1" max="60" step="0.5" placeholder="L" aria-label="Tank size in litres"><button class="btn" id="fu-settank">Set</button></div></div>
+        <dl class="kv">
+          <dt>Burn rate now</dt><dd id="fu-rate">--</dd>
+          <dt>Rate vs the manual</dt><dd id="fu-corr">--</dd>
+          <dt>Last fill-up</dt><dd id="fu-last">--</dd>
+        </dl>
+        <button class="btn" id="fu-reset">Use the manual's rate again</button>
+      </div>
+    </details>
+  </section>
+
   <!-- Battery rules -->
   <section class="card" id="rules" aria-labelledby="h-rules">
     <div class="card-h">
@@ -752,6 +815,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 <nav class="tabs" aria-label="Sections">
   <a href="#climate" class="on"><svg class="i"><use href="#i-flame"/></svg>Climate</a>
   <a href="#fridge"><svg class="i"><use href="#i-snow"/></svg>Fridge</a>
+  <a href="#fuel"><svg class="i"><use href="#i-drop"/></svg>Fuel</a>
   <a href="#power"><svg class="i"><use href="#i-bolt"/></svg>Power</a>
   <a href="#rules"><svg class="i"><use href="#i-shield"/></svg>Rules</a>
 </nav>
@@ -1176,6 +1240,148 @@ $("c-sw").onclick = async () => {
   ruleCmd("/api/cutoff", on ? "on" : "off");
 };
 
+/* ---------- Heater fuel ---------- */
+const FUEL_LIMITS = [5, 50];
+const fuPend = { warn: null, reserve: null };
+async function fuelCmd(body, okMsg) {
+  try {
+    const r = await post("/api/fuel", body);
+    if (!r.ok) { await failed(r); return false; }
+    const note = await r.text();
+    toast(okMsg || note || "Saved");
+    return true;
+  } catch (e) { toast("Could not reach the hub.", "bad"); return false; }
+  finally { refresh(); }
+}
+function litresIn(id) {
+  const v = $(id).value.trim();
+  if (v === "") return null;
+  const n = Number(v.replace(",", "."));
+  return isFinite(n) && n >= 0 ? n : NaN;
+}
+$("fu-full").onclick = async () => {
+  buzz();
+  const added = litresIn("fu-added");
+  if (Number.isNaN(added)) { toast("Enter the litres added as a number, or leave it empty.", "bad"); return; }
+  const body = added === null ? "full" : "full:" + added;
+  const msg = added === null ? "Fill the tank to the top, then confirm. Without the litres added the hub cannot learn from this fill-up." : "Tank filled to the top with " + added + " L added.";
+  if (!(await ask({ title: "Tank full?", body: msg, yes: "Tank full", icon: "warn" }))) return;
+  const btn = $("fu-full");
+  btn.classList.add("busy");
+  try {
+    const r = await post("/api/fuel", body);
+    if (!r.ok) await failed(r);
+    else { $("fu-added").value = ""; toast(await r.text()); }
+  } catch (e) { toast("Could not reach the hub.", "bad"); }
+  btn.classList.remove("busy");
+  refresh();
+};
+$("fu-setlevel").onclick = async () => {
+  buzz();
+  const l = litresIn("fu-level");
+  if (l === null || Number.isNaN(l)) { toast("Enter the litres in the tank.", "bad"); return; }
+  if (await fuelCmd("level:" + l)) $("fu-level").value = "";
+};
+$("fu-settank").onclick = async () => {
+  buzz();
+  const l = litresIn("fu-tanksz");
+  if (l === null || Number.isNaN(l)) { toast("Enter the tank size in litres.", "bad"); return; }
+  if (await fuelCmd("tank:" + l)) $("fu-tanksz").value = "";
+};
+$("fu-reset").onclick = async () => {
+  buzz();
+  if (await ask({ title: "Forget the learned burn rate?", body: "The gauge goes back to the rates in BougeRV's manual until the next fill-ups correct it again.", yes: "Reset", icon: "warn", danger: true })) fuelCmd("reset-correction");
+};
+$("fu-stopsw").onclick = async () => {
+  buzz();
+  if (!last || !last.fuel) return;
+  const on = !last.fuel.reserve_stop;
+  if (!on && !(await ask({ title: "Let the heater run past the reserve?", body: "The hub will still warn, but the heater could run the tank dry, which usually means a failed start and priming the fuel line again.", yes: "Only warn", icon: "warn", danger: true }))) return;
+  flip("fu-stopsw", on);
+  fuelCmd("stop:" + (on ? "on" : "off"));
+};
+// Warning and reserve levels: taps add up, then one send per level.
+function stepFuel(key, delta) {
+  if (!last || !last.fuel) return;
+  const cur = fuPend[key] ? fuPend[key].v : last.fuel[key === "warn" ? "warn_pct" : "reserve_pct"];
+  const v = Math.min(FUEL_LIMITS[1], Math.max(FUEL_LIMITS[0], cur + delta));
+  if (v === cur) return;
+  if (fuPend[key]) clearTimeout(fuPend[key].timer);
+  const p = fuPend[key] = { v, until: Infinity, timer: null };
+  showFuelLevel(key, v, true);
+  p.timer = setTimeout(async () => {
+    p.timer = null;
+    if (!(await fuelCmd(key + ":" + v, "Level saved"))) fuPend[key] = null;
+    p.until = Date.now() + 3000;
+  }, 900);
+}
+function showFuelLevel(key, v, pending) {
+  const st = $(key === "warn" ? "fu-warn" : "fu-res");
+  st.querySelector("output").textContent = v + " %";
+  st.classList.toggle("pending", !!pending);
+}
+[["fu-warn", "warn"], ["fu-res", "reserve"]].forEach(([id, key]) => {
+  const [down, up] = $(id).querySelectorAll("button");
+  hold(down, () => stepFuel(key, -5));
+  hold(up, () => stepFuel(key, 5));
+});
+function hrs(h) {
+  if (h < 1) return Math.max(1, Math.round(h * 60)) + " min";
+  return h < 10 ? h.toFixed(1).replace(/\.0$/, "") + " h" : Math.round(h) + " h";
+}
+function renderFuel(fu, h) {
+  const known = fu.level_l !== null;
+  if (known) tween($("fu-l"), fu.level_l, 1); else blank("fu-l");
+  $("fu-pct").textContent = known ? fu.pct + " %" : "";
+  const tank = $("fu-tank");
+  tank.className = "tank" + (!known ? " unknown" : fu.reserve ? " res" : fu.low ? " low" : "");
+  $("fu-fl").style.width = (known ? fu.pct : 0) + "%";
+  $("fu-mkw").style.left = fu.warn_pct + "%";
+  $("fu-mkr").style.left = fu.reserve_pct + "%";
+  $("fu-mkr").hidden = !fu.reserve_stop;
+  $("fu-mkw").hidden = fu.reserve_stop && fu.warn_pct === fu.reserve_pct;
+  tank.setAttribute("aria-label", known ? "Fuel about " + fu.pct + " %" : "Fuel level not set");
+  $("fu-cap").textContent = fu.tank_l.toFixed(1).replace(/\.0$/, "") + " L tank";
+
+  const badge = $("fu-badge");
+  [badge.textContent, badge.className] = !known ? ["Not set", "badge"]
+    : fu.reserve ? ["Reserve", "badge bad"]
+    : fu.low ? ["Low", "badge warn"]
+    : fu.uncertain ? ["Uncertain", "badge warn"]
+    : ["Estimate", "badge"];
+
+  const kw = h && h.state ? h.set_power_kw : null;
+  const until = fu.reserve_stop ? "until the reserve" : "until empty";
+  $("fu-eta").innerHTML = "";
+  if (fu.reserve) $("fu-eta").textContent = "Held off at the reserve";
+  else if (known && fu.hours_left !== null && kw !== null) {
+    const b = document.createElement("b");
+    b.textContent = "About " + hrs(fu.hours_left);
+    $("fu-eta").append(b, "of burning at " + kw.toFixed(1) + " kW, " + until);
+  } else $("fu-eta").textContent = known ? "Burn time shows once the heater reports" : "";
+
+  const note = $("fu-note");
+  if (!known) { note.textContent = "Fill the tank to the top and tap Tank full to start the estimate."; note.className = "note"; }
+  else if (fu.reserve) { note.textContent = "At the reserve: the heater is held off until you refill and tap Tank full, or correct the level."; note.className = "note bd"; }
+  else if (fu.uncertain) { note.textContent = "The heater burned while the hub was not watching, so this may read high or low. Check the tank and set the level if needed."; note.className = "note wn"; }
+  else { note.textContent = "Worked out from burn time and power, not measured."; note.className = "note"; }
+
+  ["warn", "reserve"].forEach(key => {
+    const p = fuPend[key];
+    const real = fu[key === "warn" ? "warn_pct" : "reserve_pct"];
+    if (p && !p.timer && (p.v === real || Date.now() > p.until)) fuPend[key] = null;
+    if (fuPend[key]) showFuelLevel(key, fuPend[key].v, true); else showFuelLevel(key, real, false);
+  });
+  $("fu-stopsw").setAttribute("aria-checked", fu.reserve_stop);
+  $("fu-stopsw").classList.remove("busy");
+  $("fu-res").closest(".lvl").style.opacity = fu.reserve_stop ? "" : ".5";
+
+  setText("fu-rate", fu.rate_l_h !== null ? fu.rate_l_h.toFixed(2) + " L/h" : "--");
+  setText("fu-corr", fu.calibrations ? "× " + fu.correction.toFixed(2) + " (from " + fu.calibrations + " fill-up" + (fu.calibrations > 1 ? "s" : "") + ")" : "As the manual says");
+  setText("fu-last", fu.last_fill || "--");
+  $("fu-reset").hidden = !fu.calibrations;
+}
+
 /* ---------- Clock ---------- */
 function sendClock() {
   sentClock = true;
@@ -1195,10 +1401,11 @@ const REASONS = {
 function render(s) {
   document.body.classList.remove("loading");
   renderClimate(s);
-  renderHeater(s.heater, s.cutoff);
+  renderHeater(s.heater, s.cutoff, s.fuel);
   renderFridge(s.fridge);
   renderPower(s.bluetti);
   renderRules(s.saver, s.cutoff);
+  if (s.fuel) renderFuel(s.fuel, s.heater);
   renderHub(s);
   renderAlerts(s);
 }
@@ -1237,7 +1444,7 @@ function renderClimate(s) {
   $("why").className = "why " + kind;
 }
 
-function heaterView(h, co) {
+function heaterView(h, co, fu) {
   if (!h.connected) return ["search", "Searching", "Looking for the heater over Bluetooth"];
   if (!h.state) return ["search", "Connected", "Waiting for the first status"];
   if (h.error !== null) return ["fault", "Fault", "Code " + h.error + ". Clear it at the heater."];
@@ -1247,7 +1454,7 @@ function heaterView(h, co) {
                                 : ["ignite", "Igniting", "Warming up, about 4 to 5 minutes"];
     case "Starting": return ["ignite", "Starting", "Start accepted"];
     case "ShuttingDown": return ["cool", "Cooling down", "The fan runs until the burner is cool"];
-    default: return ["off", "Off", co.enabled && co.tripped ? "Held off: Bluetti battery low" : "Ready"];
+    default: return ["off", "Off", co.enabled && co.tripped ? "Held off: Bluetti battery low" : fu && fu.reserve ? "Held off: fuel reserve" : "Ready"];
   }
 }
 // Run time: minutes under an hour, then hours and minutes.
@@ -1255,8 +1462,8 @@ function dur(s) {
   const m = Math.floor(s / 60);
   return m < 1 ? "under 1 min" : m < 60 ? m + " min" : Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min";
 }
-function renderHeater(h, co) {
-  const [k, t, sub] = heaterView(h, co);
+function renderHeater(h, co, fu) {
+  const [k, t, sub] = heaterView(h, co, fu);
   $("hvis").dataset.k = k;
   $("h-t").textContent = t;
   $("h-s").textContent = sub;
@@ -1495,6 +1702,9 @@ function renderAlerts(s) {
     if (co.enabled && co.tripped) list.push(["cutoff", "bad", "Bluetti battery low (" + (co.tripped_at || "") + "): the heater was stopped and cannot start until the battery is back to " + co.resume + " %."]);
     const h = s.heater;
     if (h.connected && h.state && h.error !== null) list.push(["fault", "bad", "The heater reports fault code " + h.error + ". Clear it at the heater; the hub will not start it until then."]);
+    const fu = s.fuel;
+    if (fu && fu.reserve) list.push(["fuel", "bad", "Fuel down to the reserve (about " + fu.level_l.toFixed(1) + " L): the heater is held off. Refill, then tap Tank full."]);
+    else if (fu && fu.low) list.push(["fuel", "warn", "Heater fuel is low: about " + fu.level_l.toFixed(1) + " L (" + fu.pct + " %) left."]);
     const b = s.bluetti;
     if (b.connected && b.soc !== null && b.soc <= 20 && !(co.enabled && co.tripped)) list.push(["soc", "warn", "The Bluetti is down to " + b.soc + " %."]);
     if (s.fridge.warm_alert) list.push(["warm", "bad", "The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power."]);
@@ -1766,7 +1976,7 @@ const io = new IntersectionObserver(entries => {
   const best = Object.keys(seen).reduce((a, b) => seen[b] > (seen[a] ?? -1) ? b : a, null);
   if (best && seen[best] > 0) tabs.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + best));
 }, { threshold: [0, .1, .25, .5, .75, 1] });
-["climate", "fridge", "power", "rules"].forEach(id => io.observe($(id)));
+["climate", "fuel", "fridge", "power", "rules"].forEach(id => io.observe($(id)));
 tabs.forEach(a => a.addEventListener("click", buzz));
 </script>
 </body>
