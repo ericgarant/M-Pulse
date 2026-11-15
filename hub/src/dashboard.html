@@ -124,7 +124,17 @@ body:not([data-page="home"]) footer.hub { display: none; }
   body[data-page="climate"] main { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
   body[data-page="fridge"] main, body[data-page="power"] main { max-width: 900px; }
 }
-/* Alerts: all of them on Home, only a page's own ones elsewhere. */
+/* Alerts: all of them on Home, one line each; only a page's own ones, in
+   full, elsewhere. */
+.alert { text-decoration: none; color: inherit; }
+.alert > div { flex: 1; min-width: 0; }
+.alert .short, .alert .chev { display: none; }
+.alert .chev { transform: rotate(-90deg); color: var(--muted) !important; margin-left: auto; }
+body[data-page="home"] a.alert { align-items: center; padding-block: 10px; }
+body[data-page="home"] a.alert .long { display: none; }
+body[data-page="home"] a.alert .short { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body[data-page="home"] a.alert .chev { display: block; }
+@media (min-width: 900px) { body[data-page="home"] #alerts:has(a.alert ~ a.alert) { grid-template-columns: 1fr 1fr; } }
 body:not([data-page="home"]) .alert:not([data-p="all"]) { display: none; }
 body[data-page="climate"] .alert[data-p~="climate"], body[data-page="fridge"] .alert[data-p~="fridge"],
 body[data-page="power"] .alert[data-p~="power"], body[data-page="rules"] .alert[data-p~="rules"] { display: flex; }
@@ -136,6 +146,7 @@ body[data-page="home"] #home { display: grid; }
 @media (min-width: 900px) {
   #home { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cl fr pw" "cl fu ru"; grid-template-rows: 1fr 1fr;
     min-height: calc(100vh - 220px); }  /* fill the screen above the tab bar */
+  body:has(#alerts > *) #home { min-height: 0; }  /* alerts first, then tiles at their own size */
   .tile { padding: 20px; gap: 10px; }
   .tile .big { font-size: 60px; margin-top: 6px; }
   .tile .sub { font-size: 15.5px; }
@@ -179,6 +190,9 @@ body[data-page="home"] #home { display: grid; }
 .mkv { display: none; margin: 4px 0 0; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 14.5px; }
 .mkv dt { color: var(--muted); } .mkv dd { margin: 0; text-align: right; font-weight: 600; }
 @media (min-width: 900px) { .mkv { display: grid; } }
+/* With alerts showing on a short screen, drop the extra lines so the
+   target's − and + stay above the tab bar. */
+@media (max-height: 900px) { body:has(#alerts > *) .mkv { display: none; } }
 body[data-page="climate"] #fuel .fuel-sum { flex-wrap: wrap; }
 body[data-page="climate"] #fuel .fuel-sum .big { white-space: nowrap; }
 body[data-page="climate"] #fuel .fuel-sum .eta { text-align: left; }
@@ -948,7 +962,7 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
         <div class="rstate" id="fu-state"><i class="dot"></i><span>--</span></div>
       </div>
     </div>
-    <p class="note">Levels change in 5 % steps and apply a moment after you stop tapping. They go back to the defaults when the hub restarts.</p>
+    <p class="note">Levels change in 5 % steps and apply a moment after you stop tapping. The hub keeps them across a restart. The low-battery stop always comes back on.</p>
   </section>
 </main>
 
@@ -1178,19 +1192,20 @@ const HELP = {
     ["Tank full", "Tap it every time you fill the tank to the top. Until the first time, the level is unknown and neither the warning nor the reserve acts."],
     ["Litres added", "Optional, but it makes the estimate better. Enter how many litres went in at the fill-up before tapping Tank full: the hub compares that with what it thought was burned and corrects its burn rate for your heater. Each fill-up refines it."],
     ["Uncertain", "Shown when the heater burned while the hub could not see it, for example after a hub restart or a lost Bluetooth link. The hub counts on at the last power for up to an hour so it reads low rather than high, but check the tank and set the level by hand if needed. The next Tank full clears it."],
-    ["Warning and reserve", "The bar's marks show both levels, 15 % by default. At the warning, the hub raises a low fuel alert. At the reserve, it stops a burning heater with its normal OFF, so it gets its full cool-down, and refuses new starts until you refill and tap Tank full, or correct the level. Running a diesel heater dry usually means a failed start and priming the fuel line."],
-    ["Reserve stops the heater", "Turn it off to only warn at the reserve and let the heater keep running."],
+    ["Warning and reserve", "The bar's marks show the warning and reserve levels. Set them, and whether the reserve stops the heater, under Heater fuel reserve on the Rules page."],
     ["Fuel settings", "Set the level by hand after a partial fill or a check, and set the tank size (5 L by default). Burn rate now is the rate at the current power; Rate vs the manual shows the correction learned from fill-ups. Use the manual's rate again forgets that correction."],
   ]],
-  rules: ["Battery rules", "warn", [
-    ["Heater low-battery stop", "When the Bluetti drops to the stop level (15 % by default), the hub stops the heater cleanly, with its full cool-down, and blocks starts until the Bluetti is back to the restart level (25 % by default). It protects the battery the heater needs to cool down safely. It is on after every hub restart."],
-    ["Fridge saver", "When the Bluetti drops to the Eco level (30 % by default), the hub puts the fridge in Eco to save power, and back to Max once the Bluetti reaches the Max level (50 % by default). It is off after every hub restart."],
-    ["Levels", "Change in 5 % steps and are sent a moment after you stop tapping. The restart or Max level always stays at least 5 % above the lower one, so the rule does not flip back and forth. They go back to the defaults when the hub restarts."],
-    ["Status line", "Watching the battery: the rule is on and nothing needs doing. Heater stopped, or Holding the fridge in Eco: the rule is acting now and will let go at the higher level. Off: the rule is switched off. Under the Fridge saver, Last change says what it last did and when."],
+  rules: ["Rules", "warn", [
+    ["Heater low-battery stop", "When the Bluetti drops to the stop level (15 % by default), the hub stops the heater cleanly, with its full cool-down, and blocks starts until the Bluetti is back to the restart level (25 % by default). It protects the battery the heater needs to cool down safely. It is a safety, so it is back on after every hub restart, with your levels."],
+    ["Fridge saver", "When the Bluetti drops to the Eco level (30 % by default), the hub puts the fridge in Eco to save power, and back to Max once the Bluetti reaches the Max level (50 % by default). Whether it is on is kept across a hub restart."],
+    ["Heater fuel reserve", "Uses the fuel estimate from the Heater fuel card on the Climate page. At the warning level (15 % by default) the hub raises a low fuel alert. At the reserve it stops a burning heater with its normal OFF, so it gets its full cool-down, and refuses new starts until you refill and tap Tank full, or correct the level. Running a diesel heater dry usually means a failed start and priming the fuel line. Switch it off to only warn and let the heater keep running."],
+    ["Levels", "Change in 5 % steps and are sent a moment after you stop tapping. The restart or Max level always stays at least 5 % above the lower one, so the rule does not flip back and forth. All levels are kept in the hub's flash, so a restart or power cut keeps them."],
+    ["Status line", "Watching the battery (or the fuel): the rule is on and nothing needs doing. Heater stopped, or Holding the fridge in Eco: the rule is acting now and will let go at the higher level. Off: the rule is switched off. Under the Fridge saver, Last change says what it last did and when."],
   ]],
   screen: ["Alerts and screen", "warn", [
-    ["Alerts", "Shown at the top while the problem lasts and gone on their own once it clears. Red needs action now: the hub is out of reach, the Bluetti low-battery stop tripped, a heater fault code, fuel at the reserve, or the fridge staying too warm. Amber is a heads-up: fuel low, the Bluetti at 20 % or below, the heater did not start after 3 tries, or no fresh reading from the cabin sensor."],
-    ["Top bar", "The pulse logo beats each time fresh data arrives from the hub. The chips give a quick status of the heater, fridge and Bluetti; tap one to jump to its card. The button on the right cycles the theme: Dark, Night (dim red, kind to night vision) and Light."],
+    ["Alerts", "Shown at the top while the problem lasts and gone on their own once it clears. Home lists every alert in one line each: tap one to open its page, which shows it in full. Red needs action now: the hub is out of reach, the Bluetti low-battery stop tripped, a heater fault code, fuel at the reserve, or the fridge staying too warm. Amber is a heads-up: fuel low, the Bluetti at 20 % or below, the heater did not start after 3 tries, or no fresh reading from the cabin sensor."],
+    ["Pages", "Home shows every service at a glance: tap a tile to open its page, or use the tabs at the bottom (down the left side on a laptop). The Climate tile's − and + change the target without leaving Home. A tab with a red or amber dot has an alert on its page. After 5 minutes without a touch, the screen goes back to Home."],
+    ["Top bar", "The pulse logo beats each time fresh data arrives from the hub. The chips give a quick status of the heater, fridge and Bluetti; tap one to open its page. The button on the right cycles the theme: Dark, Night (dim red, kind to night vision) and Light."],
     ["Footer", "The hub's clock and its address on your Wi-Fi. If the hub's clock is not set, this device sends its own time; the button does it again by hand."],
     ["Taps and scrolling", "Buttons act only on a deliberate tap. A touch that scrolls the page, or lands while it is still moving, does nothing. Hold − or + to repeat."],
     ["Offline", "If the hub cannot be reached, the cards dim and the page keeps retrying. Check that this device is on the M-Pulse Wi-Fi."],
@@ -1996,18 +2011,18 @@ function renderAlerts(s) {
   if (!s) list.push(["offline", "bad", "Can't reach the hub. Check this device is on the M-Pulse Wi-Fi. Retrying…"]);
   else {
     const co = s.cutoff, c = s.control;
-    if (co.enabled && co.tripped) list.push(["cutoff", "bad", "Bluetti battery low (" + (co.tripped_at || "") + "): the heater was stopped and cannot start until the battery is back to " + co.resume + " %."]);
+    if (co.enabled && co.tripped) list.push(["cutoff", "bad", "Bluetti battery low (" + (co.tripped_at || "") + "): the heater was stopped and cannot start until the battery is back to " + co.resume + " %.", "Bluetti low: heater stopped until " + co.resume + " %"]);
     const h = s.heater;
-    if (h.connected && h.state && h.error !== null) list.push(["fault", "bad", "The heater reports fault code " + h.error + ". Clear it at the heater; the hub will not start it until then."]);
+    if (h.connected && h.state && h.error !== null) list.push(["fault", "bad", "The heater reports fault code " + h.error + ". Clear it at the heater; the hub will not start it until then.", "Heater fault code " + h.error]);
     const fu = s.fuel;
-    if (fu && fu.reserve) list.push(["fuel", "bad", "Fuel down to the reserve (about " + fu.level_l.toFixed(1) + " L): the heater is held off. Refill, then tap Tank full."]);
-    else if (fu && fu.low) list.push(["fuel", "warn", "Heater fuel is low: about " + fu.level_l.toFixed(1) + " L (" + fu.pct + " %) left."]);
+    if (fu && fu.reserve) list.push(["fuel", "bad", "Fuel down to the reserve (about " + fu.level_l.toFixed(1) + " L): the heater is held off. Refill, then tap Tank full.", "Fuel at the reserve: heater held off"]);
+    else if (fu && fu.low) list.push(["fuel", "warn", "Heater fuel is low: about " + fu.level_l.toFixed(1) + " L (" + fu.pct + " %) left.", "Heater fuel low: " + fu.level_l.toFixed(1) + " L left"]);
     const b = s.bluetti;
-    if (b.connected && b.soc !== null && b.soc <= 20 && !(co.enabled && co.tripped)) list.push(["soc", "warn", "The Bluetti is down to " + b.soc + " %."]);
-    if (s.fridge.warm_alert) list.push(["warm", "bad", "The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power."]);
-    if (c.start_failed) list.push(["start", "warn", "The heater did not start after 3 tries. Check it, then press Auto again to retry."]);
-    if (!s.cabin) list.push(["sensor", "warn", "No reading from the cabin sensor yet."]);
-    else if (s.cabin.age_s > 120) list.push(["sensor", "warn", "The cabin sensor was last heard " + ago(s.cabin.age_s) + "."]);
+    if (b.connected && b.soc !== null && b.soc <= 20 && !(co.enabled && co.tripped)) list.push(["soc", "warn", "The Bluetti is down to " + b.soc + " %.", "Bluetti down to " + b.soc + " %"]);
+    if (s.fridge.warm_alert) list.push(["warm", "bad", "The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power.", "Fridge too warm for 30 min"]);
+    if (c.start_failed) list.push(["start", "warn", "The heater did not start after 3 tries. Check it, then press Auto again to retry.", "Heater did not start after 3 tries"]);
+    if (!s.cabin) list.push(["sensor", "warn", "No reading from the cabin sensor yet.", "No cabin reading yet"]);
+    else if (s.cabin.age_s > 120) list.push(["sensor", "warn", "The cabin sensor was last heard " + ago(s.cabin.age_s) + ".", "Cabin sensor silent " + ago(s.cabin.age_s)]);
   }
   tabs.forEach(a => {
     const mine = list.filter(([k]) => a.dataset.p !== "home" && (ALERT_PAGE[k] || "").split(" ").includes(a.dataset.p));
@@ -2021,18 +2036,23 @@ function renderAlerts(s) {
       setTimeout(() => el.remove(), 300);
     }
   });
-  list.forEach(([k, kind, text]) => {
+  list.forEach(([k, kind, text, short]) => {
     let el = box.querySelector('[data-k="' + k + '"]:not(.out)');
     if (!el) {
-      el = document.createElement("div");
+      // On Home an alert is one short line that opens its page; on that
+      // page it shows in full.
+      const page = (ALERT_PAGE[k] || "").split(" ")[0];
+      el = document.createElement(page ? "a" : "div");
+      if (page) el.href = "#" + page;
       el.dataset.k = k;
       el.dataset.p = ALERT_PAGE[k] || "all";
       el.className = "alert " + kind;
       el.setAttribute("role", "alert");
-      el.innerHTML = '<svg class="i"><use href="#i-alert"/></svg><div></div>';
+      el.innerHTML = '<svg class="i"><use href="#i-alert"/></svg><div><span class="long"></span><span class="short"></span></div><svg class="i chev"><use href="#i-chev"/></svg>';
       box.append(el);
     }
-    el.lastElementChild.textContent = text;
+    el.querySelector(".long").textContent = text;
+    el.querySelector(".short").textContent = short || text;
   });
 }
 
@@ -2290,6 +2310,8 @@ function route() {
   if (changed) drawTrends();   // charts on a hidden page had no width to draw in
 }
 addEventListener("hashchange", route);
+// A tablet or laptop has room for the details on the Fridge and Power pages.
+if (matchMedia("(min-width: 900px)").matches) ["fridge", "power"].forEach(id => { $(id).querySelector("details").open = true; });
 route();
 tabs.forEach(a => a.addEventListener("click", buzz));
 
@@ -2371,16 +2393,16 @@ function renderHome(s) {
 
   const co = s.cutoff, sv = s.saver;
   const rows = [
-    ["Low-battery stop", !co.enabled ? "" : co.tripped ? "bad" : "watch"],
-    ["Fridge saver", !sv.enabled ? "" : sv.holding_eco || sv.battery_low ? "hold" : "watch"],
-    ["Fuel reserve", !fu || !fu.reserve_stop ? "" : fu.reserve ? "bad" : fu.low ? "hold" : "watch"],
+    ["Low-battery stop", !co.enabled ? "" : co.tripped ? "bad" : "watch", co.tripped ? "heater stopped" : ""],
+    ["Fridge saver", !sv.enabled ? "" : sv.holding_eco || sv.battery_low ? "hold" : "watch", sv.holding_eco ? "fridge in Eco" : sv.battery_low ? "battery low" : ""],
+    ["Fuel reserve", !fu || !fu.reserve_stop ? "" : fu.reserve ? "bad" : fu.low ? "hold" : "watch", fu && fu.reserve ? "heater held off" : fu && fu.low ? "fuel low" : ""],
   ];
   const rl = $("tl-rl");
   rl.textContent = "";
-  rows.forEach(([n, cls]) => {
+  rows.forEach(([n, cls, word]) => {
     const d = document.createElement("div"), i = document.createElement("i"), sp = document.createElement("span");
     d.className = cls; sp.textContent = n;
-    const st = document.createElement("em"); st.textContent = ({ watch: "watching", hold: "acting", bad: "acting now", "": "off" })[cls];
+    const st = document.createElement("em"); st.textContent = word || (cls ? "watching" : "off");
     sp.append(st);
     d.append(i, sp); rl.append(d);
   });

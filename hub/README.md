@@ -16,9 +16,10 @@ It:
   outputs when you ask on the dashboard (see [Bluetti](#bluetti))
 - stops the heater cleanly when the Bluetti runs low and blocks starts until
   it has recharged (see [Heater low-battery stop](#heater-low-battery-stop),
-  on after every restart)
+  on after every restart, with its saved levels)
 - can put the fridge in Eco while the Bluetti is low and back to Max once it
-  recovers (see [Fridge saver](#fridge-saver), off after every restart)
+  recovers (see [Fridge saver](#fridge-saver), off until you turn it on;
+  kept across a restart)
 - reads the cabin temperature and humidity from its own DHT11 (see
   [Cabin sensor](#cabin-sensor)), and falls back to readings from the
   [sensor node](../sensor-node) over Wi-Fi if that sensor stops answering
@@ -115,10 +116,23 @@ Join the `M-Pulse` Wi-Fi and open `http://192.168.71.1` (type the `http://`).
 
 ## Using the dashboard
 
-The page is built for the camper's tablet and works on a phone too: on a
-tablet the cards sit side by side, and on a phone they stack, with a tab bar
-at the bottom to jump between them. Everything is inside the one page the
-hub serves, so it needs no internet.
+The page is built for the camper's tablet and works on a phone and a laptop
+too. It opens on **Home**, a summary with one tile per service, and each
+service has its own page: **Climate** (heater and fuel), **Fridge**,
+**Power** and **Rules**. Tap a tile, or use the tab bar (at the bottom on a
+phone or tablet, down the left side on a laptop with a mouse). Each page has
+its own address (`#home`, `#climate`, `#fridge`, `#power`, `#rules`), so a
+bookmark opens it directly. After 5 minutes without a touch the screen goes
+back to Home. Everything is inside the one page the hub serves, so it needs
+no internet.
+
+- **Home**: the Climate tile shows the cabin temperature, the heater's state
+  and the mode, with **−** and **+** for the target, so the heater is one
+  tap away. The Fridge, Power, Fuel and Rules tiles show the headline values
+  and turn red or amber with their alerts. On a tablet or laptop the tiles
+  fill the screen and show a few more values (solar, charger and outputs;
+  fridge power and input; burn rate and last fill-up; each rule's state).
+  On a phone it all fits on one screen.
 
 Each card has a small (?) button in its header that opens help for that
 card: what each value and control means and how the automation behaves.
@@ -129,10 +143,13 @@ themes.
   connected, amber while connecting, red while searching) and its headline
   value: what the heater is doing, the temperature inside the fridge and the
   Bluetti's charge. A chip turns red with that appliance's alarm (heater
-  fault, warm fridge, charge at 20 % or below). Tap one to jump to its card. The logo pulses each time fresh data arrives. The buttons on the
+  fault, warm fridge, charge at 20 % or below). Tap one to open its page. The logo pulses each time fresh data arrives. The buttons on the
   right change the theme (dark, a dim red *Night* theme for after dark, and
   light; each device remembers its choice) and go full screen.
-- **Alerts** appear in a strip under the top bar: the low-battery stop
+- **Alerts** appear under the top bar. Home lists all of them, one line
+  each, and tapping one opens its page, which shows it in full. Each page
+  shows only its own, and a tab gets a red or amber dot while its page has
+  one. The alerts: the low-battery stop
   holding the heater off, low fuel or the fuel reserve, a heater fault code, the Bluetti at 20 % or below,
   the fridge warm alert, a heater that did not start
   after 3 tries, a cabin sensor that is missing or more than 2 minutes old,
@@ -191,9 +208,10 @@ themes.
     shows, which the hub cannot decode yet (see below).
 - **Heater fuel**: the estimated litres and percent left, a tank bar with
   the warning and reserve marks, hours of burning left at the current power,
-  and **Tank full** with an optional "litres added" box. *Fuel settings*
-  holds the warning and reserve levels, the reserve's stop switch, the level
-  and tank size by hand, and the learned burn rate. See
+  and **Tank full** with an optional "litres added" box. It sits on the
+  Climate page. *Fuel settings* holds the level and tank size by hand and
+  the learned burn rate; the warning and reserve levels are on the Rules
+  page. See
   [Heater fuel estimate](#heater-fuel-estimate).
 - **Fridge** shows the temperature inside in a ring that frosts over while
   the fridge runs and turns red with the warm alert (more than 4 °C above its
@@ -215,17 +233,19 @@ themes.
   the voltage and current, and the last switch command and whether the
   Bluetti took it. *Charge, last 4 h* charts the charge, with the heater's
   low-battery stop level marked.
-- **Battery rules**:
+- **Rules**:
   - *Heater low-battery stop*: a switch (turning it off asks first), the
     stop and restart levels, and what it is doing now.
   - *Fridge saver*: a switch, the Eco and Max levels, what it is doing now
     and its last change.
+  - *Heater fuel reserve*: whether the reserve stops the heater, the
+    warning and reserve levels, and what it is doing now.
 
   Levels change in 5 % steps with **+** and **−** and go to the hub a
   moment after you stop tapping. Raising one level past the other moves the
-  other too, to keep the 5 % gap the hub needs. Like the setpoint, they go
-  back to the defaults when the hub restarts.
-- **Footer**: the hub's clock and its address on another Wi-Fi, if joined.
+  other too, to keep the 5 % gap the hub needs. The hub keeps them in flash
+  across a restart or power cut (the fuel levels with the fuel estimate).
+- **Footer** (Home only): the hub's clock and its address on another Wi-Fi, if joined.
   The page sets the hub's clock from the device's time when the hub has no
   internet time.
 
@@ -355,8 +375,9 @@ the resume level (default 25 %); in Auto the thermostat may then restart the
 heater, in Monitor it stays off until switched on. The logic is in
 [`core/src/heater_cutoff.rs`](../core/src/heater_cutoff.rs).
 
-- It is on after every restart. The levels, and an off switch, are on the
-  dashboard's Battery rules card; a red alert shows at the top of the page
+- It is on after every restart: a safety, so turning it off lasts only
+  until the hub restarts. The levels, and an off switch, are on the
+  dashboard's Rules page; the levels are kept across a restart; a red alert shows at the top of the page
   while it holds the heater off.
 - A heater that is already cooling down or off is left alone. The Off is
   repeated every 20 s while the heater still reports On or Starting.
@@ -365,7 +386,7 @@ heater, in Monitor it stays off until switched on. The logic is in
 - It works in Monitor mode too. A start that was waiting to be sent when it
   trips is dropped.
 - The stop level can be 5 to 50 %, and the resume level at least 5 points
-  above it. The levels go back to the defaults when the hub restarts.
+  above it.
 
 ## Heater fuel estimate
 
@@ -417,16 +438,15 @@ Switches the fridge to Eco when the Bluetti's charge falls to the low level,
 and back to Max when it is up to the high level again (defaults 30 % and
 50 %). The logic is in [`core/src/eco_guard.rs`](../core/src/eco_guard.rs).
 
-- It is off after every restart. Turn it on and pick the levels on the
-  dashboard's Battery rules card.
+- It is off until you turn it on and pick the levels on the dashboard's
+  Rules page. Both are kept across a restart.
 - It acts only when the charge crosses a level, and restores Max only if it
   was the one that set Eco. Change the mode by hand and it leaves it alone.
 - It needs a Bluetti reading under 30 s old and a fridge status under 10 s
   old; without them it waits. A change the fridge does not take is retried
   every 30 s, three times at most.
 - The low level can be 5 to 95 %, and the high level at least 5 points above
-  it. The levels, and whether it is on, go back to the defaults when the hub
-  restarts.
+  it.
 
 ## Build and flash
 
@@ -579,15 +599,17 @@ change from the dashboard lasts until the hub restarts.
 
 ## Low-battery defaults
 
-| Setting | Value | After a restart |
+| Setting | Default | After a restart |
 | --- | --- | --- |
-| Heater stop | at or below 15 % | on |
+| Heater stop | at or below 15 % | always on, saved levels |
 | Heater starts allowed again | at or above 25 % | |
-| Fridge to Eco | at or below 30 % | off |
+| Fridge to Eco | at or below 30 % | off until turned on, then saved |
 | Fridge back to Max | at or above 50 % | |
 
 They live in `Config::default()` in `../core/src/heater_cutoff.rs` and
-`../core/src/eco_guard.rs`.
+`../core/src/eco_guard.rs`. Changes from the dashboard are saved in the
+`rules` namespace of the `nvs` partition (two copies, like the fuel gauge;
+see `../core/src/rules.rs`). Erasing the flash brings back the defaults.
 
 ## Safety notes
 
@@ -614,8 +636,8 @@ They live in `Config::default()` in `../core/src/heater_cutoff.rs` and
 - The hub only sends a command while it has a fresh status from the heater
   (under 10 seconds old).
 - The hub restarts in Monitor mode. After a power cut it will not resume
-  Auto by itself. The low-battery stop comes back on with its default
-  levels, and the fridge saver comes back off. The fuel estimate and its
+  Auto by itself. The low-battery stop always comes back on. Its levels,
+  the fridge saver's levels and switch, and the fuel estimate and its
   settings are kept.
 - The fuel reserve is only as good as the estimate (see
   [Heater fuel estimate](#heater-fuel-estimate)). Check the tank by eye now

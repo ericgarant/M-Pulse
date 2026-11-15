@@ -21,11 +21,11 @@ mod clock;
 mod control;
 mod dht;
 mod fridge;
-mod fuel_store;
 mod heater;
 mod net;
 mod radio;
 mod state;
+mod store;
 mod web;
 
 use embassy_futures::join::join3;
@@ -38,6 +38,7 @@ use esp_idf_svc::sntp::EspSntp;
 use esp_idf_svc::timer::EspTaskTimerService;
 use log::{info, warn};
 use m_pulse_core::thermostat::Config;
+use m_pulse_core::{fuel, rules};
 
 fn main() -> anyhow::Result<()> {
     // Required once at startup so the ESP-IDF runtime patches are linked in.
@@ -54,7 +55,7 @@ fn main() -> anyhow::Result<()> {
 
     // The fuel gauge lives in flash. Without it the gauge still works, but
     // starts unknown after every restart.
-    let fuel_store = match fuel_store::FuelStore::open(nvs.clone()) {
+    let fuel_store = match store::Store::<fuel::Saved>::open(nvs.clone()) {
         Ok((store, saved)) => {
             if let Some(saved) = saved {
                 let mut s = state.lock();
@@ -69,6 +70,23 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
+    // The battery rules' levels and switches live in flash too. Without it
+    // they go back to the defaults after every restart.
+    let rules_store = match store::Store::<rules::Saved>::open(nvs.clone()) {
+        Ok((store, saved)) => {
+            if let Some(saved) = saved {
+                let mut s = state.lock();
+                s.cutoff.config = saved.cutoff;
+                s.saver.config = saved.saver;
+            }
+            Some(store)
+        }
+        Err(err) => {
+            warn!("Battery rules: flash not available, they will not survive a restart: {err}");
+            None
+        }
+    };
+
     net::start(peripherals.modem, sysloop, nvs, state.clone())?;
     // Sets the clock whenever the hub reaches the internet. Kept alive for
     // the life of the firmware.
@@ -78,7 +96,7 @@ fn main() -> anyhow::Result<()> {
     // free on any ESP32-S3 module: not a strapping, flash, PSRAM or USB pin.
     dht::spawn(peripherals.pins.gpio4, state.clone())?;
     cabin::spawn(state.clone())?;
-    control::spawn(state.clone(), fuel_store)?;
+    control::spawn(state.clone(), fuel_store, rules_store)?;
     let _server = web::start(state.clone())?;
 
     let timers = EspTaskTimerService::new()?;

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Dashboard pages**: the page opens on Home, a summary with a tile per
+  service (Climate with the target's − and +, Fridge, Power, Fuel, Rules),
+  and each service has its own page behind a tab bar: at the bottom on a
+  phone or tablet, down the left side on a laptop. Home lists every alert
+  in one line that opens its page; each page shows its own, and tabs get a
+  dot. The screen goes back to Home after 5 minutes untouched. About 22 KB
+  more page in flash.
+- **Rules page**: "Battery rules" is now "Rules", with a third rule, *Heater
+  fuel reserve*: the fuel warning, reserve and stop switch moved there from
+  Fuel settings.
+- **Battery rules kept across a restart**: the low-battery stop's levels and
+  the fridge saver's levels and switch are saved in flash (`core/src/rules.rs`).
+  The low-battery stop itself always comes back on.
 - **Help on every card**: a small (?) button in each card's header opens a
   scrolling sheet that explains each value, control and mode, how the
   automation behaves (Auto vs Monitor only, the comfort band, glow plug
