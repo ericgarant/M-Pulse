@@ -24,6 +24,7 @@ use esp_idf_svc::hal::gpio::{InputOutput, InputPin, OutputPin, PinDriver, Pull};
 use esp_idf_svc::hal::interrupt::IsrCriticalSection;
 use esp_idf_svc::hal::task::thread::ThreadSpawnConfiguration;
 use log::{info, warn};
+use m_pulse_core::dht11;
 
 use crate::state::{Cabin, Shared, Source};
 
@@ -62,7 +63,8 @@ static BIT_TIMING: IsrCriticalSection = IsrCriticalSection::new();
 enum ReadError {
     /// The line did not change level when expected: no sensor, or a bad wire.
     Timeout(&'static str),
-    Checksum,
+    /// The bits arrived but did not make a good reading.
+    Frame(dht11::FrameError),
     Pin,
 }
 
@@ -70,7 +72,7 @@ impl std::fmt::Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ReadError::Timeout(step) => write!(f, "no level change ({step})"),
-            ReadError::Checksum => f.write_str("checksum mismatch"),
+            ReadError::Frame(err) => write!(f, "bad frame ({err:?})"),
             ReadError::Pin => f.write_str("could not drive the pin"),
         }
     }
@@ -128,7 +130,7 @@ fn sample_loop(mut pin: PinDriver<'static, InputOutput>, state: Shared) {
                         || p.humidity_pct != humidity_pct
                 });
                 if changed {
-                    info!("Cabin: {temperature_c:.0} °C, {humidity_pct:.0} % RH (hub DHT11)");
+                    info!("Cabin: {temperature_c:.1} °C, {humidity_pct:.0} % RH (hub DHT11)");
                 }
             }
             // Keep the previous value in place. The thermostat decides when it
@@ -147,8 +149,10 @@ fn sample_loop(mut pin: PinDriver<'static, InputOutput>, state: Shared) {
 
 fn read_with_retries(pin: &mut PinDriver<'static, InputOutput>) -> Option<(f32, f32)> {
     for attempt in 1..=READ_ATTEMPTS {
-        match read_frame(pin) {
-            Ok([rh, _, temp, _, _]) => return Some((f32::from(temp), f32::from(rh))),
+        let result =
+            read_frame(pin).and_then(|frame| dht11::decode(frame).map_err(ReadError::Frame));
+        match result {
+            Ok(reading) => return Some(reading),
             Err(err) => {
                 log::debug!("DHT11: read attempt {attempt}/{READ_ATTEMPTS} failed: {err}");
                 // Release the bus and give the sensor time to recover.
@@ -161,7 +165,8 @@ fn read_with_retries(pin: &mut PinDriver<'static, InputOutput>) -> Option<(f32, 
 }
 
 /// One DHT11 transaction: wakes the sensor and reads its 5-byte frame
-/// (humidity, humidity decimal, temperature, temperature decimal, checksum).
+/// (humidity, humidity decimal, temperature, temperature decimal, checksum),
+/// undecoded.
 fn read_frame(pin: &mut PinDriver<'static, InputOutput>) -> Result<[u8; 5], ReadError> {
     pin.set_low().map_err(|_| ReadError::Pin)?;
     FreeRtos::delay_ms(START_PULSE_MS);
@@ -187,12 +192,8 @@ fn read_frame(pin: &mut PinDriver<'static, InputOutput>) -> Result<[u8; 5], Read
         }
     }
 
-    let sum = frame[..4].iter().fold(0u8, |acc, b| acc.wrapping_add(*b));
-    if sum == frame[4] {
-        Ok(frame)
-    } else {
-        Err(ReadError::Checksum)
-    }
+    // Checksum and plausibility are checked by `dht11::decode`.
+    Ok(frame)
 }
 
 /// Busy-waits until the line is at `high`, for at most `LEVEL_TIMEOUT_US`.

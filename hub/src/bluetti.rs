@@ -205,6 +205,7 @@ async fn stay_connected(
     let mut last: Option<Status> = None;
     let mut misses = 0u8;
     while client.connected() {
+        discard_late_replies(&inbox, &mut channel);
         let sealed = channel
             .seal(&request, random())
             .ok_or_else(|| anyhow::anyhow!("channel lost its key"))?;
@@ -266,6 +267,7 @@ async fn switch_output(
     let OutputCommand { output, on } = command;
     let request = output.switch_request(on);
     warn!("Bluetti command {command:?}: writing {request:02x?}");
+    discard_late_replies(inbox, channel);
     let sealed = channel
         .seal(&request, random())
         .ok_or_else(|| anyhow::anyhow!("channel lost its key"))?;
@@ -305,6 +307,20 @@ fn drain(inbox: &Inbox, channel: &mut Channel) -> Vec<Event> {
         }
     }
     events
+}
+
+/// Drops replies that came in after their request had timed out.
+///
+/// Each request takes the first reply that arrives after it. A read reply
+/// that was late would otherwise be taken as the answer to the next request:
+/// an output switch would be reported as refused, or the switch's echo
+/// parsed as a reading.
+fn discard_late_replies(inbox: &Inbox, channel: &mut Channel) {
+    for event in drain(inbox, channel) {
+        if let Event::Data(late) = event {
+            warn!("Dropped a late Bluetti reply ({} bytes)", late.len());
+        }
+    }
 }
 
 /// Waits for the next decrypted reply, or `None` after `REPLY_TIMEOUT`.
