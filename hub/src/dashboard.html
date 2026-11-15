@@ -885,17 +885,58 @@ function seg(id, value) {
   g.dataset.i = i;
   g.style.setProperty("--i", Math.max(0, i));
 }
-// Repeats while a +/- button is held down.
+/* ---------- Telling a tap from a scroll ---------- */
+// A finger that lands on a control while scrolling must never change a
+// value. A press only counts as a tap when it lifts close to where it went
+// down, the browser did not take it over to scroll, and the page was not
+// still moving when it landed (a tap that stops a fling is not a tap).
+const SLOP_PX = 10, SCROLL_QUIET_MS = 350;
+let lastScroll = 0;
+// Capture catches the page and any inner scroller (the trend charts too).
+addEventListener("scroll", () => { lastScroll = performance.now(); }, { capture: true, passive: true });
+const scrolledRecently = () => performance.now() - lastScroll < SCROLL_QUIET_MS;
+const press = { id: null, x: 0, y: 0, moved: false, stale: false };
+addEventListener("pointerdown", e => {
+  Object.assign(press, { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, stale: scrolledRecently() });
+}, { capture: true, passive: true });
+addEventListener("pointermove", e => {
+  if (e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > SLOP_PX) press.moved = true;
+}, { capture: true, passive: true });
+addEventListener("pointercancel", e => { if (e.pointerId === press.id) press.moved = true; }, { capture: true, passive: true });
+// True when the press that just ended was a drag, a scroll, or landed on a
+// moving page.
+const notATap = () => press.moved || press.stale || scrolledRecently();
+// Every click in the page goes through here first. Keyboard presses
+// (detail 0) are always real.
+document.addEventListener("click", e => {
+  if (e.detail === 0 || !e.target.closest("button, a, summary, [role=switch], [role=radio]")) return;
+  if (notATap()) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
+
+// A +/- button: a tap steps once when the finger lifts; holding it still
+// for a moment steps, then repeats until it lifts. Moving the finger, or
+// the page scrolling, cancels the press without a step.
 function hold(btn, fn) {
-  let t = null, iv = null;
-  const stop = () => { clearTimeout(t); clearInterval(iv); t = iv = null; };
+  let t = null, iv = null, down = false, repeated = false;
+  const stop = () => { clearTimeout(t); clearInterval(iv); t = iv = null; down = false; };
+  const tick = () => { if (notATap()) stop(); else fn(); };
   btn.addEventListener("pointerdown", e => {
     if (e.button) return;
     stop();
-    fn(); buzz();
-    t = setTimeout(() => { iv = setInterval(fn, 140); }, 450);
+    down = true; repeated = false;
+    if (press.stale) return;
+    t = setTimeout(() => {
+      if (!down || notATap()) return;
+      repeated = true; fn(); buzz();
+      iv = setInterval(tick, 140);
+    }, 450);
   });
-  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => btn.addEventListener(ev, stop));
+  btn.addEventListener("pointerup", () => {
+    const tap = down && !repeated && !notATap();
+    stop();
+    if (tap) { fn(); buzz(); }
+  });
+  ["pointerleave", "pointercancel"].forEach(ev => btn.addEventListener(ev, stop));
   // Keyboard presses arrive as clicks with no pointer.
   btn.addEventListener("click", e => { if (e.detail === 0) fn(); });
   btn.addEventListener("contextmenu", e => e.preventDefault());
