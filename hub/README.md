@@ -507,6 +507,14 @@ Tested for the Bluetti output switches (PR #16), on the current hub:
 - From the dashboard, the AC and DC switches both worked: the Elite 200 V2
   followed them.
 
+Tested for the heater fuel estimate (PR #23), on the current hub with the
+heater, fridge and Bluetti connected (15 Nov 2026):
+
+- Tank full started the gauge, and a burn took fuel off it.
+- Setting the level at the reserve while the heater burned sent the normal
+  Off and blocked the On button until the level was raised.
+- The level and settings came back after a hub restart.
+
 Tested for v1.0.0 (PR #21), on the current hub:
 
 - CI built the hub and sensor-node firmware with no Clippy warnings, and the
