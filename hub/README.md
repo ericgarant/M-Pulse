@@ -457,6 +457,20 @@ Tested for the Bluetti output switches (PR #16), on the current hub:
 - From the dashboard, the AC and DC switches both worked: the Elite 200 V2
   followed them.
 
+Tested for v1.0.0 (PR #21), on the current hub:
+
+- CI built the hub and sensor-node firmware with no Clippy warnings, and the
+  core tests (76) passed, including the new ones for the thermostat taking
+  over a running heater, the DHT11 decoder and the trend history.
+- The dashboard in a browser against `tools/mock_hub.py`: chips, greyed-out
+  heater buttons, the trend tooltip, one setpoint request per burst of taps,
+  the fridge mode hold, the three themes and the links-down state, with no
+  page errors.
+- Flashed on 15 Nov 2026 (1.58 MB, about half the app partition): booted,
+  started the network and dashboard server within a second, and read the
+  DHT11 to a tenth of a degree (22.1 °C, 28 % RH). The heater, fridge and
+  Bluetti were out of range, so no link was made.
+
 Tested on the current hub (bare S3 module, PR #13):
 
 - Booted, started the dashboard server, and received the sensor node's
@@ -479,7 +493,12 @@ Not yet tested:
 - The fridge saver and the heater stop at a real low charge. Both were
   triggered by moving their levels, not by draining the Bluetti.
 - Joining another Wi-Fi (see [Networks](#networks)).
-- The redesigned dashboard on the real tablet and phone, with live data.
+- The dashboard on the real tablet and phone, with live data, including the
+  trend charts over a full four hours.
+- The v1.0.0 fixes against the real appliances: Auto taking over a heater
+  started by hand (it should keep burning inside the comfort band), a quick
+  fridge Off then Eco or Max (both should stick), and the Bluetti AC/DC
+  switches still reported as taken.
 
 ## Thermostat defaults
 
