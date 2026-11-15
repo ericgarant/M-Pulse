@@ -37,10 +37,11 @@ and tests on any computer with `cargo test`.
 - **Dashboard.** The hub serves one page for the camper's Android tablet
   and your phone: join the hub's `M-Pulse` Wi-Fi (password `mpulse-heater`
   unless you set your own in `wifi.env`) and open http://192.168.71.1. It
-  needs no internet. It has Climate, Fridge, Power and Battery rules cards,
-  live status chips and alerts at the top, four-hour trend charts of the
-  cabin temperature and the Bluetti's charge, and dark, red Night and light
-  themes.
+  needs no internet. It opens on a Home summary with a tile per service,
+  and Climate, Fridge, Power and Rules each have their own page, laid out
+  for a phone, a tablet or a laptop. It has live status chips and alerts at
+  the top, four-hour trend charts of the cabin temperature and the Bluetti's
+  charge, and dark, red Night and light themes.
 
 Details, defaults and what has been tested are in [hub/README.md](hub/README.md).
 
@@ -106,8 +107,9 @@ Open items, roughly in order:
   Auto with the cabin inside the comfort band (it should keep burning), and
   switch the fridge Off then quickly to Eco or Max (both should stick). See
   [CHANGELOG.md](CHANGELOG.md).
-- Remember the setpoint, mode and battery-rule levels across a power cut.
-  Today a restart puts the hub in Monitor only with default settings.
+- Remember the setpoint across a power cut. Today a restart puts the hub in
+  Monitor only with the default setpoint (the battery-rule levels, fridge
+  saver switch and fuel settings are kept).
 - Later: the MaxxAir fans and the ceiling LEDs.
 
 ## Getting started

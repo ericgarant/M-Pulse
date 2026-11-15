@@ -37,7 +37,13 @@ def state():
     bluetti = {"connected": True, "secure": True, "keep_ac": False, "keep_dc": True, "last_command": None, "age_s": 2,
                "model": "EL200V2", "soc": soc, "volts": 51.6, "amps": -3.2, "pv_w": 0 if alerts else 186, "grid_w": 0,
                "ac_w": 0, "dc_w": 64, "ac_on": False, "dc_on": True, "to_full_min": 310, "to_empty_min": 905, "charging": 1}
+    lvl = 0.6 if alerts else 3.6
+    fuel = {"level_l": lvl, "pct": round(lvl / 5 * 100), "tank_l": 5.0, "low": alerts, "reserve": False,
+            "warn_pct": 15, "reserve_pct": 10, "reserve_stop": True, "uncertain": False,
+            "hours_left": (lvl - 0.5) / 0.26, "rate_l_h": 0.26, "correction": 1.0, "calibrations": 0,
+            "last_fill": "2 days ago"}
     return {
+        "fuel": fuel,
         "cabin": {"temp_c": 16.0 if alerts else 18.6, "rh": 41, "age_s": 3, "source": "hub"},
         "heater": heater, "fridge": fridge, "bluetti": bluetti,
         "cutoff": {"enabled": True, "stop": 15, "resume": 25, "tripped": alerts, "tripped_at": "at 15 %, 4 min ago" if alerts else None},
