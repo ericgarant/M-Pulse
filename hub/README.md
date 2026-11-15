@@ -128,7 +128,7 @@ hub serves, so it needs no internet.
   right change the theme (dark, a dim red *Night* theme for after dark, and
   light; each device remembers its choice) and go full screen.
 - **Alerts** appear in a strip under the top bar: the low-battery stop
-  holding the heater off, a heater fault code, the Bluetti at 20 % or below,
+  holding the heater off, low fuel or the fuel reserve, a heater fault code, the Bluetti at 20 % or below,
   the fridge warm alert, a heater that did not start
   after 3 tries, a cabin sensor that is missing or more than 2 minutes old,
   and a hub that has not answered for 12 s. When the hub cannot be reached,
@@ -184,6 +184,12 @@ hub serves, so it needs no internet.
     last command, and the raw 20-byte status report. The raw bytes are
     there to find the altitude and combustion efficiency the LCD remote
     shows, which the hub cannot decode yet (see below).
+- **Heater fuel**: the estimated litres and percent left, a tank bar with
+  the warning and reserve marks, hours of burning left at the current power,
+  and **Tank full** with an optional "litres added" box. *Fuel settings*
+  holds the warning and reserve levels, the reserve's stop switch, the level
+  and tank size by hand, and the learned burn rate. See
+  [Heater fuel estimate](#heater-fuel-estimate).
 - **Fridge** shows the temperature inside in a ring that frosts over while
   the fridge runs and turns red with the warm alert (more than 4 °C above its
   target for 30 minutes: check the lid and the power). **+** and **−**
@@ -355,6 +361,50 @@ heater, in Monitor it stays off until switched on. The logic is in
   trips is dropped.
 - The stop level can be 5 to 50 %, and the resume level at least 5 points
   above it. The levels go back to the defaults when the hub restarts.
+
+## Heater fuel estimate
+
+The heater does not report its fuel level, so the hub works it out from how
+long the heater burns and at what power. No sensor is needed. The logic is in
+[`core/src/fuel.rs`](../core/src/fuel.rs).
+
+- **Start it**: fill the tank to the top and tap **Tank full** on the
+  dashboard's Heater fuel card. Until then the level shows `--` and neither
+  the warning nor the reserve does anything.
+- **Burn rate**: from BougeRV's manual for the 5 kW heater, 0.18 L/h at
+  1.4 kW up to 0.53 L/h at 5.0 kW, in a straight line between them. Fuel is
+  counted only while the heater reports Starting or On with its pump or
+  flame on, so the glow plug warm-up and the cool-down are not counted.
+- **It learns your heater**: at each fill to the top, type how many litres
+  went in before tapping Tank full. If the hub counted every burn since the
+  last fill to the top (and at least 1 L of it), it compares the two and
+  moves its rate halfway toward what the fill-up measured. "Rate vs the
+  manual" under *Fuel settings* shows the result. A ratio outside 0.5 to 2×
+  is treated as a typing slip and ignored.
+- **Warning** (default 15 %): an orange alert and a Low badge.
+- **Reserve** (default 15 %): the hub sends the heater its normal Off, so it
+  runs its full cool-down, and refuses starts from Auto and from the On
+  button until you refill and tap Tank full or set a higher level. The
+  reserve can be set to only warn (*Reserve stops the heater* switch).
+- Both levels can be 5 to 50 % in 5 % steps. The tank size (default 5 L, 1
+  to 60 L) and the level can be set by hand under *Fuel settings*. Setting
+  the level by hand means the next fill-up cannot correct the rate.
+- **Saved in flash** (two copies with a checksum, NVS namespace `fuel`): the
+  level, the learned rate and all the settings survive a power cut. The level
+  is written about every 0.02 L while burning.
+
+What it cannot see:
+
+- Burning while the hub is off or out of range. If the link drops while the
+  heater burns, the hub keeps counting at the last power for up to an hour
+  (so it reads low rather than high) and marks the estimate **Uncertain**.
+  A heater found already burning after a restart or reconnect is marked
+  Uncertain too. A whole burn started and stopped from the LCD remote while
+  the hub was off leaves no trace. Uncertain clears at the next fill-up.
+- Accuracy is an estimate, not a measurement: roughly ±15 to 20 % on the
+  manual's figures, better after a few fill-ups with the litres entered.
+  Altitude (the heater trims fuel up high), battery voltage and cold fuel
+  all move the real rate.
 
 ## Fridge saver
 
@@ -552,4 +602,8 @@ They live in `Config::default()` in `../core/src/heater_cutoff.rs` and
   (under 10 seconds old).
 - The hub restarts in Monitor mode. After a power cut it will not resume
   Auto by itself. The low-battery stop comes back on with its default
-  levels, and the fridge saver comes back off.
+  levels, and the fridge saver comes back off. The fuel estimate and its
+  settings are kept.
+- The fuel reserve is only as good as the estimate (see
+  [Heater fuel estimate](#heater-fuel-estimate)). Check the tank by eye now
+  and then, and correct the level when it is off.
