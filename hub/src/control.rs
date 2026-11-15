@@ -31,10 +31,11 @@ use m_pulse_core::fuel::{Meter, Saved, Seen};
 use m_pulse_core::heater_cutoff;
 use m_pulse_core::history;
 use m_pulse_core::protocol::RunState;
+use m_pulse_core::rules;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
-use crate::fuel_store::FuelStore;
 use crate::state::{FridgeCommand, Mode, Shared};
+use crate::store::Store;
 
 /// How often the thermostat is evaluated. Matches the sensor's sample rate.
 const TICK: Duration = Duration::from_secs(5);
@@ -52,16 +53,24 @@ const FRIDGE_MAX_AGE: Duration = Duration::from_secs(10);
 const BLUETTI_MAX_AGE: Duration = Duration::from_secs(30);
 
 /// Starts the control thread.
-pub fn spawn(state: Shared, fuel_store: Option<FuelStore>) -> anyhow::Result<()> {
+pub fn spawn(
+    state: Shared,
+    fuel_store: Option<Store<Saved>>,
+    rules_store: Option<Store<rules::Saved>>,
+) -> anyhow::Result<()> {
     thread::Builder::new()
         .name("thermostat".into())
         // 8 kB: the fuel gauge's flash writes run on this thread too.
         .stack_size(8 * 1024)
-        .spawn(move || control_loop(state, fuel_store))?;
+        .spawn(move || control_loop(state, fuel_store, rules_store))?;
     Ok(())
 }
 
-fn control_loop(state: Shared, mut fuel_store: Option<FuelStore>) {
+fn control_loop(
+    state: Shared,
+    mut fuel_store: Option<Store<Saved>>,
+    mut rules_store: Option<Store<rules::Saved>>,
+) {
     let config = state.lock().control.config;
     info!(
         "Thermostat: setpoint {:.1} °C, on at or below {:.1} °C, off at or above {:.1} °C",
@@ -84,6 +93,11 @@ fn control_loop(state: Shared, mut fuel_store: Option<FuelStore>) {
     let mut meter = Meter::default();
     let mut last_step = Instant::now();
     let mut last_saved: Option<Saved> = None;
+    // What main loaded from flash (or the defaults), so boot writes nothing.
+    let mut rules_saved = {
+        let s = state.lock();
+        rules::Saved::new(s.cutoff.config, s.saver.config)
+    };
 
     loop {
         let (cabin, setpoint, mode, heater_now) = {
@@ -134,7 +148,7 @@ fn control_loop(state: Shared, mut fuel_store: Option<FuelStore>) {
             smoothed = None;
         }
 
-        let fuel_now = {
+        let (fuel_now, rules_now) = {
             let mut s = state.lock();
             s.control.decision = Some(decision);
             s.control.smoothed_c = smoothed.map(|x| x.temperature_c);
@@ -150,13 +164,14 @@ fn control_loop(state: Shared, mut fuel_store: Option<FuelStore>) {
                 config: s.fuel.config,
                 gauge: s.fuel.gauge,
             };
+            let rules_now = rules::Saved::new(s.cutoff.config, s.saver.config);
             if Instant::now() >= next_point {
                 next_point += Duration::from_secs(history::STEP_S);
                 let point = trend_point(&s);
                 drop(s);
                 state.history().push(point);
             }
-            fuel_now
+            (fuel_now, rules_now)
         };
 
         // Written outside the lock: a flash write takes a few milliseconds.
@@ -167,6 +182,17 @@ fn control_loop(state: Shared, mut fuel_store: Option<FuelStore>) {
                     Err(err) => warn!("Fuel gauge: could not save: {err}"),
                 }
             }
+        }
+        // The rules change only from the dashboard, a few times at most.
+        if rules_now != rules_saved {
+            if let Some(store) = rules_store.as_mut() {
+                match store.save(&rules_now) {
+                    Ok(()) => info!("Battery rules: saved {rules_now:?}"),
+                    // Not retried every tick: the next change tries again.
+                    Err(err) => warn!("Battery rules: could not save: {err}"),
+                }
+            }
+            rules_saved = rules_now;
         }
 
         if last_decision != Some(decision) {

@@ -14,5 +14,6 @@ pub mod fuel;
 pub mod heater_cutoff;
 pub mod history;
 pub mod protocol;
+pub mod rules;
 pub mod thermostat;
 pub mod wire;

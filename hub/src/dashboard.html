@@ -36,7 +36,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+html { scroll-padding-top: 76px; }
 body {
   margin: 0; min-height: 100vh; color: var(--fg); background: var(--bg);
   font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -111,17 +111,97 @@ svg.i { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-wi
 @keyframes drop { from { opacity: 0; transform: translateY(-10px) scale(.98); } }
 @keyframes lift { to { opacity: 0; transform: translateY(-8px); } }
 
-/* ---------- Layout ---------- */
-main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "climate" "fuel" "fridge" "power" "rules"; }
-@media (min-width: 720px) {
-  main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "climate climate" "fuel fuel" "fridge power" "rules rules"; }
-}
+/* ---------- Layout: one page at a time ---------- */
+/* Home is the summary; each service has its own page. A section shows on
+   the pages its data-page lists, set from the address (#home, #climate...). */
+main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+main > section { display: none; }
+body[data-page="home"] main > [data-page~="home"], body[data-page="climate"] main > [data-page~="climate"],
+body[data-page="fridge"] main > [data-page~="fridge"], body[data-page="power"] main > [data-page~="power"],
+body[data-page="rules"] main > [data-page~="rules"] { display: block; }
+body:not([data-page="home"]) footer.hub { display: none; }
 @media (min-width: 1100px) {
-  main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-areas: "climate fridge" "climate power" "climate fuel" "rules rules"; }
-  #climate { align-self: stretch; }
+  body[data-page="climate"] main { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+  body[data-page="fridge"] main, body[data-page="power"] main { max-width: 900px; }
 }
-#climate { grid-area: climate; } #fridge { grid-area: fridge; } #power { grid-area: power; } #rules { grid-area: rules; } #fuel { grid-area: fuel; }
+/* Alerts: all of them on Home, one line each; only a page's own ones, in
+   full, elsewhere. */
+.alert { text-decoration: none; color: inherit; }
+.alert > div { flex: 1; min-width: 0; }
+.alert .short, .alert .chev { display: none; }
+.alert .chev { transform: rotate(-90deg); color: var(--muted) !important; margin-left: auto; }
+body[data-page="home"] a.alert { align-items: center; padding-block: 10px; }
+body[data-page="home"] a.alert .long { display: none; }
+body[data-page="home"] a.alert .short { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body[data-page="home"] a.alert .chev { display: block; }
+@media (min-width: 900px) { body[data-page="home"] #alerts:has(a.alert ~ a.alert) { grid-template-columns: 1fr 1fr; } }
+body:not([data-page="home"]) .alert:not([data-p="all"]) { display: none; }
+body[data-page="climate"] .alert[data-p~="climate"], body[data-page="fridge"] .alert[data-p~="fridge"],
+body[data-page="power"] .alert[data-p~="power"], body[data-page="rules"] .alert[data-p~="rules"] { display: flex; }
+
+/* ---------- Home: one tile per service ---------- */
+#home { display: none; }
+body[data-page="home"] #home { display: grid; }
+#home { gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cl cl" "fr pw" "fu ru"; }
+@media (min-width: 900px) {
+  #home { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cl fr pw" "cl fu ru"; grid-template-rows: 1fr 1fr;
+    min-height: calc(100vh - 220px); }  /* fill the screen above the tab bar */
+  body:has(#alerts > *) #home { min-height: 0; }  /* alerts first, then tiles at their own size */
+  .tile { padding: 20px; gap: 10px; }
+  .tile .big { font-size: 60px; margin-top: 6px; }
+  .tile .sub { font-size: 15.5px; }
+  .rlist div { font-size: 15px; } .rlist { gap: 10px; margin-top: 8px; }
+}
+.tile { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; box-shadow: var(--shadow); min-width: 0;
+  display: flex; flex-direction: column; gap: 8px; animation: rise .6s var(--ease) both; transition: transform .15s var(--ease), border-color .3s; }
+.tile:active { transform: scale(.985); }
+.tile > a { position: absolute; inset: 0; border-radius: inherit; z-index: 1; }
+.tile .th { display: flex; align-items: center; gap: 10px; }
+.tile .th h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.tile .th .chev { margin-left: auto; color: var(--faint); transform: rotate(-90deg); }
+.tile .th .badge { margin-left: auto; } .tile .th .badge + .chev { margin-left: 0; }
+.tile .big { font-size: 44px; }
+.tile .sub { font-size: 14px; color: var(--muted); }
+.tile .sub b { color: var(--fg); font-weight: 650; }
+.tile.alarm { border-color: color-mix(in srgb, var(--bad) 55%, transparent); }
+.tile.warned { border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+.tile .bar { height: 10px; border-radius: 99px; background: var(--bg2); overflow: hidden; margin-top: auto; }
+.tile .bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--go); transition: width 1s var(--ease); }
+.tile .bar.heat i { background: linear-gradient(90deg, var(--heat), var(--heat2)); }
+.tile .bar.low i { background: var(--warn); } .tile .bar.bad i { background: var(--bad); }
+#t-cl { grid-area: cl; } #t-fr { grid-area: fr; } #t-pw { grid-area: pw; } #t-fu { grid-area: fu; } #t-ru { grid-area: ru; }
+#t-cl .big { font-size: 64px; }
+@media (min-width: 900px) { #t-cl .big { font-size: 96px; margin: 8px 0 4px; } }
+#t-cl .hrow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; background: var(--bg2); font-weight: 650; }
+#t-cl .hrow svg { width: 24px; height: 24px; color: var(--faint); }
+#t-cl .hrow.run svg, #t-cl .hrow.ignite svg { color: var(--heat); }
+#t-cl .hrow.fault svg { color: var(--bad); }
+#t-cl .hrow small { display: block; font-weight: 500; color: var(--muted); font-size: 13px; }
+/* The target stays settable from Home: these sit above the tile's link. */
+#t-cl .tset { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; }
+#t-cl .tset .sp { text-align: center; }
+#t-cl .tset .sp .lbl { font-size: 11.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+#t-cl .tset .sp .v { font-size: 30px; font-weight: 600; color: var(--heat); }
+#t-cl .tset .sp.pending .v { color: var(--warn); }
+@media (max-width: 899px) { #t-cl { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; }
+  #t-cl .th { grid-column: 1 / -1; } #t-cl .tset { grid-column: 1 / -1; } #t-cl .big { align-self: center; } #t-cl .hrow { align-self: center; } }
+.rlist { display: grid; gap: 6px; margin-top: 2px; }
+/* Extra lines a tablet or laptop has room for; hidden on a phone. */
+.mkv { display: none; margin: 4px 0 0; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 14.5px; }
+.mkv dt { color: var(--muted); } .mkv dd { margin: 0; text-align: right; font-weight: 600; }
+@media (min-width: 900px) { .mkv { display: grid; } }
+/* With alerts showing on a short screen, drop the extra lines so the
+   target's − and + stay above the tab bar. */
+@media (max-height: 900px) { body:has(#alerts > *) .mkv { display: none; } }
+body[data-page="climate"] #fuel .fuel-sum { flex-wrap: wrap; }
+body[data-page="climate"] #fuel .fuel-sum .big { white-space: nowrap; }
+body[data-page="climate"] #fuel .fuel-sum .eta { text-align: left; }
+.rlist div { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); min-width: 0; }
+.rlist div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rlist em { font-style: normal; } .rlist em::before { content: ": "; }
+@media (max-width: 899px) { .rlist em { display: none; } }
+.rlist i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.rlist .watch i { background: var(--go); } .rlist .hold i { background: var(--warn); } .rlist .bad i { background: var(--bad); }
 
 .card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow);
   animation: rise .6s var(--ease) both; transition: opacity .4s, filter .4s; min-width: 0; }
@@ -445,16 +525,29 @@ footer.hub { max-width: 1400px; margin: 16px auto 0; display: flex; flex-wrap: w
 footer.hub b { color: var(--muted); font-weight: 600; }
 footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 12px; }
 
-/* ---------- Phone tab bar ---------- */
-.tabs { display: none; }
+/* ---------- Tab bar: one tab per page, at every width ---------- */
+body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 25; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+  max-width: 640px; margin: 0 auto;
+  height: 64px; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border: 1px solid var(--line2); box-shadow: 0 10px 30px #0006; }
+.tabs a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 650; color: var(--faint); text-decoration: none; border-radius: 16px; transition: color .3s, background .3s; }
+@media (min-width: 720px) { .tabs a { flex-direction: row; gap: 8px; font-size: 14px; } }
+.tabs a svg { width: 22px; height: 22px; }
+.tabs a.on { color: var(--fg); background: var(--bg2); }
+/* A dot on a tab whose page has an alert. */
+.tabs a.alarm::after, .tabs a.warned::after { content: ""; position: absolute; top: 7px; right: calc(50% - 20px); width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--card); }
+.tabs a.warned::after { background: var(--warn); }
+@media (min-width: 720px) { .tabs a.alarm::after, .tabs a.warned::after { right: 10px; top: 10px; } }
+/* Laptop: the tabs become a rail down the left side, out of the way. */
+@media (min-width: 1360px) and (min-height: 700px) and (hover: hover) {
+  body { padding-bottom: 24px; padding-left: 112px; }
+  .top { margin-left: -112px; padding-left: 128px; }
+  .tabs { grid-template-columns: none; grid-auto-rows: 72px; left: 12px; right: auto; top: 88px; bottom: auto; width: 84px; height: auto; margin: 0; }
+  .tabs a { flex-direction: column; gap: 4px; font-size: 12px; }
+  #toasts { bottom: 24px; }
+}
 @media (max-width: 719px) {
-  body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
-  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 25; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
-    height: 64px; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-    border: 1px solid var(--line2); box-shadow: 0 10px 30px #0006; }
-  .tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 650; color: var(--faint); text-decoration: none; border-radius: 16px; transition: color .3s, background .3s; }
-  .tabs a svg { width: 22px; height: 22px; }
-  .tabs a.on { color: var(--fg); background: var(--bg2); }
   .chip .n { display: none; }
   .chip { padding: 0 10px; gap: 5px; font-size: 12.5px; }
   .brand small { display: none; }
@@ -501,8 +594,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 .sheet h3 { margin: 0 0 6px; font-size: 21px; }
 .sheet p { margin: 0 0 20px; color: var(--muted); font-size: 15px; }
 .sheet .row2 .btn { width: 100%; }
-#toasts { position: fixed; z-index: 60; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: grid; gap: 8px; width: min(440px, calc(100% - 32px)); pointer-events: none; }
-@media (min-width: 720px) { #toasts { bottom: 24px; } }
+#toasts { position: fixed; z-index: 60; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); /* above the tab bar */ transform: translateX(-50%); display: grid; gap: 8px; width: min(440px, calc(100% - 32px)); pointer-events: none; }
 .toast { padding: 12px 16px; border-radius: 16px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 14.5px; box-shadow: 0 10px 30px #0006; animation: pop .35s var(--ease) both; text-align: center; }
 .toast.bad { background: var(--bad); color: #fff; }
 .toast.out { animation: fadeout .3s both; }
@@ -518,7 +610,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 }
 </style>
 </head>
-<body class="loading">
+<body class="loading" data-page="home">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <linearGradient id="g-temp" gradientUnits="userSpaceOnUse" x1="40" y1="200" x2="200" y2="200"><stop offset="0" stop-color="#4cc9f0"/><stop offset=".5" stop-color="#ffb347"/><stop offset="1" stop-color="#ff5a36"/></linearGradient>
@@ -546,6 +638,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 2.2-2.4 3.7M12 17.2v.01"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5.5 9.5V20h13V9.5M10 20v-5h4v5"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5v.01"/></symbol>
 </svg>
 
@@ -568,8 +661,47 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 <div id="alerts" aria-live="polite"></div>
 
 <main>
+  <!-- Home: a glance at every service; a tile opens its page -->
+  <div id="home" aria-label="Summary">
+    <div class="tile" id="t-cl"><a href="#climate" aria-label="Open Climate"></a>
+      <div class="th"><div class="ic heat"><svg class="i"><use href="#i-flame"/></svg></div><h2>Climate</h2><span class="badge" id="tl-mode">--</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+      <div class="big"><span class="num" id="tl-cab">--</span><span class="unit">°C</span></div>
+      <dl class="mkv"><dt>Humidity</dt><dd id="tk-rh">--</dd><dt>Thermostat</dt><dd id="tk-why">--</dd></dl>
+      <div class="hrow" id="tl-h"><svg class="i"><use href="#i-flame"/></svg><div><span id="tl-ht">--</span><small id="tl-hs">--</small></div></div>
+      <div class="tset">
+        <button class="btn round" id="tl-down" aria-label="Lower the setpoint"><svg class="i"><use href="#i-minus"/></svg></button>
+        <div class="sp" id="tl-spbox"><div class="lbl">Target</div><div class="v"><span id="tl-sp">--</span>°</div></div>
+        <button class="btn round" id="tl-up" aria-label="Raise the setpoint"><svg class="i"><use href="#i-plus"/></svg></button>
+      </div>
+    </div>
+    <div class="tile" id="t-fr"><a href="#fridge" aria-label="Open Fridge"></a>
+      <div class="th"><div class="ic ice"><svg class="i"><use href="#i-snow"/></svg></div><h2>Fridge</h2><svg class="i chev"><use href="#i-chev"/></svg></div>
+      <div class="big"><span class="num" id="tl-ft">--</span><span class="unit">°C</span></div>
+      <div class="sub" id="tl-fs">--</div>
+      <dl class="mkv"><dt>Power</dt><dd id="tk-fp">--</dd><dt>Input</dt><dd id="tk-fv">--</dd><dt>Link</dt><dd id="tk-fl">--</dd></dl>
+    </div>
+    <div class="tile" id="t-pw"><a href="#power" aria-label="Open Power"></a>
+      <div class="th"><div class="ic go"><svg class="i"><use href="#i-bolt"/></svg></div><h2>Power</h2><svg class="i chev"><use href="#i-chev"/></svg></div>
+      <div class="big"><span class="num" id="tl-soc">--</span><span class="unit">%</span></div>
+      <div class="sub" id="tl-ps">--</div>
+      <dl class="mkv"><dt>Solar</dt><dd id="tk-pv">--</dd><dt>Charger</dt><dd id="tk-gr">--</dd><dt>AC out</dt><dd id="tk-ac">--</dd><dt>DC out</dt><dd id="tk-dc">--</dd></dl>
+      <div class="bar" id="tl-pb"><i></i></div>
+    </div>
+    <div class="tile" id="t-fu"><a href="#fuel" aria-label="Open Heater fuel"></a>
+      <div class="th"><div class="ic heat"><svg class="i"><use href="#i-drop"/></svg></div><h2>Fuel</h2><svg class="i chev"><use href="#i-chev"/></svg></div>
+      <div class="big"><span class="num" id="tl-fl">--</span><span class="unit">L</span></div>
+      <div class="sub" id="tl-fus">--</div>
+      <dl class="mkv"><dt>Burn rate now</dt><dd id="tk-rate">--</dd><dt>Tank</dt><dd id="tk-tank">--</dd><dt>Last fill-up</dt><dd id="tk-fill">--</dd></dl>
+      <div class="bar heat" id="tl-fb"><i></i></div>
+    </div>
+    <div class="tile" id="t-ru"><a href="#rules" aria-label="Open Rules"></a>
+      <div class="th"><div class="ic warn"><svg class="i"><use href="#i-shield"/></svg></div><h2>Rules</h2><svg class="i chev"><use href="#i-chev"/></svg></div>
+      <div class="rlist" id="tl-rl"></div>
+    </div>
+  </div>
+
   <!-- Climate: cabin reading, thermostat and the heater -->
-  <section class="card" id="climate" aria-labelledby="h-climate">
+  <section class="card" id="climate" data-page="climate" aria-labelledby="h-climate">
     <div class="card-h">
       <div class="ic heat"><svg class="i"><use href="#i-flame"/></svg></div>
       <h2 id="h-climate">Climate</h2>
@@ -676,7 +808,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   </section>
 
   <!-- Fridge -->
-  <section class="card nolink" id="fridge" aria-labelledby="h-fridge">
+  <section class="card nolink" id="fridge" data-page="fridge" aria-labelledby="h-fridge">
     <div class="card-h">
       <div class="ic ice"><svg class="i"><use href="#i-snow"/></svg></div>
       <h2 id="h-fridge">Fridge</h2>
@@ -717,7 +849,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   </section>
 
   <!-- Power: the Bluetti, with its AC and DC output switches -->
-  <section class="card" id="power" aria-labelledby="h-power">
+  <section class="card" id="power" data-page="power" aria-labelledby="h-power">
     <div class="card-h">
       <div class="ic go"><svg class="i"><use href="#i-bolt"/></svg></div>
       <h2 id="h-power">Power</h2>
@@ -760,7 +892,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   </section>
 
   <!-- Fuel: estimated from burn time and power, see core/src/fuel.rs -->
-  <section class="card" id="fuel" aria-labelledby="h-fuel">
+  <section class="card" id="fuel" data-page="climate" aria-labelledby="h-fuel">
     <div class="card-h">
       <div class="ic heat"><svg class="i"><use href="#i-drop"/></svg></div>
       <h2 id="h-fuel">Heater fuel</h2>
@@ -784,9 +916,6 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
     <details>
       <summary><svg class="i"><use href="#i-chev"/></svg>Fuel settings</summary>
       <div class="fset">
-        <div class="lvl"><span>Warn at or below</span><div class="stepper" id="fu-warn"><button aria-label="Lower the fuel warning">−</button><output>--</output><button aria-label="Raise the fuel warning">+</button></div></div>
-        <div class="lvl"><span>Reserve at or below</span><div class="stepper" id="fu-res"><button aria-label="Lower the fuel reserve">−</button><output>--</output><button aria-label="Raise the fuel reserve">+</button></div></div>
-        <div class="pwr"><span class="l">Reserve stops the heater</span><button class="switch" id="fu-stopsw" role="switch" aria-checked="false" aria-label="Fuel reserve stops the heater"></button></div>
         <div class="lvl"><span>Set the level by hand</span><div class="in"><input class="field" id="fu-level" type="number" inputmode="decimal" min="0" step="0.1" placeholder="L" aria-label="Litres in the tank"><button class="btn" id="fu-setlevel">Set</button></div></div>
         <div class="lvl"><span>Tank size</span><div class="in"><input class="field" id="fu-tanksz" type="number" inputmode="decimal" min="1" max="60" step="0.5" placeholder="L" aria-label="Tank size in litres"><button class="btn" id="fu-settank">Set</button></div></div>
         <dl class="kv">
@@ -800,11 +929,11 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   </section>
 
   <!-- Battery rules -->
-  <section class="card" id="rules" aria-labelledby="h-rules">
+  <section class="card" id="rules" data-page="rules" aria-labelledby="h-rules">
     <div class="card-h">
       <div class="ic warn"><svg class="i"><use href="#i-shield"/></svg></div>
-      <h2 id="h-rules">Battery rules</h2>
-      <button class="help" data-help="rules" aria-label="Help: Battery rules"><svg class="i"><use href="#i-help"/></svg></button>
+      <h2 id="h-rules">Rules</h2>
+      <button class="help" data-help="rules" aria-label="Help: Rules"><svg class="i"><use href="#i-help"/></svg></button>
     </div>
     <div class="rules">
       <div class="rule" id="r-cutoff">
@@ -824,8 +953,16 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
         <div class="rstate" id="s-state"><i class="dot"></i><span>--</span></div>
         <div class="last" id="s-last">--</div>
       </div>
+      <div class="rule" id="r-fuel">
+        <div class="rule-h"><div class="ic heat"><svg class="i"><use href="#i-drop"/></svg></div><h3>Heater fuel reserve</h3>
+          <button class="switch" id="fu-stopsw" role="switch" aria-checked="false" aria-label="Fuel reserve stops the heater"></button></div>
+        <p>Warns when the fuel estimate runs low, and stops the heater cleanly at the reserve so the pump never runs dry.</p>
+        <div class="lvl"><span>Warn at or below</span><div class="stepper" id="fu-warn"><button aria-label="Lower the fuel warning">−</button><output>--</output><button aria-label="Raise the fuel warning">+</button></div></div>
+        <div class="lvl"><span>Stop at or below</span><div class="stepper" id="fu-res"><button aria-label="Lower the fuel reserve">−</button><output>--</output><button aria-label="Raise the fuel reserve">+</button></div></div>
+        <div class="rstate" id="fu-state"><i class="dot"></i><span>--</span></div>
+      </div>
     </div>
-    <p class="note">Levels change in 5 % steps and apply a moment after you stop tapping. They go back to the defaults when the hub restarts.</p>
+    <p class="note">Levels change in 5 % steps and apply a moment after you stop tapping. The hub keeps them across a restart. The low-battery stop always comes back on.</p>
   </section>
 </main>
 
@@ -839,11 +976,11 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 </footer>
 
 <nav class="tabs" aria-label="Sections">
-  <a href="#climate" class="on"><svg class="i"><use href="#i-flame"/></svg>Climate</a>
-  <a href="#fridge"><svg class="i"><use href="#i-snow"/></svg>Fridge</a>
-  <a href="#fuel"><svg class="i"><use href="#i-drop"/></svg>Fuel</a>
-  <a href="#power"><svg class="i"><use href="#i-bolt"/></svg>Power</a>
-  <a href="#rules"><svg class="i"><use href="#i-shield"/></svg>Rules</a>
+  <a href="#home" data-p="home" class="on"><svg class="i"><use href="#i-home"/></svg>Home</a>
+  <a href="#climate" data-p="climate"><svg class="i"><use href="#i-flame"/></svg>Climate</a>
+  <a href="#fridge" data-p="fridge"><svg class="i"><use href="#i-snow"/></svg>Fridge</a>
+  <a href="#power" data-p="power"><svg class="i"><use href="#i-bolt"/></svg>Power</a>
+  <a href="#rules" data-p="rules"><svg class="i"><use href="#i-shield"/></svg>Rules</a>
 </nav>
 
 <div class="sheet" id="sheet" hidden>
@@ -875,6 +1012,7 @@ const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const SP_MIN = 5, SP_MAX = 30, GAP = 5;
 const LOW_LIMITS = { saver: [5, 95], cutoff: [5, 50] };
 
+const tabs = [...document.querySelectorAll(".tabs a")];
 let last = null;         // last state from the hub
 let fridge = null;       // fridge status while its link is up
 let fails = 0, sentClock = false, pollTimer = null, lastOk = 0;
@@ -1054,19 +1192,20 @@ const HELP = {
     ["Tank full", "Tap it every time you fill the tank to the top. Until the first time, the level is unknown and neither the warning nor the reserve acts."],
     ["Litres added", "Optional, but it makes the estimate better. Enter how many litres went in at the fill-up before tapping Tank full: the hub compares that with what it thought was burned and corrects its burn rate for your heater. Each fill-up refines it."],
     ["Uncertain", "Shown when the heater burned while the hub could not see it, for example after a hub restart or a lost Bluetooth link. The hub counts on at the last power for up to an hour so it reads low rather than high, but check the tank and set the level by hand if needed. The next Tank full clears it."],
-    ["Warning and reserve", "The bar's marks show both levels, 15 % by default. At the warning, the hub raises a low fuel alert. At the reserve, it stops a burning heater with its normal OFF, so it gets its full cool-down, and refuses new starts until you refill and tap Tank full, or correct the level. Running a diesel heater dry usually means a failed start and priming the fuel line."],
-    ["Reserve stops the heater", "Turn it off to only warn at the reserve and let the heater keep running."],
+    ["Warning and reserve", "The bar's marks show the warning and reserve levels. Set them, and whether the reserve stops the heater, under Heater fuel reserve on the Rules page."],
     ["Fuel settings", "Set the level by hand after a partial fill or a check, and set the tank size (5 L by default). Burn rate now is the rate at the current power; Rate vs the manual shows the correction learned from fill-ups. Use the manual's rate again forgets that correction."],
   ]],
-  rules: ["Battery rules", "warn", [
-    ["Heater low-battery stop", "When the Bluetti drops to the stop level (15 % by default), the hub stops the heater cleanly, with its full cool-down, and blocks starts until the Bluetti is back to the restart level (25 % by default). It protects the battery the heater needs to cool down safely. It is on after every hub restart."],
-    ["Fridge saver", "When the Bluetti drops to the Eco level (30 % by default), the hub puts the fridge in Eco to save power, and back to Max once the Bluetti reaches the Max level (50 % by default). It is off after every hub restart."],
-    ["Levels", "Change in 5 % steps and are sent a moment after you stop tapping. The restart or Max level always stays at least 5 % above the lower one, so the rule does not flip back and forth. They go back to the defaults when the hub restarts."],
-    ["Status line", "Watching the battery: the rule is on and nothing needs doing. Heater stopped, or Holding the fridge in Eco: the rule is acting now and will let go at the higher level. Off: the rule is switched off. Under the Fridge saver, Last change says what it last did and when."],
+  rules: ["Rules", "warn", [
+    ["Heater low-battery stop", "When the Bluetti drops to the stop level (15 % by default), the hub stops the heater cleanly, with its full cool-down, and blocks starts until the Bluetti is back to the restart level (25 % by default). It protects the battery the heater needs to cool down safely. It is a safety, so it is back on after every hub restart, with your levels."],
+    ["Fridge saver", "When the Bluetti drops to the Eco level (30 % by default), the hub puts the fridge in Eco to save power, and back to Max once the Bluetti reaches the Max level (50 % by default). Whether it is on is kept across a hub restart."],
+    ["Heater fuel reserve", "Uses the fuel estimate from the Heater fuel card on the Climate page. At the warning level (15 % by default) the hub raises a low fuel alert. At the reserve it stops a burning heater with its normal OFF, so it gets its full cool-down, and refuses new starts until you refill and tap Tank full, or correct the level. Running a diesel heater dry usually means a failed start and priming the fuel line. Switch it off to only warn and let the heater keep running."],
+    ["Levels", "Change in 5 % steps and are sent a moment after you stop tapping. The restart or Max level always stays at least 5 % above the lower one, so the rule does not flip back and forth. All levels are kept in the hub's flash, so a restart or power cut keeps them."],
+    ["Status line", "Watching the battery (or the fuel): the rule is on and nothing needs doing. Heater stopped, or Holding the fridge in Eco: the rule is acting now and will let go at the higher level. Off: the rule is switched off. Under the Fridge saver, Last change says what it last did and when."],
   ]],
   screen: ["Alerts and screen", "warn", [
-    ["Alerts", "Shown at the top while the problem lasts and gone on their own once it clears. Red needs action now: the hub is out of reach, the Bluetti low-battery stop tripped, a heater fault code, fuel at the reserve, or the fridge staying too warm. Amber is a heads-up: fuel low, the Bluetti at 20 % or below, the heater did not start after 3 tries, or no fresh reading from the cabin sensor."],
-    ["Top bar", "The pulse logo beats each time fresh data arrives from the hub. The chips give a quick status of the heater, fridge and Bluetti; tap one to jump to its card. The button on the right cycles the theme: Dark, Night (dim red, kind to night vision) and Light."],
+    ["Alerts", "Shown at the top while the problem lasts and gone on their own once it clears. Home lists every alert in one line each: tap one to open its page, which shows it in full. Red needs action now: the hub is out of reach, the Bluetti low-battery stop tripped, a heater fault code, fuel at the reserve, or the fridge staying too warm. Amber is a heads-up: fuel low, the Bluetti at 20 % or below, the heater did not start after 3 tries, or no fresh reading from the cabin sensor."],
+    ["Pages", "Home shows every service at a glance: tap a tile to open its page, or use the tabs at the bottom (down the left side on a laptop). The Climate tile's − and + change the target without leaving Home. A tab with a red or amber dot has an alert on its page. After 5 minutes without a touch, the screen goes back to Home."],
+    ["Top bar", "The pulse logo beats each time fresh data arrives from the hub. The chips give a quick status of the heater, fridge and Bluetti; tap one to open its page. The button on the right cycles the theme: Dark, Night (dim red, kind to night vision) and Light."],
     ["Footer", "The hub's clock and its address on your Wi-Fi. If the hub's clock is not set, this device sends its own time; the button does it again by hand."],
     ["Taps and scrolling", "Buttons act only on a deliberate tap. A touch that scrolls the page, or lands while it is still moving, does nothing. Hold − or + to repeat."],
     ["Offline", "If the hub cannot be reached, the cards dim and the page keeps retrying. Check that this device is on the M-Pulse Wi-Fi."],
@@ -1178,6 +1317,9 @@ function showSetpoint(v) {
   $("sp").textContent = v.toFixed(1);
   $("sp-box").classList.add("pending");
   bump($("sp-box").querySelector(".v"));
+  $("tl-sp").textContent = v.toFixed(1);
+  $("tl-spbox").classList.add("pending");
+  bump($("tl-spbox").querySelector(".v"));
   drawDial(last.cabin ? last.cabin.temp_c : null, v, last.control.hysteresis_c);
 }
 hold($("sp-down"), () => nudge(-0.5));
@@ -1532,6 +1674,12 @@ function renderFuel(fu, h) {
     if (p && !p.timer && (p.v === real || Date.now() > p.until)) fuPend[key] = null;
     if (fuPend[key]) showFuelLevel(key, fuPend[key].v, true); else showFuelLevel(key, real, false);
   });
+  const [ft, fcls] = !fu.reserve_stop ? ["Off: warns only, the heater keeps running", ""]
+    : !known ? ["Waiting for the level: tap Tank full on the fuel card", ""]
+    : fu.reserve ? ["Heater held off at the reserve", "bad"]
+    : ["Watching the fuel", "watch"];
+  $("fu-state").className = "rstate " + fcls;
+  $("fu-state").lastElementChild.textContent = ft;
   $("fu-stopsw").setAttribute("aria-checked", fu.reserve_stop);
   $("fu-stopsw").classList.remove("busy");
   $("fu-res").closest(".lvl").style.opacity = fu.reserve_stop ? "" : ".5";
@@ -1568,6 +1716,7 @@ function render(s) {
   if (s.fuel) renderFuel(s.fuel, s.heater);
   renderHub(s);
   renderAlerts(s);
+  renderHome(s);
 }
 
 function renderClimate(s) {
@@ -1853,25 +2002,33 @@ function renderHub(s) {
   if (!s.clock && !sentClock) sendClock();
 }
 
+// Which page each alert belongs to. Home shows all of them; another page
+// shows its own, and the tab of a page with an alert gets a dot.
+const ALERT_PAGE = { cutoff: "climate power rules", fault: "climate", fuel: "climate rules", soc: "power", warm: "fridge", start: "climate", sensor: "climate" };
 // Alerts at the top, kept by key so only new ones animate in.
 function renderAlerts(s) {
   const list = [];
   if (!s) list.push(["offline", "bad", "Can't reach the hub. Check this device is on the M-Pulse Wi-Fi. Retrying…"]);
   else {
     const co = s.cutoff, c = s.control;
-    if (co.enabled && co.tripped) list.push(["cutoff", "bad", "Bluetti battery low (" + (co.tripped_at || "") + "): the heater was stopped and cannot start until the battery is back to " + co.resume + " %."]);
+    if (co.enabled && co.tripped) list.push(["cutoff", "bad", "Bluetti battery low (" + (co.tripped_at || "") + "): the heater was stopped and cannot start until the battery is back to " + co.resume + " %.", "Bluetti low: heater stopped until " + co.resume + " %"]);
     const h = s.heater;
-    if (h.connected && h.state && h.error !== null) list.push(["fault", "bad", "The heater reports fault code " + h.error + ". Clear it at the heater; the hub will not start it until then."]);
+    if (h.connected && h.state && h.error !== null) list.push(["fault", "bad", "The heater reports fault code " + h.error + ". Clear it at the heater; the hub will not start it until then.", "Heater fault code " + h.error]);
     const fu = s.fuel;
-    if (fu && fu.reserve) list.push(["fuel", "bad", "Fuel down to the reserve (about " + fu.level_l.toFixed(1) + " L): the heater is held off. Refill, then tap Tank full."]);
-    else if (fu && fu.low) list.push(["fuel", "warn", "Heater fuel is low: about " + fu.level_l.toFixed(1) + " L (" + fu.pct + " %) left."]);
+    if (fu && fu.reserve) list.push(["fuel", "bad", "Fuel down to the reserve (about " + fu.level_l.toFixed(1) + " L): the heater is held off. Refill, then tap Tank full.", "Fuel at the reserve: heater held off"]);
+    else if (fu && fu.low) list.push(["fuel", "warn", "Heater fuel is low: about " + fu.level_l.toFixed(1) + " L (" + fu.pct + " %) left.", "Heater fuel low: " + fu.level_l.toFixed(1) + " L left"]);
     const b = s.bluetti;
-    if (b.connected && b.soc !== null && b.soc <= 20 && !(co.enabled && co.tripped)) list.push(["soc", "warn", "The Bluetti is down to " + b.soc + " %."]);
-    if (s.fridge.warm_alert) list.push(["warm", "bad", "The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power."]);
-    if (c.start_failed) list.push(["start", "warn", "The heater did not start after 3 tries. Check it, then press Auto again to retry."]);
-    if (!s.cabin) list.push(["sensor", "warn", "No reading from the cabin sensor yet."]);
-    else if (s.cabin.age_s > 120) list.push(["sensor", "warn", "The cabin sensor was last heard " + ago(s.cabin.age_s) + "."]);
+    if (b.connected && b.soc !== null && b.soc <= 20 && !(co.enabled && co.tripped)) list.push(["soc", "warn", "The Bluetti is down to " + b.soc + " %.", "Bluetti down to " + b.soc + " %"]);
+    if (s.fridge.warm_alert) list.push(["warm", "bad", "The fridge has been more than 4 °C above its target for 30 minutes. Check the lid and the power.", "Fridge too warm for 30 min"]);
+    if (c.start_failed) list.push(["start", "warn", "The heater did not start after 3 tries. Check it, then press Auto again to retry.", "Heater did not start after 3 tries"]);
+    if (!s.cabin) list.push(["sensor", "warn", "No reading from the cabin sensor yet.", "No cabin reading yet"]);
+    else if (s.cabin.age_s > 120) list.push(["sensor", "warn", "The cabin sensor was last heard " + ago(s.cabin.age_s) + ".", "Cabin sensor silent " + ago(s.cabin.age_s)]);
   }
+  tabs.forEach(a => {
+    const mine = list.filter(([k]) => a.dataset.p !== "home" && (ALERT_PAGE[k] || "").split(" ").includes(a.dataset.p));
+    a.classList.toggle("alarm", mine.some(m => m[1] === "bad"));
+    a.classList.toggle("warned", mine.length > 0 && !mine.some(m => m[1] === "bad"));
+  });
   const box = $("alerts"), keep = new Set(list.map(a => a[0]));
   [...box.children].forEach(el => {
     if (!keep.has(el.dataset.k) && !el.classList.contains("out")) {
@@ -1879,17 +2036,23 @@ function renderAlerts(s) {
       setTimeout(() => el.remove(), 300);
     }
   });
-  list.forEach(([k, kind, text]) => {
+  list.forEach(([k, kind, text, short]) => {
     let el = box.querySelector('[data-k="' + k + '"]:not(.out)');
     if (!el) {
-      el = document.createElement("div");
+      // On Home an alert is one short line that opens its page; on that
+      // page it shows in full.
+      const page = (ALERT_PAGE[k] || "").split(" ")[0];
+      el = document.createElement(page ? "a" : "div");
+      if (page) el.href = "#" + page;
       el.dataset.k = k;
+      el.dataset.p = ALERT_PAGE[k] || "all";
       el.className = "alert " + kind;
       el.setAttribute("role", "alert");
-      el.innerHTML = '<svg class="i"><use href="#i-alert"/></svg><div></div>';
+      el.innerHTML = '<svg class="i"><use href="#i-alert"/></svg><div><span class="long"></span><span class="short"></span></div><svg class="i chev"><use href="#i-chev"/></svg>';
       box.append(el);
     }
-    el.lastElementChild.textContent = text;
+    el.querySelector(".long").textContent = text;
+    el.querySelector(".short").textContent = short || text;
   });
 }
 
@@ -2128,16 +2291,123 @@ loop();
 loadHistory();
 setInterval(() => { if (!document.hidden) loadHistory(); }, 60000);
 
-/* ---------- Phone tab bar follows the scroll ---------- */
-const tabs = [...document.querySelectorAll(".tabs a")];
-const seen = {};
-const io = new IntersectionObserver(entries => {
-  entries.forEach(e => { seen[e.target.id] = e.intersectionRatio; });
-  const best = Object.keys(seen).reduce((a, b) => seen[b] > (seen[a] ?? -1) ? b : a, null);
-  if (best && seen[best] > 0) tabs.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + best));
-}, { threshold: [0, .1, .25, .5, .75, 1] });
-["climate", "fuel", "fridge", "power", "rules"].forEach(id => io.observe($(id)));
+/* ---------- Pages ---------- */
+// The address picks the page: #home, #climate, #fridge, #power, #rules.
+// A section id that is not a page (#fuel) opens the page that holds it and
+// scrolls to it, so the chips and old bookmarks keep working.
+const PAGES = ["home", "climate", "fridge", "power", "rules"];
+const PAGE_NAME = { home: "Home", climate: "Climate", fridge: "Fridge", power: "Power", rules: "Rules" };
+function route() {
+  const id = location.hash.slice(1) || "home";
+  const target = PAGES.includes(id) ? null : $(id);
+  const page = PAGES.includes(id) ? id : target && target.dataset.page ? target.dataset.page.split(" ")[0] : "home";
+  const changed = document.body.dataset.page !== page;
+  document.body.dataset.page = page;
+  tabs.forEach(a => { a.classList.toggle("on", a.dataset.p === page); a.toggleAttribute("aria-current", a.dataset.p === page); });
+  document.title = page === "home" ? "M-Pulse" : PAGE_NAME[page] + " · M-Pulse";
+  if (target) requestAnimationFrame(() => target.scrollIntoView({ block: "start" }));
+  else requestAnimationFrame(() => scrollTo(0, 0));   // not to the section's own anchor
+  if (changed) drawTrends();   // charts on a hidden page had no width to draw in
+}
+addEventListener("hashchange", route);
+// A tablet or laptop has room for the details on the Fridge and Power pages.
+if (matchMedia("(min-width: 900px)").matches) ["fridge", "power"].forEach(id => { $(id).querySelector("details").open = true; });
+route();
 tabs.forEach(a => a.addEventListener("click", buzz));
+
+// A tablet left on another page drifts back to Home after 5 minutes
+// without a touch, so the screen on the wall always shows the summary.
+const IDLE_HOME_MS = 5 * 60 * 1000;
+let idleTimer = null;
+function idleReset() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { if (document.body.dataset.page !== "home" && $("help").hidden && $("sheet").hidden) location.hash = "#home"; }, IDLE_HOME_MS);
+}
+["pointerdown", "keydown"].forEach(ev => addEventListener(ev, idleReset, { passive: true }));
+idleReset();
+
+/* ---------- Home tiles ---------- */
+hold($("tl-down"), () => nudge(-0.5));
+hold($("tl-up"), () => nudge(0.5));
+function renderHome(s) {
+  const c = s.control, cab = s.cabin, h = s.heater, f = s.fridge, b = s.bluetti, fu = s.fuel;
+  if (cab) tween($("tl-cab"), cab.temp_c, 1); else blank("tl-cab");
+  const mb = $("tl-mode");
+  mb.textContent = c.mode === "auto" ? "Auto" : "Monitor";
+  mb.className = "badge " + (c.mode === "auto" ? "heat" : "");
+  $("tl-sp").textContent = (spPend.v ?? c.setpoint_c).toFixed(1);
+  $("tl-spbox").classList.toggle("pending", spPend.v !== null);
+  const [k, t, sub] = heaterView(h, s.cutoff, fu);
+  $("tl-h").className = "hrow " + k;
+  $("tl-ht").textContent = "Heater " + t.toLowerCase();
+  $("tl-hs").textContent = sub;
+  $("t-cl").classList.toggle("alarm", k === "fault");
+
+  if (f.connected && f.temp !== null && f.temp !== undefined) {
+    tween($("tl-ft"), f.temp, 0);
+    $("tl-fs").innerHTML = "";
+    const tb = document.createElement("b"); tb.textContent = f.power ? "Target " + f.set_temp + "°" : "Off";
+    $("tl-fs").append(tb, f.power ? " · " + f.mode : "");
+  } else { blank("tl-ft"); $("tl-fs").textContent = f.connected ? "Waiting for the fridge" : "Searching"; }
+  $("t-fr").classList.toggle("alarm", !!f.warm_alert);
+
+  const pb = $("tl-pb");
+  if (b.connected && b.soc !== null) {
+    tween($("tl-soc"), b.soc, 0);
+    const inW = (b.pv_w || 0) + (b.grid_w || 0), outW = (b.ac_w || 0) + (b.dc_w || 0);
+    const eta = inW > outW && b.to_full_min ? dur(b.to_full_min * 60) + " to full" : b.to_empty_min ? dur(b.to_empty_min * 60) + " left" : "";
+    $("tl-ps").innerHTML = "";
+    const w = document.createElement("b"); w.textContent = (inW >= outW ? "+" : "−") + Math.abs(inW - outW) + " W";
+    $("tl-ps").append(w, eta ? " · " + eta : "");
+    pb.firstElementChild.style.width = b.soc + "%";
+    pb.className = "bar" + (b.soc <= 20 ? " bad" : b.soc <= 50 ? " low" : "");
+  } else { blank("tl-soc"); $("tl-ps").textContent = "Searching"; pb.firstElementChild.style.width = "0"; }
+  $("t-pw").classList.toggle("alarm", s.cutoff.enabled && s.cutoff.tripped);
+  $("t-pw").classList.toggle("warned", b.connected && b.soc !== null && b.soc <= 20 && !(s.cutoff.enabled && s.cutoff.tripped));
+
+  const fb = $("tl-fb");
+  if (fu && fu.level_l !== null) {
+    tween($("tl-fl"), fu.level_l, 1);
+    const kw = h && h.state ? h.set_power_kw : null;
+    $("tl-fus").innerHTML = "";
+    const p = document.createElement("b"); p.textContent = fu.pct + " %";
+    $("tl-fus").append(p, fu.reserve ? " · at the reserve" : fu.hours_left !== null && kw !== null ? " · about " + hrs(fu.hours_left) + " at " + kw.toFixed(1) + " kW" : "");
+    fb.firstElementChild.style.width = fu.pct + "%";
+    fb.className = "bar " + (fu.reserve ? "bad" : fu.low ? "low" : "heat");
+  } else { blank("tl-fl"); $("tl-fus").textContent = "Not set: tap Tank full"; fb.firstElementChild.style.width = "0"; }
+  $("t-fu").classList.toggle("alarm", !!(fu && fu.reserve));
+  $("t-fu").classList.toggle("warned", !!(fu && fu.low && !fu.reserve));
+
+  const put = (id, v) => { $(id).textContent = v; };
+  put("tk-rh", cab ? cab.rh + " %" : "--");
+  put("tk-why", (REASONS[c.reason] || [c.reason || "--"])[0].split(":")[0]);
+  put("tk-fp", f.connected ? (f.power ? "On" : "Off") : "--");
+  put("tk-fv", f.connected && f.volts != null ? f.volts.toFixed(1) + " V" : "--");
+  put("tk-fl", f.connected ? "Connected" : "Searching");
+  const on = b.connected && b.soc !== null;
+  put("tk-pv", on ? b.pv_w + " W" : "--"); put("tk-gr", on ? b.grid_w + " W" : "--");
+  put("tk-ac", on ? (b.ac_on ? b.ac_w + " W" : "Off") : "--"); put("tk-dc", on ? (b.dc_on ? b.dc_w + " W" : "Off") : "--");
+  put("tk-rate", fu && fu.rate_l_h !== null ? fu.rate_l_h.toFixed(2) + " L/h" : "--");
+  put("tk-tank", fu ? fu.tank_l.toFixed(1).replace(/\.0$/, "") + " L" : "--");
+  put("tk-fill", fu && fu.last_fill || "--");
+
+  const co = s.cutoff, sv = s.saver;
+  const rows = [
+    ["Low-battery stop", !co.enabled ? "" : co.tripped ? "bad" : "watch", co.tripped ? "heater stopped" : ""],
+    ["Fridge saver", !sv.enabled ? "" : sv.holding_eco || sv.battery_low ? "hold" : "watch", sv.holding_eco ? "fridge in Eco" : sv.battery_low ? "battery low" : ""],
+    ["Fuel reserve", !fu || !fu.reserve_stop ? "" : fu.reserve ? "bad" : fu.low ? "hold" : "watch", fu && fu.reserve ? "heater held off" : fu && fu.low ? "fuel low" : ""],
+  ];
+  const rl = $("tl-rl");
+  rl.textContent = "";
+  rows.forEach(([n, cls, word]) => {
+    const d = document.createElement("div"), i = document.createElement("i"), sp = document.createElement("span");
+    d.className = cls; sp.textContent = n;
+    const st = document.createElement("em"); st.textContent = word || (cls ? "watching" : "off");
+    sp.append(st);
+    d.append(i, sp); rl.append(d);
+  });
+  $("t-ru").classList.toggle("alarm", rows.some(r => r[1] === "bad"));
+}
 </script>
 </body>
 </html>
