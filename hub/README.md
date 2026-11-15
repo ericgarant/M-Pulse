@@ -120,6 +120,11 @@ tablet the cards sit side by side, and on a phone they stack, with a tab bar
 at the bottom to jump between them. Everything is inside the one page the
 hub serves, so it needs no internet.
 
+Each card has a small (?) button in its header that opens help for that
+card: what each value and control means and how the automation behaves.
+The footer's *Alerts and screen help* explains the alerts, top bar and
+themes.
+
 - **Top bar**: a chip for each appliance with its link (green when
   connected, amber while connecting, red while searching) and its headline
   value: what the heater is doing, the temperature inside the fridge and the

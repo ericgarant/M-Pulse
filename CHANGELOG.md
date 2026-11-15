@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Help on every card**: a small (?) button in each card's header opens a
+  scrolling sheet that explains each value, control and mode, how the
+  automation behaves (Auto vs Monitor only, the comfort band, glow plug
+  rest, low-battery stop, fuel estimate, warning and reserve) and what the
+  alerts mean. The footer's "Alerts and screen help" covers the top bar,
+  alerts and themes. About 13 KB more page in flash.
 - **Heater fuel estimate** (no sensor): the hub tallies fuel from burn time
   and power setting (BougeRV's 0.18 to 0.53 L/h), learns the heater's real
   rate from the litres entered at each fill-up, and keeps it all in flash.
