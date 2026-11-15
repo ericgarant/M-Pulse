@@ -1,8 +1,10 @@
 //! Everything the hub knows, in one place.
 //!
-//! Each part of the firmware (heater, fridge and Bluetti links, cabin receiver, thermostat,
-//! dashboard) runs on its own thread and reads or writes this shared state.
-//! Hold the lock only long enough to copy values in or out.
+//! Each part of the firmware (heater, fridge and Bluetti links, cabin
+//! sensor and receiver, thermostat, dashboard) runs on its own thread and
+//! reads or writes this shared state. Hold the lock only long enough to copy
+//! values in or out: the BLE links take it from NimBLE's own task on every
+//! notification.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
@@ -12,6 +14,7 @@ use m_pulse_core::bluetti;
 use m_pulse_core::eco_guard::{self, EcoGuard};
 use m_pulse_core::fridge::{self, RunMode};
 use m_pulse_core::heater_cutoff::{self, Cutoff};
+use m_pulse_core::history::History;
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
 
@@ -171,12 +174,19 @@ pub struct Hub {
     pub sta_ip: Option<String>,
 }
 
+/// Handles to the hub's state, cheap to clone into each thread.
+///
+/// The trend history has its own lock, so serving it never holds up the
+/// links, and copying the live state never copies the history.
 #[derive(Clone)]
-pub struct Shared(Arc<Mutex<Hub>>);
+pub struct Shared {
+    hub: Arc<Mutex<Hub>>,
+    history: Arc<Mutex<History>>,
+}
 
 impl Shared {
     pub fn new(config: Config) -> Self {
-        Self(Arc::new(Mutex::new(Hub {
+        let hub = Arc::new(Mutex::new(Hub {
             cabin: None,
             heater: Heater::default(),
             fridge: Fridge::default(),
@@ -190,11 +200,26 @@ impl Shared {
                 smoothed_c: None,
             },
             sta_ip: None,
-        })))
+        }));
+        Self {
+            hub,
+            history: Arc::default(),
+        }
     }
 
     /// Locks the state. A panic on another thread never makes it unusable.
     pub fn lock(&self) -> MutexGuard<'_, Hub> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner())
+        self.hub.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// A copy of the state, taken under the lock and released at once, for
+    /// work that takes a while (such as writing the dashboard's JSON).
+    pub fn snapshot(&self) -> Hub {
+        self.lock().clone()
+    }
+
+    /// Locks the trend history.
+    pub fn history(&self) -> MutexGuard<'_, History> {
+        self.history.lock().unwrap_or_else(|e| e.into_inner())
     }
 }

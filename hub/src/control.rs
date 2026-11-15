@@ -1,8 +1,9 @@
 //! Thermostat control loop.
 //!
-//! Runs on its own thread: takes the latest cabin reading from the sensor
-//! node, smooths it, and asks the thermostat state machine whether the heater
-//! should be running. The decision is published for the dashboard.
+//! Runs on its own thread: takes the latest cabin reading (the hub's own
+//! DHT11, or the sensor node as a fallback), smooths it, and asks the
+//! thermostat state machine whether the heater should be running. The
+//! decision is published for the dashboard.
 //!
 //! In Monitor mode that is all it does. In Auto mode it also queues the
 //! switch command that moves the heater toward the decision.
@@ -12,7 +13,8 @@
 //! and keeps the thermostat from starting it.
 //!
 //! The same loop runs the fridge saver: Eco while the Bluetti is low, Max
-//! again once it has recovered (see `m_pulse_core::eco_guard`).
+//! again once it has recovered (see `m_pulse_core::eco_guard`), and records
+//! one point a minute for the dashboard's trend charts.
 
 use std::thread;
 use std::time::{Duration, Instant};
@@ -21,6 +23,8 @@ use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::filter::MedianFilter;
 use m_pulse_core::heater_cutoff;
+use m_pulse_core::history;
+use m_pulse_core::protocol::RunState;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
 
 use crate::state::{FridgeCommand, Mode, Shared};
@@ -63,14 +67,34 @@ fn control_loop(state: Shared) {
     let mut last_received: Option<Instant> = None;
     let mut smoothed: Option<Sample> = None;
     let mut last_decision: Option<Decision> = None;
-    // Steady clock for the fridge saver.
+    let mut last_mode = Mode::Monitor;
+    // Steady clock for the fridge saver and the history.
     let boot = Instant::now();
+    let mut next_point = boot;
 
     loop {
-        let (cabin, setpoint) = {
+        let (cabin, setpoint, mode, heater_now) = {
             let s = state.lock();
-            (s.cabin, s.control.config.setpoint_c)
+            (
+                s.cabin,
+                s.control.config.setpoint_c,
+                s.control.mode,
+                heater_on(&s.heater),
+            )
         };
+
+        // Auto takes over from what the heater is doing now, not from what
+        // the thermostat tracked while it was only watching.
+        if mode == Mode::Auto && last_mode != Mode::Auto {
+            if let Some(on) = heater_now {
+                thermostat.adopt(on);
+                info!(
+                    "Thermostat: in charge, heater is {}",
+                    if on { "on" } else { "off" }
+                );
+            }
+        }
+        last_mode = mode;
 
         // The dashboard changes the setpoint in the shared state.
         if (setpoint - thermostat.config().setpoint_c).abs() > 0.01 {
@@ -106,6 +130,12 @@ fn control_loop(state: Shared) {
                 drive_heater(&mut s, decision.heat);
             }
             save_fridge(&mut s, boot.elapsed().as_secs());
+            if Instant::now() >= next_point {
+                next_point += Duration::from_secs(history::STEP_S);
+                let point = trend_point(&s);
+                drop(s);
+                state.history().push(point);
+            }
         }
 
         if last_decision != Some(decision) {
@@ -115,6 +145,31 @@ fn control_loop(state: Shared) {
 
         thread::sleep(TICK);
     }
+}
+
+/// Whether the heater is burning or about to (`Some(true)`), fully off or
+/// cooling down (`Some(false)`), or unknown: not connected or no fresh
+/// status (`None`).
+fn heater_on(h: &crate::state::Heater) -> Option<bool> {
+    let fresh = h.connected && h.status_at.is_some_and(|at| at.elapsed() <= STATUS_MAX_AGE);
+    let status = h.status.filter(|_| fresh)?;
+    Some(matches!(status.state, RunState::On | RunState::Starting))
+}
+
+/// This minute, for the dashboard's trend history.
+fn trend_point(hub: &crate::state::Hub) -> history::Point {
+    let cabin = hub.control.smoothed_c;
+    let burning = hub.heater.connected
+        && hub
+            .heater
+            .status
+            .is_some_and(|st| actuator::is_running(&st));
+    history::Point::new(
+        cabin,
+        hub.control.config.setpoint_c,
+        burning,
+        bluetti_soc(hub),
+    )
 }
 
 /// Queues the switch command that moves the heater toward `want_heat`, if
@@ -222,7 +277,11 @@ fn save_fridge(hub: &mut crate::state::Hub, now_s: u64) {
         .fridge
         .status_at
         .is_some_and(|t| t.elapsed() <= FRIDGE_MAX_AGE);
-    let fridge = (hub.fridge.connected && fresh)
+    // While a command waits for the fridge link, the mode is about to
+    // change: the saver holds still rather than spend one of its tries on a
+    // change it cannot queue.
+    let settled = hub.fridge.pending.is_none();
+    let fridge = (hub.fridge.connected && fresh && settled)
         .then(|| hub.fridge.status.map(|s| s.mode))
         .flatten();
     let was_low = hub.saver.guard.low;
@@ -233,10 +292,6 @@ fn save_fridge(hub: &mut crate::state::Hub, now_s: u64) {
         }
         return;
     };
-    if hub.fridge.pending.is_some() {
-        // A dashboard command goes first; the saver tries again later.
-        return;
-    }
     info!("Fridge saver: Bluetti at {soc:?} %, switching the fridge to {mode:?}");
     hub.fridge.pending = Some(FridgeCommand::Mode(mode));
     hub.saver.last_action = Some((mode, Instant::now()));
