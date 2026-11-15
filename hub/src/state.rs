@@ -13,6 +13,7 @@ use m_pulse_core::actuator::Switch;
 use m_pulse_core::bluetti;
 use m_pulse_core::eco_guard::{self, EcoGuard};
 use m_pulse_core::fridge::{self, RunMode};
+use m_pulse_core::fuel;
 use m_pulse_core::heater_cutoff::{self, Cutoff};
 use m_pulse_core::history::History;
 use m_pulse_core::protocol::Status;
@@ -141,6 +142,18 @@ pub struct HeaterCutoff {
     pub tripped_at: Option<(u8, Instant)>,
 }
 
+/// The heater's fuel tank, as the hub works it out (see
+/// `m_pulse_core::fuel`). Saved to flash by the control loop.
+#[derive(Clone, Debug, Default)]
+pub struct Fuel {
+    pub config: fuel::Config,
+    pub gauge: fuel::Gauge,
+    /// When the reserve last stopped (or kept off) the heater.
+    pub reserve_since: Option<Instant>,
+    /// What the last fill to full did to the rate, for the dashboard.
+    pub last_fill: Option<(String, Instant)>,
+}
+
 /// Who is allowed to switch the heater.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -169,6 +182,7 @@ pub struct Hub {
     pub bluetti: Bluetti,
     pub saver: FridgeSaver,
     pub cutoff: HeaterCutoff,
+    pub fuel: Fuel,
     pub control: Control,
     /// The hub's address on your Wi-Fi network, once joined.
     pub sta_ip: Option<String>,
@@ -193,6 +207,7 @@ impl Shared {
             bluetti: Bluetti::default(),
             saver: FridgeSaver::default(),
             cutoff: HeaterCutoff::default(),
+            fuel: Fuel::default(),
             control: Control {
                 mode: Mode::Monitor,
                 config,

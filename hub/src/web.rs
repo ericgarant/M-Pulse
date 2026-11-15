@@ -20,6 +20,12 @@
 //!   `levels:<low>-<high>`, in percent of the Bluetti's charge)
 //! - set the heater's low-battery cutoff (`POST /api/cutoff`, body `on`,
 //!   `off` or `levels:<stop>-<resume>`)
+//! - keep the fuel estimate (`POST /api/fuel`): `full` (filled to the top),
+//!   `full:<litres added>` (filled to the top, with what went in, which
+//!   corrects the burn rate), `level:<litres>` (set by hand),
+//!   `tank:<litres>`, `warn:<percent>`, `reserve:<percent>`, `stop:on` or
+//!   `stop:off` (whether the reserve stops the heater), and
+//!   `reset-correction`
 //! - switch the Bluetti's outputs (`POST /api/bluetti`, body `ac:on`,
 //!   `ac:off`, `dc:on` or `dc:off`); see [`output_refusal`] for when the hub
 //!   says no
@@ -37,6 +43,7 @@ use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::bluetti::Output;
 use m_pulse_core::eco_guard;
 use m_pulse_core::fridge::RunMode;
+use m_pulse_core::fuel::{self, Fill};
 use m_pulse_core::heater_cutoff;
 use m_pulse_core::history;
 use m_pulse_core::protocol::{self, RunState};
@@ -339,6 +346,25 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         Ok(())
     })?;
 
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/fuel", Method::Post, move |mut req| {
+        let text = read_body(&mut req)?;
+        let result = {
+            let mut hub = s.lock();
+            apply_fuel(&mut hub, text.trim())
+        };
+        match result {
+            Ok(note) => {
+                warn!("Dashboard updated the fuel gauge ({}): {note}", text.trim());
+                req.into_ok_response()?.write_all(note.as_bytes())?;
+            }
+            Err(why) => {
+                req.into_status_response(400)?.write_all(why.as_bytes())?;
+            }
+        }
+        Ok(())
+    })?;
+
     server.fn_handler::<anyhow::Error, _>("/api/time", Method::Post, |mut req| {
         let text = read_body(&mut req)?;
         let Ok(secs) = text.trim().parse::<i64>() else {
@@ -379,6 +405,11 @@ fn manual_refusal(hub: &Hub, switch: Switch) -> Option<&'static str> {
             "The Bluetti battery is low, so heater starts are blocked until it recharges.",
         );
     }
+    if hub.fuel.gauge.at_reserve(&hub.fuel.config) {
+        return Some(
+            "The fuel estimate is down to the reserve, so heater starts are blocked. Refill and tap Tank full, or correct the level.",
+        );
+    }
     let Some(status) = h.status else {
         return Some("No status from the heater yet.");
     };
@@ -389,6 +420,101 @@ fn manual_refusal(hub: &Hub, switch: Switch) -> Option<&'static str> {
         RunState::Off => None,
         RunState::ShuttingDown => Some("The heater is cooling down. Wait until it is off."),
         RunState::On | RunState::Starting => Some("The heater is already on."),
+    }
+}
+
+/// Applies a fuel gauge change from the dashboard. Returns a short note for
+/// the page, or why the request was refused.
+fn apply_fuel(hub: &mut Hub, body: &str) -> Result<String, String> {
+    let f = &mut hub.fuel;
+    let config = f.config;
+    let litres = |v: &str| -> Result<f32, String> {
+        v.parse::<f32>()
+            .ok()
+            .filter(|l| l.is_finite() && *l >= 0.0)
+            .ok_or_else(|| format!("{v} is not a number of litres"))
+    };
+    let pct = |v: &str| -> Result<u8, String> {
+        v.parse::<u8>()
+            .map_err(|_| format!("{v} is not a whole percent"))
+    };
+    let range_msg = || format!("Levels go from {} to {} %.", fuel::MIN_PCT, fuel::MAX_PCT);
+    let (key, value) = body.split_once(':').unwrap_or((body, ""));
+    match (key, value) {
+        ("full", "") => {
+            f.gauge.fill_to_full(&config, None);
+            Ok("Tank set to full.".into())
+        }
+        ("full", added) => {
+            let added = litres(added)?;
+            if added > config.tank_l {
+                return Err(format!(
+                    "{added:.1} L is more than the {:.1} L tank holds.",
+                    config.tank_l
+                ));
+            }
+            let note = match f.gauge.fill_to_full(&config, Some(added)) {
+                Fill::Calibrated {
+                    correction,
+                    measured,
+                } => format!(
+                    "Tank set to full. This fill-up measured {measured:.2}× the manual's rate; the gauge now uses {correction:.2}×."
+                ),
+                Fill::Plain(Some(why)) => {
+                    format!("Tank set to full. The rate was not corrected: {why}.")
+                }
+                Fill::Plain(None) => "Tank set to full.".into(),
+            };
+            f.last_fill = Some((note.clone(), std::time::Instant::now()));
+            Ok(note)
+        }
+        ("level", v) => {
+            let l = litres(v)?;
+            if l > config.tank_l {
+                return Err(format!("The tank holds {:.1} L.", config.tank_l));
+            }
+            f.gauge.set_level(&config, l);
+            Ok(format!("Level set to {l:.1} L."))
+        }
+        ("tank", v) => {
+            let l = litres(v)?;
+            let c = config.with_tank(l).ok_or_else(|| {
+                format!(
+                    "Tank size goes from {:.0} to {:.0} L.",
+                    fuel::TANK_RANGE_L.start(),
+                    fuel::TANK_RANGE_L.end()
+                )
+            })?;
+            f.config = c;
+            // A level above the new size is cut to it.
+            if let Some(level) = f.gauge.level_l {
+                if level > c.tank_l {
+                    f.gauge.level_l = Some(c.tank_l);
+                }
+            }
+            Ok(format!("Tank size set to {l:.1} L."))
+        }
+        ("warn", v) => {
+            f.config = config.with_warn(pct(v)?).ok_or_else(range_msg)?;
+            Ok(format!("Low-fuel warning at {} %.", f.config.warn_pct))
+        }
+        ("reserve", v) => {
+            f.config = config.with_reserve(pct(v)?).ok_or_else(range_msg)?;
+            Ok(format!("Reserve at {} %.", f.config.reserve_pct))
+        }
+        ("stop", "on" | "off") => {
+            f.config.reserve_stop = value == "on";
+            Ok(if f.config.reserve_stop {
+                "The reserve stops the heater.".into()
+            } else {
+                "The reserve only warns now.".into()
+            })
+        }
+        ("reset-correction", "") => {
+            f.gauge.reset_correction();
+            Ok("Back to the manual's burn rate.".into())
+        }
+        _ => Err("Send full, full:<litres added>, level:<litres>, tank:<litres>, warn:<percent>, reserve:<percent>, stop:on, stop:off or reset-correction.".into()),
     }
 }
 
@@ -710,6 +836,41 @@ fn state_json(hub: &Hub) -> String {
         opt_str(
             co.tripped_at
                 .map(|(pct, when)| format!("at {pct} %, {} min ago", when.elapsed().as_secs() / 60))
+                .as_deref()
+        )
+    );
+
+    let fu = &hub.fuel;
+    let set_kw = hub.heater.status.map(|st| st.set_power_kw);
+    let num = |v: Option<f32>, places: usize| {
+        v.filter(|x| x.is_finite())
+            .map_or("null".to_string(), |x| format!("{x:.places$}"))
+    };
+    let _ = write!(
+        out,
+        "\"fuel\":{{\"level_l\":{},\"pct\":{},\"tank_l\":{:.1},\"warn_pct\":{},\"reserve_pct\":{},\"reserve_stop\":{},\
+         \"low\":{},\"reserve\":{},\"uncertain\":{},\"can_calibrate\":{},\"correction\":{:.3},\"calibrations\":{},\
+         \"rate_l_h\":{},\"hours_left\":{},\"reserve_since_min\":{},\"last_fill\":{}}},",
+        num(fu.gauge.level_l, 2),
+        num(fu.gauge.percent(&fu.config), 0),
+        fu.config.tank_l,
+        fu.config.warn_pct,
+        fu.config.reserve_pct,
+        fu.config.reserve_stop,
+        fu.gauge.low(&fu.config),
+        fu.gauge.at_reserve(&fu.config),
+        fu.gauge.uncertain,
+        fu.gauge.can_calibrate,
+        fu.gauge.correction,
+        fu.gauge.calibrations,
+        num(set_kw.map(|kw| fu.gauge.rate(kw)), 3),
+        num(set_kw.and_then(|kw| fu.gauge.hours_left(&fu.config, kw)), 1),
+        fu.reserve_since
+            .map_or("null".to_string(), |t| (t.elapsed().as_secs() / 60).to_string()),
+        opt_str(
+            fu.last_fill
+                .as_ref()
+                .map(|(note, when)| format!("{note} ({} min ago)", when.elapsed().as_secs() / 60))
                 .as_deref()
         )
     );
