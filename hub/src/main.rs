@@ -8,7 +8,8 @@
 //! After every restart the hub is in Monitor mode and the thermostat sends
 //! no switch commands. The heater is switched only from the dashboard's On
 //! and Off buttons, by the thermostat once Auto mode is chosen there, or
-//! switched off by the low-battery stop when the Bluetti runs low.
+//! switched off by the low-battery stop when the Bluetti runs low, or by the
+//! fuel reserve when the hub's fuel estimate says the tank is nearly empty.
 //!
 //! The classic ESP32 could not hold this heater's BLE link (the heater went
 //! silent about 11 s into every connection), while the S3 holds it, so the
@@ -20,6 +21,7 @@ mod clock;
 mod control;
 mod dht;
 mod fridge;
+mod fuel_store;
 mod heater;
 mod net;
 mod radio;
@@ -34,7 +36,7 @@ use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::sntp::EspSntp;
 use esp_idf_svc::timer::EspTaskTimerService;
-use log::info;
+use log::{info, warn};
 use m_pulse_core::thermostat::Config;
 
 fn main() -> anyhow::Result<()> {
@@ -50,6 +52,23 @@ fn main() -> anyhow::Result<()> {
 
     let state = state::Shared::new(Config::default());
 
+    // The fuel gauge lives in flash. Without it the gauge still works, but
+    // starts unknown after every restart.
+    let fuel_store = match fuel_store::FuelStore::open(nvs.clone()) {
+        Ok((store, saved)) => {
+            if let Some(saved) = saved {
+                let mut s = state.lock();
+                s.fuel.config = saved.config;
+                s.fuel.gauge = saved.gauge;
+            }
+            Some(store)
+        }
+        Err(err) => {
+            warn!("Fuel gauge: flash not available, it will not survive a restart: {err}");
+            None
+        }
+    };
+
     net::start(peripherals.modem, sysloop, nvs, state.clone())?;
     // Sets the clock whenever the hub reaches the internet. Kept alive for
     // the life of the firmware.
@@ -59,7 +78,7 @@ fn main() -> anyhow::Result<()> {
     // free on any ESP32-S3 module: not a strapping, flash, PSRAM or USB pin.
     dht::spawn(peripherals.pins.gpio4, state.clone())?;
     cabin::spawn(state.clone())?;
-    control::spawn(state.clone())?;
+    control::spawn(state.clone(), fuel_store)?;
     let _server = web::start(state.clone())?;
 
     let timers = EspTaskTimerService::new()?;

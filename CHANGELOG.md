@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Heater fuel estimate** (no sensor): the hub tallies fuel from burn time
+  and power setting (BougeRV's 0.18 to 0.53 L/h), learns the heater's real
+  rate from the litres entered at each fill-up, and keeps it all in flash.
+  New Heater fuel card on the dashboard with Tank full, a low-fuel warning
+  (default 15 %) and a reserve (default 15 %) that stops the heater cleanly
+  and blocks starts. `POST /api/fuel`; logic in `core/src/fuel.rs`.
+
 ## v1.0.0 (15 Nov 2026)
 
 The first release: everything built up to and including PR #21. Firmware
