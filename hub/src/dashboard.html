@@ -466,6 +466,25 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 @media (max-width: 440px) { .brand > div:last-child { display: none; } }
 @media (max-width: 340px) { .chips { display: none; } }
 
+/* ---------- Help: a (?) on each card opens a scrolling sheet ---------- */
+.card-h .help { margin-left: auto; }
+.card-h .badge + .help { margin-left: 0; }
+.help { position: relative; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--faint); border: 1px solid var(--line); transition: color .2s, transform .15s var(--ease); }
+.help::before { content: ""; position: absolute; inset: -8px; } /* a finger-sized hit area */
+.help:hover, .help:active { color: var(--fg); }
+.help:active { transform: scale(.9); }
+.help svg { width: 18px; height: 18px; }
+#help .panel { width: min(560px, calc(100% - 24px)); max-height: min(82vh, 760px); padding: 0; text-align: left; display: flex; flex-direction: column; }
+#help .hh { display: flex; align-items: center; gap: 12px; padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+#help .hh h3 { margin: 0; font-size: 19px; flex: 1; }
+#help .hh .si { width: 40px; height: 40px; border-radius: 13px; margin: 0; }
+#help .hh .si svg { width: 22px; height: 22px; }
+#help .hx { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: var(--btn); color: var(--btn-fg); flex: none; }
+#help .hb { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 6px 20px 22px; }
+#help .hb h4 { margin: 16px 0 4px; font-size: 15.5px; }
+#help .hb p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; text-align: left; }
+#help .hb p + p { margin-top: 6px; }
+
 /* ---------- Sheet and toast ---------- */
 .sheet { position: fixed; inset: 0; z-index: 50; display: grid; align-items: end; justify-items: center; }
 @media (min-width: 720px) { .sheet { align-items: center; } }
@@ -526,6 +545,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 2.2-2.4 3.7M12 17.2v.01"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5v.01"/></symbol>
 </svg>
 
@@ -554,6 +574,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
       <div class="ic heat"><svg class="i"><use href="#i-flame"/></svg></div>
       <h2 id="h-climate">Climate</h2>
       <span class="badge" id="modebadge">--</span>
+      <button class="help" data-help="climate" aria-label="Help: Climate"><svg class="i"><use href="#i-help"/></svg></button>
     </div>
     <div class="climate-body">
       <div class="climate-main">
@@ -660,6 +681,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
       <div class="ic ice"><svg class="i"><use href="#i-snow"/></svg></div>
       <h2 id="h-fridge">Fridge</h2>
       <span class="badge" id="f-badge">--</span>
+      <button class="help" data-help="fridge" aria-label="Help: Fridge"><svg class="i"><use href="#i-help"/></svg></button>
     </div>
     <div class="fbody">
       <div class="fring">
@@ -700,6 +722,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
       <div class="ic go"><svg class="i"><use href="#i-bolt"/></svg></div>
       <h2 id="h-power">Power</h2>
       <span class="badge" id="b-badge">--</span>
+      <button class="help" data-help="power" aria-label="Help: Power"><svg class="i"><use href="#i-help"/></svg></button>
     </div>
     <div class="pwr-sum">
       <div class="big"><span class="num" id="b-soc">--</span><span class="unit">%</span></div>
@@ -742,6 +765,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
       <div class="ic heat"><svg class="i"><use href="#i-drop"/></svg></div>
       <h2 id="h-fuel">Heater fuel</h2>
       <span class="badge" id="fu-badge">--</span>
+      <button class="help" data-help="fuel" aria-label="Help: Heater fuel"><svg class="i"><use href="#i-help"/></svg></button>
     </div>
     <div class="fuel-sum">
       <div class="big"><span class="num" id="fu-l">--</span><span class="unit">L</span> <span class="unit" id="fu-pct"></span></div>
@@ -780,6 +804,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
     <div class="card-h">
       <div class="ic warn"><svg class="i"><use href="#i-shield"/></svg></div>
       <h2 id="h-rules">Battery rules</h2>
+      <button class="help" data-help="rules" aria-label="Help: Battery rules"><svg class="i"><use href="#i-help"/></svg></button>
     </div>
     <div class="rules">
       <div class="rule" id="r-cutoff">
@@ -810,6 +835,7 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
   <span>On your Wi-Fi <b id="ip">--</b></span>
   <span id="updated">Connecting…</span>
   <button class="btn" id="clockbtn" hidden>Set clock from this device</button>
+  <button class="btn" data-help="screen"><svg class="i"><use href="#i-help"/></svg>Alerts and screen help</button>
 </footer>
 
 <nav class="tabs" aria-label="Sections">
@@ -827,6 +853,14 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
     <h3 id="sh-title"></h3>
     <p id="sh-body"></p>
     <div class="row2"><button class="btn" id="sh-no">Cancel</button><button class="btn heat" id="sh-yes">OK</button></div>
+  </div>
+</div>
+<div class="sheet" id="help" hidden>
+  <div class="scrim" id="hl-scrim"></div>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="hl-title">
+    <div class="hh"><div class="si ic" id="hl-icon"><svg class="i"><use href="#i-help"/></svg></div><h3 id="hl-title"></h3>
+      <button class="hx" id="hl-x" aria-label="Close help"><svg class="i"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></button></div>
+    <div class="hb" id="hl-body"></div>
   </div>
 </div>
 <div id="toasts" aria-live="assertive"></div>
@@ -983,6 +1017,91 @@ function ask({ title, body, yes = "OK", icon = "warn", danger = false }) {
 $("sh-yes").onclick = () => sheetDone && sheetDone(true);
 $("sh-no").onclick = $("sh-scrim").onclick = () => sheetDone && sheetDone(false);
 addEventListener("keydown", e => { if (e.key === "Escape" && sheetDone) sheetDone(false); });
+
+/* ---------- Help sheets: what each card shows and does ---------- */
+// One entry per card: [title, icon, [heading, text]...]. Plain text only,
+// rendered with textContent. Keep it short: it lives in the hub's flash.
+const HELP = {
+  climate: ["Climate and heater", "heat", [
+    ["Cabin", "Temperature and humidity from the hub's own DHT11 sensor, taken every 5 s and smoothed over the last few readings. If the hub's sensor stops answering, the sensor node takes over and the card says \"sensor node\". With no fresh reading for 2 minutes the thermostat keeps the heat off."],
+    ["Dial", "The coloured arc is the cabin temperature. The light band is the comfort band, and the knob marks the target."],
+    ["Target and comfort band", "Set with − and + in 0.5° steps, from 5 to 30 °C. The value turns amber until the hub confirms it. The thermostat asks for heat when the cabin drops below the target minus 1 °C and stops at the target plus 1 °C. That 2 °C band is the hysteresis: it keeps the heater from cycling on small changes."],
+    ["Glow plug protection", "Every start heats the glow plug, which wears it. Once started, the heater runs at least 10 minutes, and once stopped it rests at least 10 minutes before starting again, even if the cabin asks sooner."],
+    ["Thermostat line", "What the thermostat wants right now and why: below the band (wants heat), inside the band (holding), warm enough, finishing the minimum run, resting the glow plug, or no fresh cabin reading."],
+    ["Monitor only and Auto", "Monitor only: the thermostat still decides and shows its reasoning, but never switches the heater. Auto: the hub starts and stops the heater to hold the target. The hub always starts in Monitor only after a restart. In Auto, a start is retried up to 3 times; if the heater still does not light, Auto pauses until you check the heater and press Auto again."],
+    ["Heater ON and OFF", "Switch the heater by hand. A manual command puts the thermostat in Monitor only so it does not undo what you did. OFF always lets the heater run its full cool-down: never cut its power while the fan is running. Starts are refused while the Bluetti low-battery stop or the fuel reserve holds the heater off."],
+    ["Heater status", "Searching: looking for the heater over Bluetooth. Igniting: the glow plug is heating the burner, about 4 to 5 minutes. Running: burning steadily. Cooling down: the fan clears and cools the burner after a stop. Fault: the heater reports an error code; clear it at the heater. Flame, Glow, Pump and Fan light up when that part is working."],
+    ["Heater power", "The heat output, 1.0 to 5.0 kW in 0.1 kW steps, like + and − on the heater's remote. More power heats faster and burns more fuel, from about 0.18 L/h at 1.4 kW to 0.53 L/h at 5 kW. Changing it never switches the heater on or off. The badges show how long it has been burning and its supply voltage."],
+    ["Cabin, last 4 h", "The cabin temperature with the comfort band and orange marks where the heater burned. Touch and slide along it to read a moment. The hub keeps these readings in memory, so they start over when it restarts."],
+    ["Heater details", "Raw values from the heater for troubleshooting: link, state, parts, power, supply, its own clock and set temperature, the last command sent and the raw status bytes."],
+  ]],
+  fridge: ["Fridge", "ice", [
+    ["Inside", "The temperature inside the BougeRV fridge, as the fridge reports it over Bluetooth."],
+    ["Target", "Set with − and + in 1° steps, within the range the fridge accepts. The value turns amber until the fridge confirms it."],
+    ["Eco and Max", "Max cools as fast as the compressor can. Eco cools more gently and uses less battery. The Fridge saver rule can switch between them for you when the Bluetti runs low."],
+    ["Power", "Switches the fridge on or off. The hub asks before switching it off, since the food will warm up."],
+    ["Badge and alert", "The badge shows the mode, Off, or Searching when the fridge is out of reach. Too warm means the inside has stayed more than 4 °C above the target for 30 minutes: check the lid and the power."],
+    ["Fridge details", "Input voltage, the fridge's own battery protection level (Low, Medium or High, set at the fridge), whether its panel is locked, and the last command sent."],
+  ]],
+  power: ["Power", "go", [
+    ["Charge", "The Bluetti's state of charge. On the right is its own estimate of time to full while charging, or time to empty while discharging, or the net watts when it has no estimate."],
+    ["Flow", "Solar and Charger are what flows in, AC out and DC out what flows out, in watts. The moving lines show where power is going. The battery turns orange at 50 % and red at 20 %."],
+    ["AC outlets and DC outputs", "Switch the Bluetti's outputs. DC covers the 12 V and USB ports. The hub asks before switching one off. A dimmed switch is one this hub is set to keep on, because something important runs from it, so it cannot be switched off from here."],
+    ["Charge, last 4 h", "The charge over the last four hours since the hub's last restart, with the heater's low-battery stop level drawn as a red line when it is on. Touch and slide along it to read a moment."],
+  ]],
+  fuel: ["Heater fuel", "heat", [
+    ["How it is worked out", "The heater has no fuel sensor, so the hub estimates the level: it starts from a full tank and takes off fuel for every minute the heater burns, at the rate BougeRV's manual gives for the power setting. It is an estimate, not a measurement, and it is saved on the hub so it survives restarts."],
+    ["Tank full", "Tap it every time you fill the tank to the top. Until the first time, the level is unknown and neither the warning nor the reserve acts."],
+    ["Litres added", "Optional, but it makes the estimate better. Enter how many litres went in at the fill-up before tapping Tank full: the hub compares that with what it thought was burned and corrects its burn rate for your heater. Each fill-up refines it."],
+    ["Uncertain", "Shown when the heater burned while the hub could not see it, for example after a hub restart or a lost Bluetooth link. The hub counts on at the last power for up to an hour so it reads low rather than high, but check the tank and set the level by hand if needed. The next Tank full clears it."],
+    ["Warning and reserve", "The bar's marks show both levels, 15 % by default. At the warning, the hub raises a low fuel alert. At the reserve, it stops a burning heater with its normal OFF, so it gets its full cool-down, and refuses new starts until you refill and tap Tank full, or correct the level. Running a diesel heater dry usually means a failed start and priming the fuel line."],
+    ["Reserve stops the heater", "Turn it off to only warn at the reserve and let the heater keep running."],
+    ["Fuel settings", "Set the level by hand after a partial fill or a check, and set the tank size (5 L by default). Burn rate now is the rate at the current power; Rate vs the manual shows the correction learned from fill-ups. Use the manual's rate again forgets that correction."],
+  ]],
+  rules: ["Battery rules", "warn", [
+    ["Heater low-battery stop", "When the Bluetti drops to the stop level (15 % by default), the hub stops the heater cleanly, with its full cool-down, and blocks starts until the Bluetti is back to the restart level (25 % by default). It protects the battery the heater needs to cool down safely. It is on after every hub restart."],
+    ["Fridge saver", "When the Bluetti drops to the Eco level (30 % by default), the hub puts the fridge in Eco to save power, and back to Max once the Bluetti reaches the Max level (50 % by default). It is off after every hub restart."],
+    ["Levels", "Change in 5 % steps and are sent a moment after you stop tapping. The restart or Max level always stays at least 5 % above the lower one, so the rule does not flip back and forth. They go back to the defaults when the hub restarts."],
+    ["Status line", "Watching the battery: the rule is on and nothing needs doing. Heater stopped, or Holding the fridge in Eco: the rule is acting now and will let go at the higher level. Off: the rule is switched off. Under the Fridge saver, Last change says what it last did and when."],
+  ]],
+  screen: ["Alerts and screen", "warn", [
+    ["Alerts", "Shown at the top while the problem lasts and gone on their own once it clears. Red needs action now: the hub is out of reach, the Bluetti low-battery stop tripped, a heater fault code, fuel at the reserve, or the fridge staying too warm. Amber is a heads-up: fuel low, the Bluetti at 20 % or below, the heater did not start after 3 tries, or no fresh reading from the cabin sensor."],
+    ["Top bar", "The pulse logo beats each time fresh data arrives from the hub. The chips give a quick status of the heater, fridge and Bluetti; tap one to jump to its card. The button on the right cycles the theme: Dark, Night (dim red, kind to night vision) and Light."],
+    ["Footer", "The hub's clock and its address on your Wi-Fi. If the hub's clock is not set, this device sends its own time; the button does it again by hand."],
+    ["Taps and scrolling", "Buttons act only on a deliberate tap. A touch that scrolls the page, or lands while it is still moving, does nothing. Hold − or + to repeat."],
+    ["Offline", "If the hub cannot be reached, the cards dim and the page keeps retrying. Check that this device is on the M-Pulse Wi-Fi."],
+  ]],
+};
+let helpFrom = null;
+function openHelp(key, from) {
+  const [title, icon, parts] = HELP[key];
+  if (sheetDone) sheetDone(false);
+  $("hl-icon").className = "si ic " + icon;
+  $("hl-title").textContent = title;
+  const body = $("hl-body");
+  body.textContent = "";
+  parts.forEach(([h, t]) => {
+    const hd = document.createElement("h4"), tx = document.createElement("p");
+    hd.textContent = h; tx.textContent = t;
+    body.append(hd, tx);
+  });
+  body.scrollTop = 0;
+  const sheet = $("help");
+  sheet.classList.remove("closing");
+  sheet.hidden = false;
+  helpFrom = from;
+  $("hl-x").focus();
+}
+function closeHelp() {
+  const sheet = $("help");
+  if (sheet.hidden || sheet.classList.contains("closing")) return;
+  sheet.classList.add("closing");
+  setTimeout(() => { if (sheet.classList.contains("closing")) sheet.hidden = true; }, 200);
+  if (helpFrom) helpFrom.focus({ preventScroll: true });
+}
+document.querySelectorAll("[data-help]").forEach(b => b.onclick = () => openHelp(b.dataset.help, b));
+$("hl-x").onclick = $("hl-scrim").onclick = closeHelp;
+addEventListener("keydown", e => { if (e.key === "Escape") closeHelp(); });
 
 /* ---------- Theme and full screen ---------- */
 const THEMES = ["dark", "night", "light"];
