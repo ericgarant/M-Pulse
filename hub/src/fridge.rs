@@ -219,7 +219,16 @@ async fn stay_connected(
                     // Let the fridge apply it before the next query.
                     timer.after(Duration::from_millis(300)).await?;
                 }
-                Err(why) => warn!("Fridge command {command:?} not sent: {why}"),
+                Err(why) => {
+                    warn!("Fridge command {command:?} not sent: {why}");
+                    // Retry on the next poll unless something newer came in.
+                    if why == WAIT_FOR_STATUS {
+                        let mut s = state.lock();
+                        if s.fridge.pending.is_none() {
+                            s.fridge.pending = Some(command);
+                        }
+                    }
+                }
             }
         }
 
@@ -234,20 +243,29 @@ async fn stay_connected(
     anyhow::bail!("link lost")
 }
 
+/// Why a settings write is held back for one poll.
+const WAIT_FOR_STATUS: &str = "waiting for the fridge to report the last change";
+
 /// The bytes for a dashboard command, checked against the last status.
 fn command_frame(state: &Shared, command: FridgeCommand) -> Result<Vec<u8>, &'static str> {
-    let (status, at) = {
+    let (status, at, last_sent) = {
         let s = state.lock();
-        (s.fridge.status, s.fridge.status_at)
+        (s.fridge.status, s.fridge.status_at, s.fridge.last_sent)
     };
     let (Some(status), Some(at)) = (status, at) else {
         return Err("no status yet");
     };
+    // A settings write carries every setting from the last status. If that
+    // status is older than the last command, it does not show that change
+    // yet, and writing it back would undo it (power off, then Eco straight
+    // after, would switch the fridge back on).
+    let predates_last = last_sent.is_some_and(|(_, sent)| at <= sent);
     match command {
         FridgeCommand::SetTemp(t) => Ok(fridge::set_temp_frame(
             t.clamp(status.min_temp, status.max_temp),
         )),
         _ if at.elapsed() > SETTINGS_MAX_AGE => Err("status too old to rewrite settings"),
+        _ if predates_last => Err(WAIT_FOR_STATUS),
         FridgeCommand::Power(on) => Ok(status.power_frame(on)),
         FridgeCommand::Mode(mode) => Ok(status.mode_frame(mode)),
     }

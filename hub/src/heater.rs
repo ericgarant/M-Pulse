@@ -237,12 +237,24 @@ async fn stay_connected(
             }
         }
 
-        let queued = state.lock().heater.pending.take();
+        // Taking a command and recording it as sent happen under one lock.
+        // Recorded only after the write, the thermostat could find neither a
+        // pending command nor the new last one while the write was in
+        // flight, queue the same switch again and use up a start attempt.
+        // If the write fails the link is rebuilt, and the heater's next
+        // status shows whether it took the command.
+        let queued = {
+            let mut s = state.lock();
+            let switch = s.heater.pending.take();
+            if let Some(switch) = switch {
+                s.heater.last_sent = Some((switch, Instant::now()));
+            }
+            switch
+        };
         if let Some(switch) = queued {
             let frame = protocol::switch_frame(switch);
             warn!("Switching heater {switch:?}: writing {}", describe(&frame));
             write_command(client, &frame).await?;
-            state.lock().heater.last_sent = Some((switch, Instant::now()));
         }
 
         let queued = state.lock().heater.pending_power.take();
@@ -257,8 +269,8 @@ async fn stay_connected(
                         kw_x10 % 10,
                         describe(&frame)
                     );
-                    write_command(client, &frame).await?;
                     state.lock().heater.last_power_sent = Some((kw_x10, Instant::now()));
+                    write_command(client, &frame).await?;
                 }
                 None => warn!("Dropped out-of-range power level {kw_x10}"),
             }

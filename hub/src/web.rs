@@ -1,13 +1,15 @@
 //! Dashboard served by the hub.
 //!
-//! `/` is a single page that polls `/api/state` every two seconds. The page
-//! can:
+//! `/` is a single page that polls `/api/state` every two seconds, and
+//! `/api/history` (the last four hours, one point a minute) every minute
+//! for its trend charts. The page can:
 //!
 //! - change the setpoint (`POST /api/setpoint`, body `18.5`)
 //! - choose who switches the heater (`POST /api/mode`, body `auto` or
 //!   `monitor`)
 //! - switch the heater by hand (`POST /api/heater`, body `on` or `off`),
-//!   which also drops back to Monitor mode so the thermostat does not undo it
+//!   which also drops back to Monitor mode so the thermostat does not undo
+//!   it (a refused command leaves the mode alone)
 //! - set the heater's burn power (`POST /api/power`, body in kW such as
 //!   `2.3`), like the + and - buttons on the heater's LCD remote; this does
 //!   not change the mode, because the thermostat only ever switches the
@@ -36,6 +38,7 @@ use m_pulse_core::bluetti::Output;
 use m_pulse_core::eco_guard;
 use m_pulse_core::fridge::RunMode;
 use m_pulse_core::heater_cutoff;
+use m_pulse_core::history;
 use m_pulse_core::protocol::{self, RunState};
 
 use crate::clock;
@@ -77,7 +80,18 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
 
     let s = state.clone();
     server.fn_handler::<anyhow::Error, _>("/api/state", Method::Get, move |req| {
-        let body = state_json(&s.lock());
+        // Written from a copy, so the links (whose BLE callbacks take the
+        // same lock) never wait on the formatting.
+        let body = state_json(&s.snapshot());
+        req.into_response(200, None, &[("Content-Type", "application/json")])?
+            .write_all(body.as_bytes())?;
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/history", Method::Get, move |req| {
+        let rows = s.history().json_rows();
+        let body = format!("{{\"step_s\":{},\"points\":{rows}}}", history::STEP_S);
         req.into_response(200, None, &[("Content-Type", "application/json")])?
             .write_all(body.as_bytes())?;
         Ok(())
@@ -135,10 +149,11 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         };
         let refusal = {
             let mut hub = s.lock();
-            // A manual command takes the thermostat out of the loop.
-            hub.control.mode = Mode::Monitor;
             let refusal = manual_refusal(&hub, switch);
             if refusal.is_none() {
+                // A manual command takes the thermostat out of the loop. A
+                // refused one changes nothing, so Auto stays in charge.
+                hub.control.mode = Mode::Monitor;
                 hub.heater.pending = Some(switch);
             }
             refusal
@@ -259,11 +274,7 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
                     enabled: false,
                     ..config
                 }),
-                other => other
-                    .strip_prefix("levels:")
-                    .and_then(|l| l.split_once('-'))
-                    .and_then(|(lo, hi)| Some((lo.parse().ok()?, hi.parse().ok()?)))
-                    .and_then(|(lo, hi)| config.with_levels(lo, hi)),
+                other => parse_levels(other).and_then(|(lo, hi)| config.with_levels(lo, hi)),
             };
             if let Some(c) = new {
                 hub.saver.config = c;
@@ -303,11 +314,7 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
                     enabled: false,
                     ..config
                 }),
-                other => other
-                    .strip_prefix("levels:")
-                    .and_then(|l| l.split_once('-'))
-                    .and_then(|(lo, hi)| Some((lo.parse().ok()?, hi.parse().ok()?)))
-                    .and_then(|(lo, hi)| config.with_levels(lo, hi)),
+                other => parse_levels(other).and_then(|(lo, hi)| config.with_levels(lo, hi)),
             };
             if let Some(c) = new {
                 hub.cutoff.config = c;
@@ -334,10 +341,18 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
 
     server.fn_handler::<anyhow::Error, _>("/api/time", Method::Post, |mut req| {
         let text = read_body(&mut req)?;
+        let Ok(secs) = text.trim().parse::<i64>() else {
+            req.into_status_response(400)?
+                .write_all(b"body must be Unix time in seconds")?;
+            return Ok(());
+        };
         // Internet time wins; only fill in a clock that was never set.
         if clock::unix_now().is_none() {
-            let secs: i64 = text.trim().parse()?;
-            clock::set_unix(secs)?;
+            if let Err(err) = clock::set_unix(secs) {
+                req.into_status_response(400)?
+                    .write_all(err.to_string().as_bytes())?;
+                return Ok(());
+            }
             info!("Dashboard set the clock: {:?}", clock::local_now());
         }
         req.into_ok_response()?.write_all(b"ok")?;
@@ -403,6 +418,12 @@ fn power_refusal(hub: &Hub) -> Option<&'static str> {
         return Some("The heater reports a fault. Clear it at the heater first.");
     }
     None
+}
+
+/// Parses `levels:<low>-<high>` (whole percent) for the battery rules.
+fn parse_levels(text: &str) -> Option<(u8, u8)> {
+    let (lo, hi) = text.strip_prefix("levels:")?.split_once('-')?;
+    Some((lo.parse().ok()?, hi.parse().ok()?))
 }
 
 fn parse_output_command(text: &str) -> Option<OutputCommand> {

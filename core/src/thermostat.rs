@@ -106,6 +106,26 @@ impl Thermostat {
         self.heat
     }
 
+    /// Takes over what the heater is actually doing, for the moment the
+    /// thermostat is given control (Monitor to Auto).
+    ///
+    /// In Monitor mode the thermostat only tracks what it would do, so its
+    /// idea of "on" can disagree with the heater, which may have been
+    /// switched by hand. Without this, a heater started by hand and then
+    /// handed to Auto with the cabin inside the deadband was switched off at
+    /// once, because the deadband keeps the thermostat's own (off) state.
+    ///
+    /// A change of state clears the timer, so the minimum on and off times
+    /// are not counted from a switch the thermostat never made. The heater's
+    /// own glow plug protection still applies: the hub counts those times
+    /// from the last command actually sent (`actuator::should_send`).
+    pub fn adopt(&mut self, heat: bool) {
+        if self.heat != heat {
+            self.heat = heat;
+            self.changed_at = None;
+        }
+    }
+
     /// Feeds in the latest sample, if any, and returns what the heater should
     /// be doing at `now`. Call this regularly, even without a new sample, so
     /// a lost sensor is noticed.
@@ -357,6 +377,36 @@ mod tests {
 
         // Ten minutes after the real switch-off, heat may start again.
         assert!(feed(&mut t, t0 + 20 * MIN, 16.0).heat);
+    }
+
+    #[test]
+    fn adopting_a_running_heater_keeps_it_on_in_the_deadband() {
+        let mut t = Thermostat::new(config());
+        let t0 = Instant::now();
+        // Monitor: the thermostat thinks heat is off.
+        assert!(!feed(&mut t, t0, 18.5).heat);
+        // The heater was started by hand; Auto takes over inside the band.
+        t.adopt(true);
+        let d = feed(&mut t, t0 + MIN, 18.5);
+        assert_eq!(
+            d,
+            Decision {
+                heat: true,
+                reason: Reason::InDeadband
+            }
+        );
+        // Warm enough: stops without waiting for a minimum on time it never
+        // started.
+        assert!(!feed(&mut t, t0 + 2 * MIN, 19.5).heat);
+    }
+
+    #[test]
+    fn adopting_the_same_state_keeps_the_timers() {
+        let mut t = Thermostat::new(config());
+        let t0 = Instant::now();
+        assert!(feed(&mut t, t0, 16.0).heat);
+        t.adopt(true);
+        assert_eq!(feed(&mut t, t0 + MIN, 19.5).reason, Reason::HoldingMinOn);
     }
 
     #[test]
