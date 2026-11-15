@@ -120,13 +120,16 @@ tablet the cards sit side by side, and on a phone they stack, with a tab bar
 at the bottom to jump between them. Everything is inside the one page the
 hub serves, so it needs no internet.
 
-- **Top bar**: a dot for each link (heater, fridge, Bluetti): green when
-  connected, amber while connecting, red while searching. Tap one to jump to
-  its card. The logo pulses each time fresh data arrives. The buttons on the
+- **Top bar**: a chip for each appliance with its link (green when
+  connected, amber while connecting, red while searching) and its headline
+  value: what the heater is doing, the temperature inside the fridge and the
+  Bluetti's charge. A chip turns red with that appliance's alarm (heater
+  fault, warm fridge, charge at 20 % or below). Tap one to jump to its card. The logo pulses each time fresh data arrives. The buttons on the
   right change the theme (dark, a dim red *Night* theme for after dark, and
   light; each device remembers its choice) and go full screen.
 - **Alerts** appear in a strip under the top bar: the low-battery stop
-  holding the heater off, the fridge warm alert, a heater that did not start
+  holding the heater off, a heater fault code, the Bluetti at 20 % or below,
+  the fridge warm alert, a heater that did not start
   after 3 tries, a cabin sensor that is missing or more than 2 minutes old,
   and a hub that has not answered for 12 s. When the hub cannot be reached,
   the cards also fade until it answers again.
@@ -135,6 +138,11 @@ hub serves, so it needs no internet.
     the target as a knob and the comfort band (target ± 1 °C, where the
     thermostat holds its state) as a lighter stretch of track. Humidity and
     the reading's age sit in the middle.
+  - *Cabin, last 4 h* charts the cabin temperature against the comfort
+    band, with a strip along the bottom for the minutes the heater was
+    burning. Touch or hover for the values at any minute. The hub keeps
+    one point a minute in memory, so the chart starts empty after a
+    restart and fills over four hours.
   - **+** and **−** change the target in 0.5 °C steps. Hold a button to
     keep stepping. Quick taps add up and go to the hub as one change; the
     target shows amber until the hub has it.
@@ -167,8 +175,9 @@ hub serves, so it needs no internet.
   - **Heater ON** (asks first) and **Heater OFF** switch the heater now. Any
     manual press puts the hub back in Monitor only, so the thermostat does
     not undo it. Heater ON is refused while the heater reports a fault, is
-    not fully off, or the low-battery stop is holding it off; the reason
-    shows in a note at the bottom of the screen.
+    not fully off, or the low-battery stop is holding it off, so the button
+    is greyed out then, with the reason under it. A refused press leaves
+    Auto in charge.
   - *Heater details* opens the raw readings: link, state, parts, power,
     the heater's own set temperature, supply voltage, whether the hub has
     set the heater's clock, the last power change, error code, firmware,
@@ -193,7 +202,8 @@ hub serves, so it needs no internet.
   some Offs (see [Bluetti output switches](#bluetti-output-switches)); the
   reason shows in a note at the bottom of the screen. *Battery details* has
   the voltage and current, and the last switch command and whether the
-  Bluetti took it.
+  Bluetti took it. *Charge, last 4 h* charts the charge, with the heater's
+  low-battery stop level marked.
 - **Battery rules**:
   - *Heater low-battery stop*: a switch (turning it off asks first), the
     stop and restart levels, and what it is doing now.
@@ -381,10 +391,14 @@ port to use. The hub is the one listed as `USB Single Serial` (on this Mac,
 The dashboard page is built into the firmware, so changing it means
 reflashing the hub. After a flash the hub is back in Monitor only.
 
-To work on the dashboard without the hub, serve `src/dashboard.html` from
-any small web server that also answers `GET /api/state` with a saved copy of
-the hub's JSON. The page only talks to the routes listed at the top of
-[`src/web.rs`](src/web.rs).
+To work on the dashboard without the hub, run the mock hub, which serves
+`src/dashboard.html` with made-up readings and answers every route the page
+uses (listed at the top of [`src/web.rs`](src/web.rs)):
+
+```sh
+python3 tools/mock_hub.py              # http://127.0.0.1:8700, heater burning
+python3 tools/mock_hub.py --scenario alerts   # low battery, fault, warm fridge
+```
 
 ## Tested
 
