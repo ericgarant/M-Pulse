@@ -157,8 +157,8 @@ themes.
   the cards also fade until it answers again.
 - **Climate**:
   - The dial shows the cabin temperature against a 5 to 30 °C scale, with
-    the target as a knob and the comfort band (target ± 1 °C, where the
-    thermostat holds its state) as a lighter stretch of track. Humidity and
+    the target as a knob and the comfort band (target ± 1 °C by default,
+    where the thermostat holds its state) as a lighter stretch of track. Humidity and
     the reading's age sit in the middle.
   - *Cabin, last 4 h* charts the cabin temperature against the comfort
     band, with a strip along the bottom for the minutes the heater was
@@ -168,6 +168,13 @@ themes.
   - **+** and **−** change the target in 0.5 °C steps. Hold a button to
     keep stepping. Quick taps add up and go to the hub as one change; the
     target shows amber until the hub has it.
+  - *Comfort band*, under the target, sets how far the cabin may drift
+    before the thermostat acts: **−** and **+** in 0.5 °C steps from ±0.5 °C
+    to ±3 °C (`POST /api/band`), with a line saying where heat starts and
+    stops. Taps add up like the target's. The band is saved in flash, so a
+    restart keeps it. A narrower band starts the heater more often, but the
+    10-minute minimum run and rest still hold, so never more than one start
+    every 20 minutes.
   - The heater panel shows what the heater is doing (Off, Starting,
     Igniting, Running, Cooling down, Fault or Searching) with an animated
     flame, and which of its parts (flame, glow plug, fuel pump, fan) are on.
@@ -588,14 +595,16 @@ Not yet tested:
 | Setting | Value |
 | --- | --- |
 | Setpoint | 18 °C (change it on the dashboard) |
-| Heat on | at or below setpoint − 1 °C |
-| Heat off | at or above setpoint + 1 °C |
+| Comfort band | ±1 °C (change it on the dashboard, ±0.5 to ±3 °C; kept in flash) |
+| Heat on | at or below setpoint − band |
+| Heat off | at or above setpoint + band |
 | Minimum on time | 10 minutes |
 | Minimum off time | 10 minutes |
 | Sensor timeout | 2 minutes without a reading turns heat off |
 
 They live in `Config::default()` in `../core/src/thermostat.rs`. A setpoint
-change from the dashboard lasts until the hub restarts.
+change from the dashboard lasts until the hub restarts; a comfort band
+change is saved in flash (`thermostat::Saved`) and survives it.
 
 ## Low-battery defaults
 

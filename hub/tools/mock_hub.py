@@ -2,7 +2,8 @@
 
 Serves ../src/dashboard.html with made-up readings on every route the page
 uses. POSTs are accepted and ignored, so the controls respond but nothing
-changes. Nothing here talks to the heater, fridge or Bluetti.
+changes, except the comfort band (`/api/band`), which the mock keeps and
+checks like the hub does. Nothing here talks to the heater, fridge or Bluetti.
 
     python3 tools/mock_hub.py [--port 8700] [--scenario burning|alerts|offline-devices]
 """
@@ -15,6 +16,7 @@ ap.add_argument("--scenario", default="burning", choices=["burning", "alerts", "
 ap.add_argument("--page", default=os.path.join(os.path.dirname(__file__), "..", "src", "dashboard.html"))
 args = ap.parse_args()
 PAGE, PORT, SCENARIO = args.page, args.port, args.scenario
+BAND = {"c": 1.0}
 
 
 def state():
@@ -48,7 +50,7 @@ def state():
         "heater": heater, "fridge": fridge, "bluetti": bluetti,
         "cutoff": {"enabled": True, "stop": 15, "resume": 25, "tripped": alerts, "tripped_at": "at 15 %, 4 min ago" if alerts else None},
         "saver": {"enabled": True, "low": 30, "high": 50, "battery_low": alerts, "holding_eco": alerts, "last_action": "Eco 12 min ago"},
-        "control": {"start_failed": False, "mode": "auto", "setpoint_c": 19.5, "hysteresis_c": 1.0, "smoothed_c": 18.6,
+        "control": {"start_failed": False, "mode": "auto", "setpoint_c": 19.5, "hysteresis_c": BAND["c"], "smoothed_c": 18.6,
                     "heat": True, "reason": "InDeadband"},
         "clock": "2026-11-14 19:42:10", "sta_ip": None,
     }
@@ -92,7 +94,16 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
-        self.rfile.read(n)
+        body = self.rfile.read(n).decode(errors="replace").strip()
+        if self.path == "/api/band":
+            try:
+                v = float(body)
+            except ValueError:
+                v = -1.0
+            if 0.5 <= v <= 3.0 and abs(v * 2 - round(v * 2)) < 0.02:
+                BAND["c"] = round(v * 2) / 2
+            else:
+                return self.send(400, "comfort band must be 0.5 to 3 in 0.5 steps", "text/plain")
         self.send(200, "ok", "text/plain")
 
 

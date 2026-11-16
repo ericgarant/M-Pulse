@@ -5,6 +5,9 @@
 //! for its trend charts. The page can:
 //!
 //! - change the setpoint (`POST /api/setpoint`, body `18.5`)
+//! - change the comfort band (`POST /api/band`, body the half-width in °C,
+//!   `0.5` to `3.0` in 0.5 steps; `1.5` means target ± 1.5 °C), which is
+//!   kept in flash
 //! - choose who switches the heater (`POST /api/mode`, body `auto` or
 //!   `monitor`)
 //! - switch the heater by hand (`POST /api/heater`, body `on` or `off`),
@@ -47,6 +50,7 @@ use m_pulse_core::fuel::{self, Fill};
 use m_pulse_core::heater_cutoff;
 use m_pulse_core::history;
 use m_pulse_core::protocol::{self, RunState};
+use m_pulse_core::thermostat;
 
 use crate::clock;
 use crate::state::{FridgeCommand, Hub, Mode, OutputCommand, Shared};
@@ -116,6 +120,23 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
             _ => {
                 req.into_status_response(400)?
                     .write_all(b"setpoint must be 5 to 30")?;
+            }
+        }
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/band", Method::Post, move |mut req| {
+        let text = read_body(&mut req)?;
+        match thermostat::parse_band(&text) {
+            Some(v) => {
+                s.lock().control.config.hysteresis_c = v;
+                info!("Dashboard set the comfort band to ±{v:.1} °C");
+                req.into_ok_response()?.write_all(b"ok")?;
+            }
+            None => {
+                req.into_status_response(400)?
+                    .write_all(b"comfort band must be 0.5 to 3 in 0.5 steps")?;
             }
         }
         Ok(())
