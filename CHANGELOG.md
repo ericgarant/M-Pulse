@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Adjustable comfort band**: the Climate page has a *Comfort band*
+  stepper under the target, ±0.5 to ±3 °C in 0.5 °C steps (±1 °C by
+  default), with a line saying where heat starts and stops. It is saved in
+  flash, so a restart keeps it. The 10-minute minimum run and rest are
+  unchanged, so even the narrowest band starts the heater at most once
+  every 20 minutes. `POST /api/band`; limits and the saved record in
+  `core/src/thermostat.rs`.
 - **Dashboard pages**: the page opens on Home, a summary with a tile per
   service (Climate with the target's − and +, Fridge, Power, Fuel, Rules),
   and each service has its own page behind a tab bar: at the bottom on a

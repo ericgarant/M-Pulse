@@ -293,6 +293,16 @@ body[data-page="climate"] #fuel .fuel-sum .eta { text-align: left; }
 .setter .sp .v { font-size: 34px; font-weight: 600; color: var(--heat); transition: transform .2s var(--ease), color .3s; }
 .v.bump { transform: scale(1.12); }
 .setter .sp.pending .v { color: var(--warn); }
+/* Comfort band: a smaller stepper under the target */
+.bandset { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--line); }
+.bandset .txt { flex: 1; min-width: 0; }
+.bandset .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.bandset .lim { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.bandset .sp { text-align: center; min-width: 64px; }
+.bandset .v { font-size: 22px; font-weight: 600; color: var(--heat); transition: transform .2s var(--ease), color .3s; }
+.bandset .sp.pending .v { color: var(--warn); }
+.bandset .btn.round { width: 40px; height: 40px; }
+.bandset .btn:disabled { opacity: .4; pointer-events: none; }
 
 .heater { display: grid; gap: 14px; min-width: 0; }
 .hvis { display: flex; align-items: center; gap: 16px; padding: 14px; border-radius: 18px; background: var(--bg2); border: 1px solid var(--line); position: relative; overflow: hidden; }
@@ -732,6 +742,12 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
           <button class="btn round" id="sp-up" aria-label="Raise the setpoint"><svg class="i"><use href="#i-plus"/></svg></button>
         </div>
         </div>
+        <div class="bandset" aria-label="Comfort band">
+          <div class="txt"><div class="lbl">Comfort band</div><div class="lim" id="band-lim">--</div></div>
+          <button class="btn round" id="bd-down" aria-label="Narrow the comfort band"><svg class="i"><use href="#i-minus"/></svg></button>
+          <div class="sp" id="bd-box"><div class="v">±<span id="bd">--</span>°</div></div>
+          <button class="btn round" id="bd-up" aria-label="Widen the comfort band"><svg class="i"><use href="#i-plus"/></svg></button>
+        </div>
         <div class="trend" id="t-cabin" hidden>
           <div class="trend-h"><span class="lbl">Cabin, last 4 h</span><span class="range" id="t-cabin-r"></span></div>
           <div class="plot"></div>
@@ -1010,6 +1026,8 @@ const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 // The setpoint range the hub accepts, and the level limits of the two
 // battery rules (core/src/eco_guard.rs and core/src/heater_cutoff.rs).
 const SP_MIN = 5, SP_MAX = 30, GAP = 5;
+// The comfort band's half-width limits and step (core/src/thermostat.rs).
+const BAND_MIN = 0.5, BAND_MAX = 3, BAND_STEP = 0.5;
 const LOW_LIMITS = { saver: [5, 95], cutoff: [5, 50] };
 
 const tabs = [...document.querySelectorAll(".tabs a")];
@@ -1163,8 +1181,9 @@ const HELP = {
   climate: ["Climate and heater", "heat", [
     ["Cabin", "Temperature and humidity from the hub's own DHT11 sensor, taken every 5 s and smoothed over the last few readings. If the hub's sensor stops answering, the sensor node takes over and the card says \"sensor node\". With no fresh reading for 2 minutes the thermostat keeps the heat off."],
     ["Dial", "The coloured arc is the cabin temperature. The light band is the comfort band, and the knob marks the target."],
-    ["Target and comfort band", "Set with − and + in 0.5° steps, from 5 to 30 °C. The value turns amber until the hub confirms it. The thermostat asks for heat when the cabin drops below the target minus 1 °C and stops at the target plus 1 °C. That 2 °C band is the hysteresis: it keeps the heater from cycling on small changes."],
-    ["Glow plug protection", "Every start heats the glow plug, which wears it. Once started, the heater runs at least 10 minutes, and once stopped it rests at least 10 minutes before starting again, even if the cabin asks sooner."],
+    ["Target", "Set with − and + in 0.5° steps, from 5 to 30 °C. The value turns amber until the hub confirms it."],
+    ["Comfort band", "How far the cabin may drift from the target before the thermostat acts. At ±1° (the default) it asks for heat when the cabin drops to the target minus 1 °C and stops at the target plus 1 °C; in between it keeps doing what it was doing. Set it with − and + in 0.5° steps, from ±0.5° to ±3°; the line beside it shows where heat starts and stops. Narrower holds the temperature closer but starts the heater more often; wider means fewer starts, which is easier on the glow plug, and bigger swings. The band is kept in the hub's flash, so a restart keeps it."],
+    ["Glow plug protection", "Every start heats the glow plug, which wears it. Once started, the heater runs at least 10 minutes, and once stopped it rests at least 10 minutes before starting again, even if the cabin asks sooner. This holds whatever the comfort band, so even at ±0.5° the heater starts at most once every 20 minutes."],
     ["Thermostat line", "What the thermostat wants right now and why: below the band (wants heat), inside the band (holding), warm enough, finishing the minimum run, resting the glow plug, or no fresh cabin reading."],
     ["Monitor only and Auto", "Monitor only: the thermostat still decides and shows its reasoning, but never switches the heater. Auto: the hub starts and stops the heater to hold the target. The hub always starts in Monitor only after a restart. In Auto, a start is retried up to 3 times; if the heater still does not light, Auto pauses until you check the heater and press Auto again."],
     ["Heater ON and OFF", "Switch the heater by hand. A manual command puts the thermostat in Monitor only so it does not undo what you did. OFF always lets the heater run its full cool-down: never cut its power while the fan is running. Starts are refused while the Bluetti low-battery stop or the fuel reserve holds the heater off."],
@@ -1320,10 +1339,46 @@ function showSetpoint(v) {
   $("tl-sp").textContent = v.toFixed(1);
   $("tl-spbox").classList.add("pending");
   bump($("tl-spbox").querySelector(".v"));
-  drawDial(last.cabin ? last.cabin.temp_c : null, v, last.control.hysteresis_c);
+  const hw = bdPend.v ?? last.control.hysteresis_c;
+  drawDial(last.cabin ? last.cabin.temp_c : null, v, hw);
+  showBand(v, hw, bdPend.v !== null);
 }
 hold($("sp-down"), () => nudge(-0.5));
 hold($("sp-up"), () => nudge(0.5));
+
+/* ---------- Comfort band: quick taps add up, then one send ---------- */
+const bdPend = { v: null, timer: null, until: 0 };
+function nudgeBand(delta) {
+  if (!last) return;
+  const base = bdPend.v ?? last.control.hysteresis_c;
+  const v = Math.min(BAND_MAX, Math.max(BAND_MIN, Math.round((base + delta) / BAND_STEP) * BAND_STEP));
+  if (v === base) return;
+  bdPend.v = v; bdPend.until = Infinity;
+  showBand(spPend.v ?? last.control.setpoint_c, v, true);
+  bump($("bd-box").querySelector(".v"));
+  drawDial(last.cabin ? last.cabin.temp_c : null, spPend.v ?? last.control.setpoint_c, v);
+  clearTimeout(bdPend.timer);
+  bdPend.timer = setTimeout(async () => {
+    bdPend.timer = null;
+    try {
+      const r = await post("/api/band", v.toFixed(1));
+      if (!r.ok) { bdPend.v = null; await failed(r); }
+    } catch (e) { bdPend.v = null; toast("Could not reach the hub.", "bad"); }
+    bdPend.until = Date.now() + 3000;
+    refresh();
+  }, 500);
+}
+// The band stepper and the limits line, for target `sp` and half-width `hw`.
+function showBand(sp, hw, pending) {
+  $("bd").textContent = hw.toFixed(1);
+  $("bd-box").classList.toggle("pending", pending);
+  $("bd-down").disabled = hw <= BAND_MIN;
+  $("bd-up").disabled = hw >= BAND_MAX;
+  $("band-lim").textContent = "Heat on at " + (sp - hw).toFixed(1) + " °C, off at " + (sp + hw).toFixed(1) + " °C";
+  $("band").textContent = (sp - hw).toFixed(1) + " to " + (sp + hw).toFixed(1) + " °C";
+}
+hold($("bd-down"), () => nudgeBand(-BAND_STEP));
+hold($("bd-up"), () => nudgeBand(BAND_STEP));
 
 /* ---------- Thermostat mode and manual heater ---------- */
 async function setMode(m) {
@@ -1734,8 +1789,10 @@ function renderClimate(s) {
   const sp = spPend.v ?? c.setpoint_c;
   $("sp").textContent = sp.toFixed(1);
   $("sp-box").classList.toggle("pending", spPend.v !== null);
-  drawDial(cab ? cab.temp_c : null, sp, c.hysteresis_c);
-  $("band").textContent = (sp - c.hysteresis_c).toFixed(1) + " to " + (sp + c.hysteresis_c).toFixed(1) + " °C";
+  if (bdPend.v !== null && !bdPend.timer && (Math.abs(c.hysteresis_c - bdPend.v) < 0.01 || Date.now() > bdPend.until)) bdPend.v = null;
+  const hw = bdPend.v ?? c.hysteresis_c;
+  drawDial(cab ? cab.temp_c : null, sp, hw);
+  showBand(sp, hw, bdPend.v !== null);
 
   seg("mode", c.mode);
   const b = $("modebadge");

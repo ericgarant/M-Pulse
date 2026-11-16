@@ -108,8 +108,8 @@ Open items, roughly in order:
   switch the fridge Off then quickly to Eco or Max (both should stick). See
   [CHANGELOG.md](CHANGELOG.md).
 - Remember the setpoint across a power cut. Today a restart puts the hub in
-  Monitor only with the default setpoint (the battery-rule levels, fridge
-  saver switch and fuel settings are kept).
+  Monitor only with the default setpoint (the comfort band, battery-rule
+  levels, fridge saver switch and fuel settings are kept).
 - Later: the MaxxAir fans and the ceiling LEDs.
 
 ## Getting started
