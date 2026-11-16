@@ -32,7 +32,7 @@ use m_pulse_core::heater_cutoff;
 use m_pulse_core::history;
 use m_pulse_core::protocol::RunState;
 use m_pulse_core::rules;
-use m_pulse_core::thermostat::{Decision, Reason, Sample, Thermostat};
+use m_pulse_core::thermostat::{Decision, Reason, Sample, Saved as ThermostatSaved, Thermostat};
 
 use crate::state::{FridgeCommand, Mode, Shared};
 use crate::store::Store;
@@ -57,12 +57,13 @@ pub fn spawn(
     state: Shared,
     fuel_store: Option<Store<Saved>>,
     rules_store: Option<Store<rules::Saved>>,
+    thermo_store: Option<Store<ThermostatSaved>>,
 ) -> anyhow::Result<()> {
     thread::Builder::new()
         .name("thermostat".into())
         // 8 kB: the fuel gauge's flash writes run on this thread too.
         .stack_size(8 * 1024)
-        .spawn(move || control_loop(state, fuel_store, rules_store))?;
+        .spawn(move || control_loop(state, fuel_store, rules_store, thermo_store))?;
     Ok(())
 }
 
@@ -70,6 +71,7 @@ fn control_loop(
     state: Shared,
     mut fuel_store: Option<Store<Saved>>,
     mut rules_store: Option<Store<rules::Saved>>,
+    mut thermo_store: Option<Store<ThermostatSaved>>,
 ) {
     let config = state.lock().control.config;
     info!(
@@ -98,13 +100,15 @@ fn control_loop(
         let s = state.lock();
         rules::Saved::new(s.cutoff.config, s.saver.config)
     };
+    let mut thermo_saved = ThermostatSaved::new(&config);
 
     loop {
-        let (cabin, setpoint, mode, heater_now) = {
+        let (cabin, setpoint, band, mode, heater_now) = {
             let s = state.lock();
             (
                 s.cabin,
                 s.control.config.setpoint_c,
+                s.control.config.hysteresis_c,
                 s.control.mode,
                 heater_on(&s.heater),
             )
@@ -127,6 +131,25 @@ fn control_loop(
         if (setpoint - thermostat.config().setpoint_c).abs() > 0.01 {
             thermostat.set_setpoint(setpoint);
             info!("Thermostat: setpoint now {setpoint:.1} °C");
+        }
+        // And the comfort band. The minimum on and off times are untouched,
+        // so a narrower band never switches the heater before they are up.
+        if (band - thermostat.config().hysteresis_c).abs() > 0.01 {
+            thermostat.set_hysteresis(band);
+            info!("Thermostat: comfort band now ±{band:.1} °C");
+            let thermo_now = ThermostatSaved::new(thermostat.config());
+            // Changes only from the dashboard, a few times at most. Written
+            // outside the lock.
+            if thermo_now != thermo_saved {
+                if let Some(store) = thermo_store.as_mut() {
+                    match store.save(&thermo_now) {
+                        Ok(()) => info!("Thermostat: saved {thermo_now:?}"),
+                        // Not retried every tick: the next change tries again.
+                        Err(err) => warn!("Thermostat: could not save: {err}"),
+                    }
+                }
+                thermo_saved = thermo_now;
+            }
         }
 
         // Feed each new reading through the filter exactly once.

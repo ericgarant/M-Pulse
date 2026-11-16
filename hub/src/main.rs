@@ -38,7 +38,7 @@ use esp_idf_svc::sntp::EspSntp;
 use esp_idf_svc::timer::EspTaskTimerService;
 use log::{info, warn};
 use m_pulse_core::thermostat::Config;
-use m_pulse_core::{fuel, rules};
+use m_pulse_core::{fuel, rules, thermostat};
 
 fn main() -> anyhow::Result<()> {
     // Required once at startup so the ESP-IDF runtime patches are linked in.
@@ -87,6 +87,22 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
+    // The comfort band's width lives in flash too. Without it the band goes
+    // back to ±1 °C after every restart.
+    let thermo_store = match store::Store::<thermostat::Saved>::open(nvs.clone()) {
+        Ok((store, saved)) => {
+            if let Some(saved) = saved {
+                let mut s = state.lock();
+                s.control.config = saved.apply(s.control.config);
+            }
+            Some(store)
+        }
+        Err(err) => {
+            warn!("Thermostat: flash not available, the comfort band will not survive a restart: {err}");
+            None
+        }
+    };
+
     net::start(peripherals.modem, sysloop, nvs, state.clone())?;
     // Sets the clock whenever the hub reaches the internet. Kept alive for
     // the life of the firmware.
@@ -96,7 +112,7 @@ fn main() -> anyhow::Result<()> {
     // free on any ESP32-S3 module: not a strapping, flash, PSRAM or USB pin.
     dht::spawn(peripherals.pins.gpio4, state.clone())?;
     cabin::spawn(state.clone())?;
-    control::spawn(state.clone(), fuel_store, rules_store)?;
+    control::spawn(state.clone(), fuel_store, rules_store, thermo_store)?;
     let _server = web::start(state.clone())?;
 
     let timers = EspTaskTimerService::new()?;

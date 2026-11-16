@@ -6,14 +6,15 @@
 //! two, the other copy is still there. Each copy carries a sequence number
 //! and a checksum, and loading picks the newest good one.
 //!
-//! Two records use it: the fuel gauge (`m_pulse_core::fuel::Saved`) and the
-//! battery rules (`m_pulse_core::rules::Saved`).
+//! Three records use it: the fuel gauge (`m_pulse_core::fuel::Saved`), the
+//! battery rules (`m_pulse_core::rules::Saved`) and the thermostat's
+//! comfort band (`m_pulse_core::thermostat::Saved`).
 
 use std::fmt::Debug;
 
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition};
 use log::{info, warn};
-use m_pulse_core::{fuel, rules};
+use m_pulse_core::{fuel, rules, thermostat};
 
 /// Something saved by a [`Store`].
 pub trait Record: Sized + Debug {
@@ -49,6 +50,19 @@ impl Record for rules::Saved {
     }
     fn decode(bytes: &[u8]) -> Option<(Self, u32)> {
         rules::Saved::decode(bytes)
+    }
+}
+
+impl Record for thermostat::Saved {
+    const NAMESPACE: &'static str = "thermo";
+    const NAME: &'static str = "Thermostat";
+    const KEYS: [&'static str; 2] = ["thermo_a", "thermo_b"];
+    const LEN: usize = thermostat::Saved::LEN;
+    fn encode(&self, seq: u32) -> Vec<u8> {
+        thermostat::Saved::encode(self, seq).to_vec()
+    }
+    fn decode(bytes: &[u8]) -> Option<(Self, u32)> {
+        thermostat::Saved::decode(bytes)
     }
 }
 
