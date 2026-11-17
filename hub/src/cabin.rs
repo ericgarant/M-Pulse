@@ -4,7 +4,7 @@
 //! `m_pulse_core::wire`). Broadcasting means it does not need to know the
 //! hub's address, on either network.
 //!
-//! The hub's own DHT11 (see `dht`) comes first: a packet is ignored while
+//! The hub's own SHT3x (see `sht3x`) comes first: a packet is ignored while
 //! the hub has a fresh reading of its own, so the node is only a fallback.
 
 use std::net::UdpSocket;
