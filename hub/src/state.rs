@@ -22,7 +22,7 @@ use m_pulse_core::thermostat::{Config, Decision};
 /// Where a cabin reading came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
-    /// The DHT11 wired to the hub itself.
+    /// The SHT3x wired to the hub itself.
     Local,
     /// The Wi-Fi sensor node.
     Remote,

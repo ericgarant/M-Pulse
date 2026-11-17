@@ -46,7 +46,7 @@ impl CabinPacket {
         if fields.next().is_some() {
             return None;
         }
-        // The DHT11 covers 0 to 50 °C; allow a margin for other sensors.
+        // The node's DHT11 covers 0 to 50 °C; allow a margin for other sensors.
         if !(-400..=850).contains(&temp) || !(0..=1000).contains(&rh) {
             return None;
         }

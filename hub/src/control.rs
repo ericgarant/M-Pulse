@@ -1,7 +1,7 @@
 //! Thermostat control loop.
 //!
 //! Runs on its own thread: takes the latest cabin reading (the hub's own
-//! DHT11, or the sensor node as a fallback), smooths it, and asks the
+//! SHT3x, or the sensor node as a fallback), smooths it, and asks the
 //! thermostat state machine whether the heater should be running. The
 //! decision is published for the dashboard.
 //!

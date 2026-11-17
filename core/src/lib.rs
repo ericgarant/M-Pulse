@@ -6,7 +6,6 @@
 pub mod actuator;
 pub mod bluetti;
 pub mod clock;
-pub mod dht11;
 pub mod eco_guard;
 pub mod filter;
 pub mod fridge;
@@ -15,5 +14,6 @@ pub mod heater_cutoff;
 pub mod history;
 pub mod protocol;
 pub mod rules;
+pub mod sht3x;
 pub mod thermostat;
 pub mod wire;

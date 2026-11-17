@@ -2,7 +2,7 @@
 //!
 //! Owns the BLE links to the BougeRV diesel heater, the BougeRV Rocky 50
 //! fridge and the Bluetti Elite 200 V2 power station, reads the cabin from its
-//! own DHT11 (falling back to the sensor node over Wi-Fi), runs the
+//! own SHT3x (falling back to the sensor node over Wi-Fi), runs the
 //! thermostat, and serves the dashboard.
 //!
 //! After every restart the hub is in Monitor mode and the thermostat sends
@@ -19,11 +19,11 @@ mod bluetti;
 mod cabin;
 mod clock;
 mod control;
-mod dht;
 mod fridge;
 mod heater;
 mod net;
 mod radio;
+mod sht3x;
 mod state;
 mod store;
 mod web;
@@ -108,9 +108,15 @@ fn main() -> anyhow::Result<()> {
     // the life of the firmware.
     let _sntp = EspSntp::new_default()?;
 
-    // DHT11 DATA is wired to GPIO4, with a 10k pull-up to 3.3V. GPIO4 is
-    // free on any ESP32-S3 module: not a strapping, flash, PSRAM or USB pin.
-    dht::spawn(peripherals.pins.gpio4, state.clone())?;
+    // SHT3x on I2C: SDA on GPIO4 (the old DHT11 data wire), SCL on GPIO5.
+    // Both are free on any ESP32-S3 module: not strapping, flash, PSRAM or
+    // USB pins. The breakout board carries its own pull-ups.
+    sht3x::spawn(
+        peripherals.i2c0,
+        peripherals.pins.gpio4,
+        peripherals.pins.gpio5,
+        state.clone(),
+    )?;
     cabin::spawn(state.clone())?;
     control::spawn(state.clone(), fuel_store, rules_store, thermo_store)?;
     let _server = web::start(state.clone())?;
