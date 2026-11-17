@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
+  over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It
+  finds the sensor at 0x44 or 0x45 by itself, checks every reading's CRC,
+  and looks for the sensor again after a minute of failed reads. Readings
+  are to a tenth of a degree, and the radio can no longer spoil them, so the
+  DHT11's core-pinning and interrupt hold-off are gone. Wiring in
+  `hub/README.md`; decoding and its tests in `core/src/sht3x.rs`. The
+  DHT11 decoder is removed (the sensor node keeps its own DHT11 driver).
+
 - **Adjustable comfort band**: the Climate page has a *Comfort band*
   stepper under the target, ±0.5 to ±3 °C in 0.5 °C steps (±1 °C by
   default), with a line saying where heat starts and stops. It is saved in
