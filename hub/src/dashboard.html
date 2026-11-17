@@ -1179,7 +1179,7 @@ addEventListener("keydown", e => { if (e.key === "Escape" && sheetDone) sheetDon
 // rendered with textContent. Keep it short: it lives in the hub's flash.
 const HELP = {
   climate: ["Climate and heater", "heat", [
-    ["Cabin", "Temperature and humidity from the hub's own DHT11 sensor, taken every 5 s and smoothed over the last few readings. If the hub's sensor stops answering, the sensor node takes over and the card says \"sensor node\". With no fresh reading for 2 minutes the thermostat keeps the heat off."],
+    ["Cabin", "Temperature and humidity from the hub's own SHT3x sensor, taken every 5 s and smoothed over the last few readings. If the hub's sensor stops answering, the sensor node takes over and the card says \"sensor node\". With no fresh reading for 2 minutes the thermostat keeps the heat off."],
     ["Dial", "The coloured arc is the cabin temperature. The light band is the comfort band, and the knob marks the target."],
     ["Target", "Set with − and + in 0.5° steps, from 5 to 30 °C. The value turns amber until the hub confirms it."],
     ["Comfort band", "How far the cabin may drift from the target before the thermostat acts. At ±1° (the default) it asks for heat when the cabin drops to the target minus 1 °C and stops at the target plus 1 °C; in between it keeps doing what it was doing. Set it with − and + in 0.5° steps, from ±0.5° to ±3°; the line beside it shows where heat starts and stops. Narrower holds the temperature closer but starts the heater more often; wider means fewer starts, which is easier on the glow plug, and bigger swings. The band is kept in the hub's flash, so a restart keeps it."],

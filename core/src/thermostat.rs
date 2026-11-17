@@ -19,9 +19,9 @@ use std::time::{Duration, Instant};
 use crate::fuel::fnv1a;
 
 /// Narrowest comfort band the dashboard may set, as the half-width in °C
-/// (so ±0.5 °C, 1 °C from bottom to top). The DHT11 reads in whole or
-/// tenth degrees and wobbles by a few tenths, so anything narrower would
-/// mostly react to sensor noise. The minimum on and off times still cap
+/// (so ±0.5 °C, 1 °C from bottom to top). Cabin air wobbles by a few
+/// tenths around the sensor, and the sensor node's DHT11 reads in whole
+/// degrees, so anything narrower would mostly react to noise. The minimum on and off times still cap
 /// the heater at one start every 20 minutes, whatever the band.
 pub const BAND_MIN_C: f32 = 0.5;
 /// Widest comfort band, as the half-width in °C (±3 °C, 6 °C in all).

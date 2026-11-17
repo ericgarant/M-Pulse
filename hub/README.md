@@ -2,7 +2,7 @@
 
 Firmware for an ESP32-S3 board (any S3 module with 4 MB flash or more; it
 uses no screen or PSRAM). The hub in the camper is a bare S3 module with
-16 MB flash and no PSRAM, with the cabin DHT11 wired to it. It replaced the
+16 MB flash and no PSRAM, with the cabin SHT3x sensor wired to it. It replaced the
 Freenove ESP32-S3 media kit, the first hub, whose screen was never used.
 It:
 
@@ -20,7 +20,7 @@ It:
 - can put the fridge in Eco while the Bluetti is low and back to Max once it
   recovers (see [Fridge saver](#fridge-saver), off until you turn it on;
   kept across a restart)
-- reads the cabin temperature and humidity from its own DHT11 (see
+- reads the cabin temperature and humidity from its own SHT3x (see
   [Cabin sensor](#cabin-sensor)), and falls back to readings from the
   [sensor node](../sensor-node) over Wi-Fi if that sensor stops answering
 - runs the thermostat on those readings
@@ -39,24 +39,47 @@ hold the same link indefinitely.
 
 ## Cabin sensor
 
-The DHT11 is wired to the hub. Hold it with the grille facing you and the
-pins pointing down; pins are numbered 1 to 4 from left to right.
+The cabin sensor is an SHT3x (SHT30 or SHT31) on a small breakout board,
+wired to the hub over I2C. It replaced the DHT11: it reads to about 0.2 °C
+instead of 1-2 °C, and the S3's I2C hardware handles the bus timing, so the
+Bluetooth radio can no longer spoil reads.
 
-| DHT11 pin | Connects to |
+### Wiring
+
+Work with the hub unplugged. Solder the supplied header to the four labelled
+pads (`VIN`, `GND`, `SCL`, `SDA`). The two pads on the other side of the
+board (`ADDR` and `ALERT` on most of these boards) stay unconnected.
+
+| SHT3x board pin | Connects to on the hub |
 | --- | --- |
-| 1 (VCC) | `3.3V` on the board |
-| 2 (DATA) | `GPIO4`, plus a 10k resistor to `3.3V` |
-| 3 | not connected |
-| 4 (GND) | `GND` |
+| `VIN` | `3.3V` |
+| `GND` | `GND` |
+| `SCL` | `GPIO5` |
+| `SDA` | `GPIO4` (the wire the DHT11's DATA used) |
 
-The data pin is set in `src/main.rs` (`peripherals.pins.gpio4`). GPIO4 is
-free on every ESP32-S3 module: it is not a strapping, flash, PSRAM or USB pin.
+- **Use 3.3V, not 5V.** The board accepts either, but its pull-up resistors
+  pull SDA and SCL to whatever `VIN` is. At 3.3V the lines stay at the
+  ESP32's own logic level.
+- **No extra resistors.** The board has its own 10k pull-ups on SDA and SCL,
+  and the hub turns on its internal ones too. Take out the 10k resistor the
+  DHT11 needed between GPIO4 and 3.3V.
+- **Address.** With `ADDR` unconnected the sensor answers at `0x44`; tied to
+  `VIN` it answers at `0x45`. The hub tries both, so either works.
+- **Placement.** Keep the sensor away from the hub's regulator and from the
+  heater's outlet, and in free air. Up to about 1 m of wire is fine at the
+  hub's 100 kHz bus speed.
 
-The DHT11 sends its bits as pulses a few tens of microseconds long, which a
-Bluetooth interrupt can easily stretch. The hub therefore reads it on the
-processor's second core, away from the radio, with interrupts held off for
-the 5 ms each read takes. Before this, every read failed once the Bluetti
-link was up.
+The pins are set in `src/main.rs` (`peripherals.pins.gpio4` and
+`peripherals.pins.gpio5`). Neither is a strapping, flash, PSRAM or USB pin
+on any ESP32-S3 module.
+
+### Checking it
+
+After flashing, the serial log shows `SHT3x: found at 0x44` about 2 s after
+boot, then `Cabin: 21.4 °C, 38 % RH (hub SHT3x)`. If it shows
+`SHT3x: no sensor at 0x44 or 0x45`, the sensor did not answer at all: check
+power and that SDA and SCL are not swapped. The hub keeps looking for it
+every minute, so a fixed wire is picked up without a restart.
 
 The hub reads the sensor every 5 s. While it has a reading less than 30 s
 old it ignores the [sensor node](../sensor-node), so the node is only a
@@ -92,7 +115,7 @@ tested, and it has trade-offs:
   briefly when it joins.
 - If the sensor node joins that network too and the hub is not on it, its
   backup readings stop reaching the hub. This only matters if the hub's own
-  DHT11 has failed.
+  sensor has failed.
 
 To try it, add these lines to `wifi.env` and rebuild the hub (and the
 sensor node, if you use it):
@@ -574,7 +597,9 @@ Not yet tested:
   range when it was flashed. The Bluetti link works on it. This also checks the shorter
   Bluetooth search time from PR #12, which has not yet been tried with the
   devices switched on.
-- Handing over to the sensor node when the hub's DHT11 stops answering.
+- **The SHT3x on the hub** (this change). CI builds the firmware and the
+  decoder is tested, but it has not yet been flashed with the sensor wired.
+- Handing over to the sensor node when the hub's sensor stops answering.
 - **Stopping a burning heater with the low-battery stop.** The heater was
   off in the test above, so no Off was sent. The Off command itself is the
   one the dashboard's Heater OFF button sends, which is tested.

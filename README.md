@@ -9,8 +9,8 @@ and no cloud.
 
 | Folder | Board | Purpose | Status |
 | --- | --- | --- | --- |
-| [`hub/`](hub/) | Bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on GPIO4 | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Runs v1.0.0. Cabin sensor, Bluetti link and the Bluetti AC/DC switches tested on this module. The heater and fridge links were tested on the earlier S3 hub (the Freenove media kit) and still need a check on this one in the camper |
-| [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) with a DHT11 | Retired from the camper. The firmware stays as an optional backup: the hub uses its readings only if its own DHT11 stops answering | Tested with the hub before the hub had its own sensor; the handover has not been tested |
+| [`hub/`](hub/) | Bare ESP32-S3 module (16 MB flash, no PSRAM) with an SHT3x on I2C (SDA GPIO4, SCL GPIO5) | Reads the cabin temperature, holds the BLE links to the BougeRV diesel heater, Rocky 50 fridge and Bluetti Elite 200 V2, runs the thermostat, switches the heater, controls the fridge, reads the Bluetti, stops the heater and can put the fridge in Eco when the Bluetti runs low, serves the dashboard | Runs v1.0.0. Cabin sensor, Bluetti link and the Bluetti AC/DC switches tested on this module. The heater and fridge links were tested on the earlier S3 hub (the Freenove media kit) and still need a check on this one in the camper |
+| [`sensor-node/`](sensor-node/) | Freenove ESP32 WROOM (ESP32-WROOM-32E) with a DHT11 | Retired from the camper. The firmware stays as an optional backup: the hub uses its readings only if its own sensor stops answering | Tested with the hub before the hub had its own sensor; the handover has not been tested |
 
 [`core/`](core/) holds the logic that does not depend on hardware: the
 thermostat state machine, the rules for when to switch the heater, the two
@@ -22,7 +22,7 @@ and tests on any computer with `cargo test`.
 ## What it does today
 
 - **Heater thermostat.** The hub reads the cabin temperature from its own
-  DHT11 (the sensor node is an optional backup), and
+  SHT3x (the sensor node is an optional backup), and
   switches the BougeRV diesel heater around a setpoint, with a deadband and
   minimum on and off times to protect the glow plug.
 - **Fridge.** The dashboard shows the Rocky 50 and changes its target, mode
@@ -55,8 +55,9 @@ release is in [CHANGELOG.md](CHANGELOG.md).
 
 In use:
 
-- **Hub**: a bare ESP32-S3 module (16 MB flash, no PSRAM) with a DHT11 on
-  GPIO4 and a 10k pull-up. Wiring is in
+- **Hub**: a bare ESP32-S3 module (16 MB flash, no PSRAM) with an SHT3x
+  temperature and humidity board on I2C (SDA on GPIO4, SCL on GPIO5). It
+  replaced the hub's DHT11. Wiring is in
   [hub/README.md](hub/README.md#cabin-sensor).
 - **Appliances it talks to over BLE**: BougeRV diesel heater (DHG001),
   BougeRV Rocky 50 fridge, Bluetti Elite 200 V2 power station (readings and the AC and DC output
@@ -68,7 +69,7 @@ Retired:
 
 - **Freenove ESP32-S3 media kit**: the first hub. Its screen was never used,
   and the firmware no longer depends on anything on that board.
-- **Freenove ESP32 WROOM sensor node**: replaced by the hub's own DHT11. Its
+- **Freenove ESP32 WROOM sensor node**: replaced by the hub's own sensor. Its
   firmware is kept as a backup (see [sensor-node/](sensor-node/)).
 
 Not yet connected: the MaxxAir fans and the ceiling LEDs.
@@ -79,7 +80,7 @@ Not yet connected: the MaxxAir fans and the ceiling LEDs.
 Tablet / phone ── Wi-Fi "M-Pulse" ──┐
   (dashboard at 192.168.71.1)       │
                                     ▼
-                        Hub (ESP32-S3 + DHT11) ── BLE ──> BougeRV diesel heater
+                        Hub (ESP32-S3 + SHT3x) ── BLE ──> BougeRV diesel heater
                                     ▲          ── BLE ──> Rocky 50 fridge
                                     │          ── BLE ──> Bluetti Elite 200 V2
 Sensor node (backup) ── UDP 4210 ───┘
