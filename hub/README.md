@@ -65,9 +65,15 @@ board (`ADDR` and `ALERT` on most of these boards) stay unconnected.
   DHT11 needed between GPIO4 and 3.3V.
 - **Address.** With `ADDR` unconnected the sensor answers at `0x44`; tied to
   `VIN` it answers at `0x45`. The hub tries both, so either works.
-- **Placement.** Keep the sensor away from the hub's regulator and from the
-  heater's outlet, and in free air. Up to about 1 m of wire is fine at the
-  hub's 100 kHz bus speed.
+- **Placement.** Mount the sensor a few cm from the hub, or on a short lead,
+  never right beside the ESP32 module: the module and its radio warm the
+  air around them and the sensor reads high. Keep it away from the heater's
+  outlet too, and in free air. Up to about 1 m of wire is fine at the hub's
+  100 kHz bus speed. Right after soldering or flashing, the board is warm
+  and the reading falls for a few minutes before it settles.
+- **On a breadboard**, a wire only connects to a pin in the same numbered
+  row and on the same side of the centre groove. Put each wire in the hole
+  right beside its sensor pin.
 
 The pins are set in `src/main.rs` (`peripherals.pins.gpio4` and
 `peripherals.pins.gpio5`). Neither is a strapping, flash, PSRAM or USB pin
@@ -80,6 +86,11 @@ boot, then `Cabin: 21.4 °C, 38 % RH (hub SHT3x)`. If it shows
 `SHT3x: no sensor at 0x44 or 0x45`, the sensor did not answer at all: check
 power and that SDA and SCL are not swapped. The hub keeps looking for it
 every minute, so a fixed wire is picked up without a restart.
+
+If the sensor is still not found, one wire is usually open. In the first
+install, SDA was fine but the SCL jumper was broken: a multimeter in
+continuity mode from the hub's `IO5` pin to the sensor's `SCL` pin should
+beep, and so should `IO4` to `SDA`. Replacing the jumper fixed it.
 
 The hub reads the sensor every 5 s. While it has a reading less than 30 s
 old it ignores the [sensor node](../sensor-node), so the node is only a
@@ -584,6 +595,17 @@ Tested for v1.0.0 (PR #21), on the current hub:
   DHT11 to a tenth of a degree (22.1 °C, 28 % RH). The heater, fridge and
   Bluetti were out of range, so no link was made.
 
+Tested for the SHT3x cabin sensor (PR #28), on the current hub (17 Nov 2026):
+
+- Flashed from main (1.67 MB, about half the app partition). The hub found
+  the sensor at 0x44 about 3 s after boot and read it every 5 s with no
+  failed reads: 24.4 °C and 31 % RH at first, easing to 22.8 °C and 33 % RH
+  as the freshly soldered board cooled.
+- The thermostat left `SensorLost` and reported `WarmEnough` above the
+  18 °C setpoint. The Bluetti link held alongside it.
+- With the SCL wire open, the hub logged `no sensor at 0x44 or 0x45`, kept
+  the heater off, and kept running.
+
 Tested on the current hub (bare S3 module, PR #13):
 
 - Booted, started the dashboard server, and received the sensor node's
@@ -597,8 +619,6 @@ Not yet tested:
   range when it was flashed. The Bluetti link works on it. This also checks the shorter
   Bluetooth search time from PR #12, which has not yet been tried with the
   devices switched on.
-- **The SHT3x on the hub** (this change). CI builds the firmware and the
-  decoder is tested, but it has not yet been flashed with the sensor wired.
 - Handing over to the sensor node when the hub's sensor stops answering.
 - **Stopping a burning heater with the low-battery stop.** The heater was
   off in the test above, so no Off was sent. The Off command itself is the

@@ -10,6 +10,9 @@
   DHT11's core-pinning and interrupt hold-off are gone. Wiring in
   `hub/README.md`; decoding and its tests in `core/src/sht3x.rs`. The
   DHT11 decoder is removed (the sensor node keeps its own DHT11 driver).
+  Tested on the hub on 17 Nov 2026: found at 0x44, readings every 5 s with
+  no failures. Mount the sensor a few cm from the hub so the ESP32's heat
+  does not make it read high.
 
 - **Adjustable comfort band**: the Climate page has a *Comfort band*
   stepper under the target, ±0.5 to ±3 °C in 0.5 °C steps (±1 °C by
