@@ -107,7 +107,7 @@ pub async fn run(
 ) -> anyhow::Result<()> {
     loop {
         // Search and connect only while the fridge link is not doing the same.
-        let turn = radio::take(timer).await?;
+        let turn = radio::take_now(timer).await?;
         match find(device, FIND_DURATION_MS).await {
             Ok(Some(addr)) => {
                 if let Err(err) = session(device, &addr, timer, &state, turn).await {

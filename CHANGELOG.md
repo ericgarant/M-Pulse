@@ -9,10 +9,27 @@
   connections, up from 4. See `hub/README.md` (Cameras).
 - **Cameras (camera node)**: new firmware in `camera-node/` for the Freenove
   ESP32-WROVER with an OV3660. It waits in standby until the hub asks, then
-  streams MJPEG, and returns to standby on stop or after 30 s with no viewer.
+  streams MJPEG, and returns to standby on stop or, as a backup, after 5
+  minutes with no viewer.
   Name set with `M_PULSE_CAMERA_NAME`. An OV2640 board has also been tested.
 - **Cameras (core)**: `core/src/camera.rs` holds the UDP messages (announce,
   start, stop), the camera states and the name rules, with tests.
+- **Camera rotation (hub)**: each camera's picture rotation (0, 90, 180 or
+  270 degrees) is saved on the hub in flash and kept across reboots, set by
+  `POST /api/cameras/<name>/rotation` with the number as the body.
+- **Camera video keeps playing (hub)**: while the Cameras page is open and a
+  tile is on screen, the page keeps renewing the camera, even while the
+  video is paused, until you press Stop or leave the page.
+- **Camera photos (hub)**: a Photo button saves a still JPEG to the device.
+- **Camera quality (camera node)**: default SVGA (800 by 600) at quality 12.
+  `GET` and `POST /settings` read and change the frame size and quality, and
+  a Quality (test) picker on each tile uses it. The stream moved to its own
+  server on port 81, so a photo or a settings change no longer waits for the
+  stream. Wi-Fi power save is off while streaming, and the TCP send buffer
+  is 32 KB. The camera logs frame rate and throughput every 10 s.
+- **Bluetooth and video (hub)**: while a camera streams, scans for the fridge
+  and the Bluetti wait up to 60 s, because scans took radio time from Wi-Fi
+  and made the video erratic. Heater scans are never held back.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

@@ -2,7 +2,8 @@
 //!
 //! Sits in standby with the camera off. The hub asks it to start over UDP,
 //! it streams MJPEG at `/stream` and a single frame at `/still.jpg`, and it
-//! returns to standby when the hub stops it or nobody has watched for 30 s.
+//! returns to standby when the hub stops it or, as a backup, nobody has
+//! watched for 5 minutes. `/settings` sets the frame size and JPEG quality.
 //! It announces its name and state to the hub every few seconds.
 
 mod camera;
@@ -50,8 +51,8 @@ fn main() -> anyhow::Result<()> {
 
     let online = net::start(peripherals.modem, sysloop, nvs)?;
     control::spawn(NAME, online)?;
-    let _server = server::start()?;
-    info!("HTTP server up on port 80");
+    let _servers = server::start()?;
+    info!("HTTP up: port 80 (page, still, settings), port {} (stream)", server::STREAM_PORT);
 
     // Everything runs on background threads; keep the main task alive.
     loop {

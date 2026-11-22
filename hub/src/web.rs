@@ -421,13 +421,28 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
     })?;
 
     let s = state.clone();
-    server.fn_handler::<anyhow::Error, _>("/api/cameras/*", Method::Post, move |req| {
-        // The path is /api/cameras/<name>/<start|stop>. Copied out first, as
-        // the request is consumed when the response is written.
+    server.fn_handler::<anyhow::Error, _>("/api/cameras/*", Method::Post, move |mut req| {
+        // The path is /api/cameras/<name>/<start|stop|rotation>. Copied out
+        // first, as the request is consumed when the response is written.
         let uri = req.uri().to_string();
         let rest = uri.strip_prefix("/api/cameras/").unwrap_or_default();
         let (name, action) = rest.split_once('/').unwrap_or_default();
         let now = Instant::now();
+        if action == "rotation" {
+            let text = read_body(&mut req)?;
+            match rotation_reply(&s, name, &text, now) {
+                Ok(body) => {
+                    info!("Dashboard set camera {name} to {} degrees", text.trim());
+                    req.into_response(200, None, &[("Content-Type", "application/json")])?
+                        .write_all(body.as_bytes())?;
+                }
+                Err((code, body)) => {
+                    req.into_response(code, None, &[("Content-Type", "application/json")])?
+                        .write_all(body.as_bytes())?;
+                }
+            }
+            return Ok(());
+        }
         let entry = {
             let mut cameras = s.cameras();
             let known = cam::valid_name(name)
@@ -458,6 +473,25 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
 
     info!("Dashboard server started");
     Ok(server)
+}
+
+/// Sets a camera's rotation from the body (`90`) and returns its entry. The
+/// error is the status code and a JSON body.
+fn rotation_reply(
+    state: &Shared,
+    name: &str,
+    body: &str,
+    now: Instant,
+) -> Result<String, (u16, &'static str)> {
+    let mut cameras = state.cameras();
+    if !cam::valid_name(name) || !cameras.knows(name) {
+        return Err((404, "{\"error\":\"no such camera\"}"));
+    }
+    let Some(degrees) = crate::camera::parse_rotation(body) else {
+        return Err((400, "{\"error\":\"rotation must be 0, 90, 180 or 270\"}"));
+    };
+    cameras.set_rotation(name, degrees);
+    Ok(cameras.json_entry(name, now).unwrap_or_default())
 }
 
 /// Why a manual command cannot be sent right now, if it cannot. Off is

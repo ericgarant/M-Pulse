@@ -7,6 +7,10 @@
 //! ends, and drops a wish that nobody has renewed for 60 s, so a closed
 //! browser does not keep a camera on.
 //!
+//! Each camera also has a picture rotation (0, 90, 180 or 270 degrees), set
+//! from the dashboard. It is kept by name and saved to flash (see [`Saved`]),
+//! so it survives a reboot and a camera that is offline.
+//!
 //! The registry lives in [`crate::state::Shared`]. Both threads hold its lock
 //! only long enough to update or read it; the UDP sends happen outside it.
 
@@ -15,7 +19,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use log::{info, warn};
-use m_pulse_core::camera::{self, Announce, CameraState, Command};
+use m_pulse_core::camera::{self, Announce, CameraState, Command, MAX_NAME_LEN};
+use m_pulse_core::fuel::fnv1a;
 
 use crate::state::Shared;
 
@@ -28,6 +33,15 @@ const MAX_TRIES: u8 = 15;
 const WISH_FOR: Duration = Duration::from_secs(60);
 /// Pause between `start` resends.
 const RESEND_EVERY: Duration = Duration::from_secs(1);
+/// The picture rotations the dashboard may set, in degrees.
+pub const ROTATIONS: [u16; 4] = [0, 90, 180, 270];
+
+/// Parses a rotation from the dashboard (`90`). Returns it only if it is one
+/// of [`ROTATIONS`].
+pub fn parse_rotation(text: &str) -> Option<u16> {
+    let v: u16 = text.trim().parse().ok()?;
+    ROTATIONS.contains(&v).then_some(v)
+}
 
 /// A viewer's request that a camera be started.
 struct Wish {
@@ -49,11 +63,16 @@ pub struct Camera {
 #[derive(Default)]
 pub struct Cameras {
     list: Vec<Camera>,
+    /// Rotation in degrees, by camera name. A name with no entry is 0.
+    rotations: Vec<(String, u16)>,
 }
 
 impl Cameras {
     /// Records an announcement. The camera's address is the packet's source.
     pub fn announce(&mut self, a: Announce, ip: Ipv4Addr, now: Instant) {
+        if a.state == CameraState::Streaming {
+            crate::radio::video_seen();
+        }
         if let Some(c) = self.list.iter_mut().find(|c| c.name == a.name) {
             c.ip = ip;
             // A camera that was streaming and is now in standby has stopped on
@@ -154,9 +173,50 @@ impl Cameras {
         out
     }
 
+    /// Whether the hub has heard from a camera with this name.
+    pub fn knows(&self, name: &str) -> bool {
+        self.list.iter().any(|c| c.name == name)
+    }
+
+    /// Sets a camera's picture rotation. Does nothing for a camera the hub
+    /// has never heard from. Only [`ROTATIONS`] values reach here.
+    pub fn set_rotation(&mut self, name: &str, degrees: u16) {
+        if !self.knows(name) {
+            return;
+        }
+        match self.rotations.iter_mut().find(|(n, _)| n == name) {
+            Some(entry) => entry.1 = degrees,
+            None => self.rotations.push((name.to_string(), degrees)),
+        }
+    }
+
+    /// A camera's rotation in degrees (0 if none has been set).
+    pub fn rotation(&self, name: &str) -> u16 {
+        self.rotations
+            .iter()
+            .find(|(n, _)| n == name)
+            .map_or(0, |(_, degrees)| *degrees)
+    }
+
+    /// The rotations as they are saved to flash.
+    pub fn saved(&self) -> Saved {
+        Saved {
+            rotations: self.rotations.clone(),
+        }
+    }
+
+    /// Takes the rotations loaded from flash at boot.
+    pub fn restore(&mut self, saved: &Saved) {
+        self.rotations = saved.rotations.clone();
+    }
+
     /// The camera list for `GET /api/cameras`, as a JSON array.
     pub fn json_list(&self, now: Instant) -> String {
-        let entries: Vec<String> = self.list.iter().map(|c| entry_json(c, now)).collect();
+        let entries: Vec<String> = self
+            .list
+            .iter()
+            .map(|c| entry_json(c, self.rotation(&c.name), now))
+            .collect();
         format!("[{}]", entries.join(","))
     }
 
@@ -165,7 +225,78 @@ impl Cameras {
         self.list
             .iter()
             .find(|c| c.name == name)
-            .map(|c| entry_json(c, now))
+            .map(|c| entry_json(c, self.rotation(name), now))
+    }
+}
+
+/// The picture rotations kept in flash, so a restart keeps them. Each camera
+/// is one slot, so the record is a fixed size: a version, the count, the
+/// slots (name length, name padded to [`MAX_NAME_LEN`], rotation in degrees),
+/// then a sequence number and a checksum. The layout follows
+/// `thermostat::Saved`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Saved {
+    rotations: Vec<(String, u16)>,
+}
+
+impl Saved {
+    const VERSION: u8 = 1;
+    const SLOT: usize = 1 + MAX_NAME_LEN + 1;
+    /// Bytes in [`Saved::encode`]'s output.
+    pub const LEN: usize = 2 + MAX_CAMERAS * Self::SLOT + 8;
+
+    pub fn encode(&self, seq: u32) -> Vec<u8> {
+        let mut out = vec![0u8; Self::LEN];
+        out[0] = Self::VERSION;
+        // The hub keeps one rotation per announced camera, at most MAX_CAMERAS.
+        out[1] = self.rotations.len().min(MAX_CAMERAS) as u8;
+        for (i, (name, degrees)) in self.rotations.iter().take(MAX_CAMERAS).enumerate() {
+            let at = 2 + i * Self::SLOT;
+            out[at] = name.len() as u8;
+            out[at + 1..at + 1 + name.len()].copy_from_slice(name.as_bytes());
+            out[at + Self::SLOT - 1] = *degrees as u8;
+        }
+        let seq_at = Self::LEN - 8;
+        out[seq_at..seq_at + 4].copy_from_slice(&seq.to_le_bytes());
+        let sum = fnv1a(&out[..seq_at + 4]);
+        out[seq_at + 4..].copy_from_slice(&sum.to_le_bytes());
+        out
+    }
+
+    /// Decodes a saved copy and its `seq`. Returns `None` for anything
+    /// damaged, from another version, or with a name or rotation the hub
+    /// could not have saved.
+    pub fn decode(bytes: &[u8]) -> Option<(Self, u32)> {
+        if bytes.len() != Self::LEN || bytes[0] != Self::VERSION {
+            return None;
+        }
+        let seq_at = Self::LEN - 8;
+        let word = |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        if fnv1a(&bytes[..seq_at + 4]) != word(seq_at + 4) {
+            return None;
+        }
+        let count = usize::from(bytes[1]);
+        if count > MAX_CAMERAS {
+            return None;
+        }
+        let mut rotations = Vec::with_capacity(count);
+        for i in 0..count {
+            let at = 2 + i * Self::SLOT;
+            let len = usize::from(bytes[at]);
+            if len > MAX_NAME_LEN {
+                return None;
+            }
+            let name = std::str::from_utf8(&bytes[at + 1..at + 1 + len]).ok()?;
+            if !camera::valid_name(name) {
+                return None;
+            }
+            let degrees = u16::from(bytes[at + Self::SLOT - 1]);
+            if !ROTATIONS.contains(&degrees) {
+                return None;
+            }
+            rotations.push((name.to_string(), degrees));
+        }
+        Some((Self { rotations }, word(seq_at)))
     }
 }
 
@@ -175,7 +306,7 @@ fn addr(ip: Ipv4Addr) -> SocketAddr {
 
 /// One camera as JSON. Names are checked by `Announce::parse`, so they need
 /// no escaping.
-fn entry_json(c: &Camera, now: Instant) -> String {
+fn entry_json(c: &Camera, rotation: u16, now: Instant) -> String {
     let online = now.duration_since(c.last_seen) < Duration::from_secs(camera::OFFLINE_AFTER_S);
     let wanted = c.wish.as_ref().is_some_and(|w| now < w.until);
     let gave_up = c
@@ -183,13 +314,14 @@ fn entry_json(c: &Camera, now: Instant) -> String {
         .as_ref()
         .is_some_and(|w| w.tries >= MAX_TRIES && c.state != CameraState::Streaming);
     let stream_url = if online && c.state == CameraState::Streaming {
-        format!("\"http://{}/stream\"", c.ip)
+        // The camera serves its stream on port 81, apart from its page, still and settings on 80.
+        format!("\"http://{}:81/stream\"", c.ip)
     } else {
         "null".to_string()
     };
     format!(
         "{{\"name\":\"{}\",\"ip\":\"{}\",\"state\":\"{}\",\"online\":{online},\"wanted\":{wanted},\
-         \"note\":{},\"stream_url\":{stream_url},\"still_url\":\"http://{}/still.jpg\"}}",
+         \"rotation\":{rotation},\"note\":{},\"stream_url\":{stream_url},\"still_url\":\"http://{}/still.jpg\"}}",
         c.name,
         c.ip,
         c.state.as_str(),

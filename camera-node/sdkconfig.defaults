@@ -11,3 +11,11 @@ CONFIG_SPIRAM_SPEED_40M=y
 
 # Dashboard and stream: room for the browser's request headers.
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+
+# Sockets: two HTTP servers (page on 80, stream on 81), each with a listen and
+# a control socket and a few connections, plus the announce and command sockets.
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# TCP send buffer per connection (default about 5.7 KB). A larger buffer keeps
+# more of each frame in flight, which raises the stream's throughput.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768

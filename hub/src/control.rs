@@ -34,6 +34,7 @@ use m_pulse_core::protocol::RunState;
 use m_pulse_core::rules;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Saved as ThermostatSaved, Thermostat};
 
+use crate::camera;
 use crate::state::{FridgeCommand, Mode, Shared};
 use crate::store::Store;
 
@@ -58,12 +59,13 @@ pub fn spawn(
     fuel_store: Option<Store<Saved>>,
     rules_store: Option<Store<rules::Saved>>,
     thermo_store: Option<Store<ThermostatSaved>>,
+    camera_store: Option<Store<camera::Saved>>,
 ) -> anyhow::Result<()> {
     thread::Builder::new()
         .name("thermostat".into())
         // 8 kB: the fuel gauge's flash writes run on this thread too.
         .stack_size(8 * 1024)
-        .spawn(move || control_loop(state, fuel_store, rules_store, thermo_store))?;
+        .spawn(move || control_loop(state, fuel_store, rules_store, thermo_store, camera_store))?;
     Ok(())
 }
 
@@ -72,6 +74,7 @@ fn control_loop(
     mut fuel_store: Option<Store<Saved>>,
     mut rules_store: Option<Store<rules::Saved>>,
     mut thermo_store: Option<Store<ThermostatSaved>>,
+    mut camera_store: Option<Store<camera::Saved>>,
 ) {
     let config = state.lock().control.config;
     info!(
@@ -101,6 +104,8 @@ fn control_loop(
         rules::Saved::new(s.cutoff.config, s.saver.config)
     };
     let mut thermo_saved = ThermostatSaved::new(&config);
+    // The camera rotations as main loaded them (or empty), so boot writes nothing.
+    let mut cameras_saved = state.cameras().saved();
 
     loop {
         let (cabin, setpoint, band, mode, heater_now) = {
@@ -150,6 +155,18 @@ fn control_loop(
                 }
                 thermo_saved = thermo_now;
             }
+        }
+
+        // Camera rotations from the dashboard. Written only when one changed.
+        let cameras_now = state.cameras().saved();
+        if cameras_now != cameras_saved {
+            if let Some(store) = camera_store.as_mut() {
+                match store.save(&cameras_now) {
+                    Ok(()) => info!("Cameras: saved {cameras_now:?}"),
+                    Err(err) => warn!("Cameras: could not save: {err}"),
+                }
+            }
+            cameras_saved = cameras_now;
         }
 
         // Feed each new reading through the filter exactly once.

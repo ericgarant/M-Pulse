@@ -59,11 +59,8 @@ pub fn start(
     let mut wifi = BlockingWifi::wrap(wifi, sysloop)?;
     wifi.set_configuration(&Configuration::Client(ClientConfiguration::default()))?;
     wifi.start()?;
-    // Light power save: the radio wakes for each beacon instead of staying on.
-    let ps = unsafe { sys::esp_wifi_set_ps(sys::wifi_ps_type_t_WIFI_PS_MIN_MODEM) };
-    if ps != sys::ESP_OK {
-        warn!("Could not enable Wi-Fi power save: {ps}");
-    }
+    // Standby: the radio sleeps between beacons. Streaming turns this off.
+    set_power_save(true);
 
     let online = Online(Arc::new(AtomicBool::new(false)));
     let flag = online.clone();
@@ -128,4 +125,18 @@ fn join(
     wifi.connect()?;
     wifi.wait_netif_up()?;
     Ok(wifi.wifi().sta_netif().get_ip_info()?.ip.to_string())
+}
+
+/// Wi-Fi power save on in standby (the radio sleeps between beacons) and off
+/// while streaming, where it would cut the frame rate.
+pub fn set_power_save(on: bool) {
+    let mode = if on {
+        sys::wifi_ps_type_t_WIFI_PS_MIN_MODEM
+    } else {
+        sys::wifi_ps_type_t_WIFI_PS_NONE
+    };
+    let ret = unsafe { sys::esp_wifi_set_ps(mode) };
+    if ret != sys::ESP_OK {
+        warn!("Could not set Wi-Fi power save {}: {ret}", if on { "on" } else { "off" });
+    }
 }

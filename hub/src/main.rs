@@ -105,6 +105,21 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
+    // The camera rotations live in flash too. Without it they go back to 0
+    // after every restart.
+    let camera_store = match store::Store::<camera::Saved>::open(nvs.clone()) {
+        Ok((store, saved)) => {
+            if let Some(saved) = saved {
+                state.cameras().restore(&saved);
+            }
+            Some(store)
+        }
+        Err(err) => {
+            warn!("Cameras: flash not available, rotations will not survive a restart: {err}");
+            None
+        }
+    };
+
     net::start(peripherals.modem, sysloop, nvs, state.clone())?;
     // Sets the clock whenever the hub reaches the internet. Kept alive for
     // the life of the firmware.
@@ -121,7 +136,7 @@ fn main() -> anyhow::Result<()> {
     )?;
     cabin::spawn(state.clone())?;
     camera::spawn(state.clone())?;
-    control::spawn(state.clone(), fuel_store, rules_store, thermo_store)?;
+    control::spawn(state.clone(), fuel_store, rules_store, thermo_store, camera_store)?;
     let _server = web::start(state.clone())?;
 
     let timers = EspTaskTimerService::new()?;

@@ -2388,11 +2388,12 @@ setInterval(() => { if (!document.hidden) loadHistory(); }, 60000);
 /* ---------- Cameras ---------- */
 // A camera is started only while the Cameras page is open: opening the page
 // asks for every camera, leaving it asks for a stop. The hub keeps a wish
-// for a minute, and this page renews it every 20 s while a tile shows a
-// stream. The video is set only while the tile is on screen.
+// for a minute, and this page renews it every 20 s while a tile is wanted and
+// on screen, whatever the video is doing. The video is set only while the tile
+// is on screen.
 const CAM_RENEW_MS = 20000, CAM_POLL_MS = 2000;
 // Frames that stop for this long count as a stalled video (Wi-Fi lost, phone
-// asleep). A stalled tile stops renewing, so the camera sleeps.
+// asleep). A stalled tile shows "Video paused" and reconnects its video.
 const CAM_STALL_MS = 10000;
 // How often a tile on screen asks a sleeping camera to wake again.
 const CAM_WAKE_MS = 5000;
@@ -2402,7 +2403,7 @@ let camTimer = null;
 const camIO = "IntersectionObserver" in window
   ? new IntersectionObserver(entries => entries.forEach(e => {
       const c = cams.get(e.target.dataset.name);
-      if (c) { c.visible = e.isIntersecting; paintStream(c); }
+      if (c) { c.visible = e.isIntersecting; camSyncRenew(c); paintStream(c); }
     }))
   : null;
 
@@ -2423,15 +2424,30 @@ function camTile(name) {
   const watch = document.createElement("button"); watch.className = "btn heat"; watch.textContent = "Watch";
   const stop = document.createElement("button"); stop.className = "btn"; stop.textContent = "Stop";
   const rotate = document.createElement("button"); rotate.className = "btn"; rotate.textContent = "Rotate";
-  row.append(watch, rotate, stop);
-  el.append(head, view, row);
+  const photo = document.createElement("button"); photo.className = "btn"; photo.textContent = "Photo";
+  photo.disabled = true;
+  row.append(watch, rotate, photo, stop);
+  // Temporary: picks frame size and JPEG quality on the camera, to compare settings.
+  const qsel = document.createElement("select");
+  qsel.setAttribute("aria-label", "Quality test setting for " + name);
+  qsel.style.cssText = "width:100%;min-width:0;padding:8px;border-radius:10px";
+  [["", "Quality (test)…"], ["VGA,12", "VGA 640×480, q12 (default)"], ["SVGA,12", "SVGA 800×600, q12"],
+   ["XGA,12", "XGA 1024×768, q12"], ["SXGA,12", "SXGA 1280×1024, q12"],
+   ["XGA,10", "XGA 1024×768, q10"], ["SXGA,10", "SXGA 1280×1024, q10"]].forEach(([v, t]) => {
+    const o = document.createElement("option"); o.value = v; o.textContent = t; qsel.append(o);
+  });
+  qsel.disabled = true;
+  const pmsg = document.createElement("p"); pmsg.className = "note"; pmsg.hidden = true;
+  el.append(head, view, row, qsel, pmsg);
   $("cm-list").append(el);
-  const c = { name, el, img, badge, msg, watch, stop, want: false, stopping: false, renew: null,
-    visible: true, shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: camRotSaved(name) };
+  const c = { name, el, img, badge, msg, watch, stop, rotate, photo, qsel, pmsg, want: false, stopping: false, renew: null,
+    visible: true, shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
   // Each frame of the MJPEG stream fires a load event; remember when the last one came.
   img.addEventListener("load", () => { c.lastFrame = Date.now(); });
   watch.onclick = () => camWatch(name);
-  rotate.onclick = () => { c.rot = (c.rot + 90) % 360; camRotSave(name, c.rot); camRotApply(c); };
+  rotate.onclick = () => camRotate(c);
+  photo.onclick = () => camPhoto(c);
+  qsel.onchange = () => camQuality(c);
   stop.onclick = () => camStop(name);
   if (camIO) camIO.observe(el);
   cams.set(name, c);
@@ -2439,17 +2455,78 @@ function camTile(name) {
   return c;
 }
 
-// The rotation is kept per camera in this browser. Storage can be blocked, so
-// every access is wrapped and the page works without it.
-function camRotSaved(name) {
-  try { return Number(localStorage.getItem("mp-cam-rot-" + name)) % 360 || 0; } catch (err) { return 0; }
-}
-function camRotSave(name, rot) {
-  try { localStorage.setItem("mp-cam-rot-" + name, String(rot)); } catch (err) { /* not kept */ }
+// The rotation is the hub's value (0, 90, 180 or 270). Anything else is 0.
+function camRotOf(e) {
+  const r = Number(e.rotation);
+  return [0, 90, 180, 270].includes(r) ? r : 0;
 }
 function camRotApply(c) {
   c.img.classList.remove("r90", "r180", "r270");
   if (c.rot) c.img.classList.add("r" + c.rot);
+}
+
+// Turns the picture to the next angle and saves it on the hub. The hub's answer
+// (or, if the save fails, the value it last sent) decides what is shown.
+async function camRotate(c) {
+  c.rot = (c.rot + 90) % 360;
+  camRotApply(c);
+  try {
+    const r = await fetch("/api/cameras/" + encodeURIComponent(c.name) + "/rotation",
+      { method: "POST", body: String(c.rot) });
+    if (!r.ok) throw new Error(r.status);
+    camShow(await r.json());
+  } catch (err) {
+    c.rot = c.last ? camRotOf(c.last) : 0;
+    camRotApply(c);
+  }
+}
+
+// Saves a still JPEG of the current frame as a download. The page does not wait
+// for it; the result shows as a short message in the tile.
+// Temporary: sends the picked size and quality to the camera's /settings and
+// shows its reply. A new size restarts the camera's driver for a moment.
+async function camQuality(c) {
+  const e = c.last;
+  if (!e || !e.ip || !c.qsel.value) return;
+  const [size, quality] = c.qsel.value.split(",");
+  c.qsel.value = "";
+  c.pmsg.hidden = false;
+  c.pmsg.textContent = "Changing to " + size + ", quality " + quality + "...";
+  try {
+    const r = await fetch("http://" + e.ip + "/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "size=" + size + "&quality=" + quality,
+    });
+    const t = (await r.text()).trim().replace(/\n/g, ", ");
+    c.pmsg.textContent = (r.ok ? "Now " : "Not changed: ") + t;
+  } catch (err) {
+    c.pmsg.textContent = "Could not reach the camera.";
+  }
+}
+
+async function camPhoto(c) {
+  const src = c.last && c.last.still_url;
+  try {
+    if (!src) throw new Error("no still");
+    const r = await fetch(src, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const url = URL.createObjectURL(await r.blob());
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    const stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = c.name.replace(/[^\w.-]+/g, "_") + "-" + stamp + ".jpg";
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    c.pmsg.textContent = "";
+    c.pmsg.hidden = true;
+  } catch (err) {
+    c.pmsg.textContent = "Photo failed. Try again while the video is playing.";
+    c.pmsg.hidden = false;
+  }
 }
 
 // Sets the video to the stream only while this page wants the camera and the
@@ -2465,6 +2542,10 @@ function paintStream(c) {
 function camPaint(c) {
   const e = c.last;
   if (!e) return;
+  c.rot = camRotOf(e);
+  camRotApply(c);
+  c.photo.disabled = !e.stream_url;
+  c.qsel.disabled = !e.stream_url;
   const streaming = e.online && e.state === "streaming";
   if (!streaming) c.stopping = false;
   const [text, cls] = !e.online ? ["Offline", "bad"]
@@ -2492,27 +2573,31 @@ function camPaint(c) {
     c.lastWake = Date.now();
     camPost(c.name, "start");
   }
-  // Renew the wish every 20 s while the tile shows a stream.
-  if (streaming && c.want) { if (!c.renew) c.renew = setInterval(() => camRenew(c), CAM_RENEW_MS); }
-  else if (c.renew) { clearInterval(c.renew); c.renew = null; }
+  camSyncRenew(c);
   c.stream = e.stream_url;
   paintStream(c);
 }
 
+// Renews the wish every 20 s while the Cameras page is open, the tile is wanted
+// and the tile is on screen. The timer is set or cleared here, and again when
+// the tile scrolls in or out of view.
+function camSyncRenew(c) {
+  const on = camsOn && c.want && c.visible;
+  if (on && !c.renew) c.renew = setInterval(() => camRenew(c), CAM_RENEW_MS);
+  else if (!on && c.renew) { clearInterval(c.renew); c.renew = null; }
+}
+
 // True once frames have been arriving and then stopped for CAM_STALL_MS. A
-// browser that never reports frames is never stalled, so it keeps renewing.
+// browser that never reports frames is never stalled.
 function camStalled(c) {
   return c.lastFrame > 0 && Date.now() - c.lastFrame > CAM_STALL_MS;
 }
 
-// Renews the wish only while frames are arriving. A stalled video is not
-// renewed, so the hub's wish runs out and the camera sleeps. The connection
-// is reopened on the next paint, and it only succeeds if the camera is still streaming.
+// Renews the wish whatever the video is doing. A stalled video also drops its
+// connection, so the next paint reopens it (and it only works if the camera is
+// still streaming).
 function camRenew(c) {
-  if (camStalled(c)) {
-    c.shown = null;
-    return;
-  }
+  if (camStalled(c)) c.shown = null;
   camPost(c.name, "start");
 }
 

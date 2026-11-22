@@ -500,34 +500,50 @@ The Home page has a Cameras tile that shows how many are online.
   4220, and the hub takes the camera's address from that packet. A camera
   with no announcement for 15 s is offline.
 - Cameras sleep until someone asks. Opening the Cameras page asks for every
-  camera. Each tile has three buttons:
+  camera. Each tile has four buttons and a picker:
   - **Watch** asks the hub to start that camera.
-  - **Rotate** turns the picture 90 degrees each time you press it. The
-    setting is saved per camera in that browser only, so other devices are
-    not changed.
+  - **Rotate** turns the picture 90 degrees each time you press it and saves
+    the angle on the hub, so every device shows the same picture.
+  - **Photo** saves a still JPEG of the camera while it streams.
   - **Stop** asks the hub to stop that camera.
+  - **Quality (test)** sets the camera's frame size and JPEG quality until
+    the camera restarts. The default is SVGA (800 by 600), quality 12. This
+    picker is for comparing settings and may be removed.
 - Leaving the page, switching to another browser tab, or closing the browser
-  asks the hub to stop the cameras that page had started. A request also
-  lapses after 60 s without renewal. The page renews it every 20 s while a
-  tile shows a stream, so a closed browser cannot keep a camera on for more
-  than a minute.
-- A camera that streams with no viewer for 30 s goes back to standby on its
-  own. The hub then ends that request instead of starting the camera again.
-  To wake it, press Stop and then Watch.
+  asks the hub to stop the cameras that page had started. While the page is
+  open and the tile is on screen, the page renews the request every 20 s,
+  even while the video is paused, so the video plays until you press Stop or
+  leave. A request lapses 60 s after its last renewal, so a closed browser
+  cannot keep a camera on for more than a minute.
+- As a backup, a camera that streams with no viewer for 5 minutes goes back
+  to standby on its own. The hub ends that request, and a tile still on
+  screen asks for the camera again within 5 s.
 - If the picture stops for 10 s (Wi-Fi lost, phone asleep), the tile says
-  "Video paused" and stops renewing, so the camera sleeps within about a
-  minute.
+  "Video paused" and reconnects when it can.
 - The hub sends `start` once a second until the camera says it is streaming,
   for 15 tries at most. After that the tile says "No answer from the camera".
-- The video is the camera's own `/stream`, loaded only while its tile is on
-  screen.
+- The video is the camera's own stream on port 81, loaded only while its
+  tile is on screen. One viewer can watch a camera at a time; a second viewer
+  waits until the first stops.
+- While a camera streams, the hub holds back Bluetooth scans for the fridge
+  and the Bluetti for up to 60 s, because a scan takes radio time from
+  Wi-Fi. Scans for the heater are never held back, since the thermostat and
+  the low-battery stop depend on that link.
+- Measured on the bench, with the heater out of range and scanning: VGA
+  about 10 frames a second, SVGA about 2 to 3, XGA about 1.5. Throughput
+  levels off near 100 KB/s, which is probably the hub's access point, since
+  every frame crosses its radio twice. Not yet measured in the camper.
 - Names are set when the camera firmware is built, with
   `M_PULSE_CAMERA_NAME` (see [camera-node](../camera-node/README.md)). The
   default is `camper`. The second camera is `cab`.
 - The API is `GET /api/cameras` (a JSON array with name, ip, state, online,
-  wanted, note, stream_url and still_url), and `POST
+  wanted, rotation, note, stream_url and still_url), and `POST
   /api/cameras/<name>/start` or `/stop`, which return one entry. An unknown
   name gets an error.
+- The rotation (0, 90, 180 or 270 degrees, default 0) is kept per camera
+  name in flash, in the same two-copy store as the thermostat settings, and
+  written only when it changes. `POST /api/cameras/<name>/rotation` takes the
+  number as plain text (`90`) and returns the entry; any other value is a 400.
 - The access point takes up to 8 connections (it was 4), for the phone, the
   tablet, the sensor node and two cameras.
 

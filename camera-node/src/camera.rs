@@ -5,12 +5,17 @@
 //! is still on the 3.3 V rail in standby, so its exact current draw is
 //! measured, not assumed.
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use esp_idf_svc::sys::{self, camera};
 use log::info;
+use m_pulse_core::camera::CameraState;
+
+use crate::state::{self, Settings, Size};
 
 /// Starts the camera with this board's pinout and returns once the sensor answers.
+/// The frame size and JPEG quality are the ones chosen by `POST /settings`.
 pub fn power_up() -> Result<()> {
+    let settings = state::settings();
     let mut config: camera::camera_config_t = unsafe { std::mem::zeroed() };
     config.pin_pwdn = -1;
     config.pin_reset = -1;
@@ -32,8 +37,8 @@ pub fn power_up() -> Result<()> {
     config.ledc_timer = sys::ledc_timer_t_LEDC_TIMER_0;
     config.ledc_channel = sys::ledc_channel_t_LEDC_CHANNEL_0;
     config.pixel_format = camera::pixformat_t_PIXFORMAT_JPEG;
-    config.frame_size = camera::framesize_t_FRAMESIZE_VGA;
-    config.jpeg_quality = 12;
+    config.frame_size = settings.size.framesize();
+    config.jpeg_quality = i32::from(settings.quality);
     config.fb_count = 2;
     config.fb_location = camera::camera_fb_location_t_CAMERA_FB_IN_PSRAM;
     config.grab_mode = camera::camera_grab_mode_t_CAMERA_GRAB_LATEST;
@@ -52,6 +57,39 @@ pub fn power_up() -> Result<()> {
 /// Stops the camera clock and driver. Callers must hold the write lock.
 pub fn power_down() {
     unsafe { camera::esp_camera_deinit() };
+}
+
+/// Changes size and quality on the running sensor and stores them for the next
+/// start. Callers must hold the read lock with the camera streaming. If the
+/// quality step fails, the old frame size is put back, so the sensor and the
+/// stored settings never disagree. On error the stored settings are unchanged.
+/// Applies new settings to a streaming camera. The caller must hold the write
+/// lock. Quality changes on the running sensor. A new frame size restarts the
+/// driver, because the driver sizes its frame buffers when it starts.
+pub fn change_settings(size: Size, quality: u8) -> Result<Settings> {
+    let old = state::settings();
+    let new = Settings { size, quality };
+
+    if new.size != old.size {
+        // The restart reads the stored settings, so store the new ones first.
+        state::set_settings(new);
+        power_down();
+        if let Err(err) = power_up() {
+            state::set_settings(old);
+            state::set_state(CameraState::Standby);
+            return Err(err.context("restart with the new frame size failed; the camera is now in standby"));
+        }
+    } else {
+        let sensor = unsafe { camera::esp_camera_sensor_get() };
+        anyhow::ensure!(!sensor.is_null(), "no camera sensor");
+        let set_quality = unsafe { (*sensor).set_quality }.context("sensor has no set_quality")?;
+        let ret = unsafe { set_quality(sensor, i32::from(quality)) };
+        anyhow::ensure!(ret == 0, "set JPEG quality {quality} failed: error {ret}");
+        state::set_settings(new);
+    }
+
+    info!("Settings: {} quality {}", new.size.name(), new.quality);
+    Ok(new)
 }
 
 /// One JPEG frame, returned to the driver on drop.

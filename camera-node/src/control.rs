@@ -6,7 +6,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use log::{info, warn};
-use m_pulse_core::camera::{Announce, CameraState, Command, ANNOUNCE_EVERY_S, ANNOUNCE_PORT, COMMAND_PORT};
+use m_pulse_core::camera::{
+    Announce, CameraState, Command, ANNOUNCE_EVERY_S, ANNOUNCE_PORT, COMMAND_PORT,
+};
 
 use crate::camera;
 use crate::net::Online;
@@ -62,6 +64,7 @@ fn start() {
     match result {
         Ok(()) => {
             state::touch_viewed();
+            crate::net::set_power_save(false);
             state::set_state(CameraState::Streaming);
             info!("Camera streaming");
         }
@@ -79,6 +82,7 @@ fn stop() {
     let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
     camera::power_down();
     state::set_state(CameraState::Standby);
+    crate::net::set_power_save(true);
     info!("Camera in standby");
 }
 
@@ -123,7 +127,8 @@ fn run_announce(name: &'static str, online: Online) {
     }
 }
 
-/// Puts a streaming camera back to standby after nobody has watched for a while.
+/// Backup: puts a streaming camera back to standby after nobody has watched for
+/// `IDLE_OFF`. The hub's stop command is the normal way to sleep.
 fn run_idle() {
     loop {
         thread::sleep(IDLE_CHECK);
