@@ -1,4 +1,6 @@
 target/
+# The vendored ESP32 camera driver keeps source under a folder named target/.
+!camera-node/components/esp32_camera/target/
 .embuild/
 sdkconfig
 sdkconfig.old
