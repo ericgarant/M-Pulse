@@ -34,9 +34,12 @@
 //!   says no
 //! - set the hub's clock from the phone when the hub has no internet time
 //!   (`POST /api/time`, body is Unix seconds)
+//! - list the cameras (`GET /api/cameras`, a JSON array) and ask for one to
+//!   be started or stopped (`POST /api/cameras/<name>/start` or `/stop`);
+//!   see [`crate::camera`]
 
 use std::fmt::Write as _;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer, Request};
 use esp_idf_svc::http::Method;
@@ -44,6 +47,7 @@ use esp_idf_svc::io::Write;
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
 use m_pulse_core::bluetti::Output;
+use m_pulse_core::camera as cam;
 use m_pulse_core::eco_guard;
 use m_pulse_core::fridge::RunMode;
 use m_pulse_core::fuel::{self, Fill};
@@ -80,6 +84,8 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         // failed with ERR_TOO_MANY_RETRIES.
         max_open_sockets: 10,
         lru_purge_enable: true,
+        // Lets one handler serve /api/cameras/<name>/start and /stop.
+        uri_match_wildcard: true,
         ..Default::default()
     })?;
 
@@ -403,6 +409,50 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
             info!("Dashboard set the clock: {:?}", clock::local_now());
         }
         req.into_ok_response()?.write_all(b"ok")?;
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/cameras", Method::Get, move |req| {
+        let body = s.cameras().json_list(Instant::now());
+        req.into_response(200, None, &[("Content-Type", "application/json")])?
+            .write_all(body.as_bytes())?;
+        Ok(())
+    })?;
+
+    let s = state.clone();
+    server.fn_handler::<anyhow::Error, _>("/api/cameras/*", Method::Post, move |req| {
+        // The path is /api/cameras/<name>/<start|stop>. Copied out first, as
+        // the request is consumed when the response is written.
+        let uri = req.uri().to_string();
+        let rest = uri.strip_prefix("/api/cameras/").unwrap_or_default();
+        let (name, action) = rest.split_once('/').unwrap_or_default();
+        let now = Instant::now();
+        let entry = {
+            let mut cameras = s.cameras();
+            let known = cam::valid_name(name)
+                && match action {
+                    "start" => cameras.want(name, now),
+                    "stop" => cameras.unwant(name),
+                    _ => false,
+                };
+            if known { cameras.json_entry(name, now) } else { None }
+        };
+        match entry {
+            Some(body) => {
+                if action == "start" {
+                    info!("Dashboard asked for camera {name}");
+                } else {
+                    info!("Dashboard let camera {name} sleep");
+                }
+                req.into_response(200, None, &[("Content-Type", "application/json")])?
+                    .write_all(body.as_bytes())?;
+            }
+            None => {
+                req.into_response(404, None, &[("Content-Type", "application/json")])?
+                    .write_all(b"{\"error\":\"no such camera\"}")?;
+            }
+        }
         Ok(())
     })?;
 

@@ -19,6 +19,8 @@ use m_pulse_core::history::History;
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
 
+use crate::camera::Cameras;
+
 /// Where a cabin reading came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
@@ -196,6 +198,7 @@ pub struct Hub {
 pub struct Shared {
     hub: Arc<Mutex<Hub>>,
     history: Arc<Mutex<History>>,
+    cameras: Arc<Mutex<Cameras>>,
 }
 
 impl Shared {
@@ -219,6 +222,7 @@ impl Shared {
         Self {
             hub,
             history: Arc::default(),
+            cameras: Arc::default(),
         }
     }
 
@@ -236,5 +240,10 @@ impl Shared {
     /// Locks the trend history.
     pub fn history(&self) -> MutexGuard<'_, History> {
         self.history.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Locks the camera registry.
+    pub fn cameras(&self) -> MutexGuard<'_, Cameras> {
+        self.cameras.lock().unwrap_or_else(|e| e.into_inner())
     }
 }

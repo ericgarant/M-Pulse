@@ -1,0 +1,13 @@
+# Rust needs more main-task stack than the 3K default for C.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# This board only streams; the hub owns Bluetooth.
+CONFIG_BT_ENABLED=n
+
+# Frame buffers live in PSRAM (the WROVER module has 8 MB, 4 MB mapped).
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_QUAD=y
+CONFIG_SPIRAM_SPEED_40M=y
+
+# Dashboard and stream: room for the browser's request headers.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024

@@ -65,6 +65,11 @@ In use:
 - **Screens**: the camper's Android tablet and a phone, both through the
   dashboard in a browser. There is no app to install.
 
+Cameras: the camper's camera is a Freenove ESP32-WROVER board with an OV3660
+sensor, and a second board with an OV2640 has also been tested. Each camera
+sleeps until someone opens the Cameras page on the dashboard. See
+[hub/README.md](hub/README.md#cameras) and [camera-node/](camera-node/).
+
 Retired:
 
 - **Freenove ESP32-S3 media kit**: the first hub. Its screen was never used,
@@ -84,6 +89,7 @@ Tablet / phone ── Wi-Fi "M-Pulse" ──┐
                                     ▲          ── BLE ──> Rocky 50 fridge
                                     │          ── BLE ──> Bluetti Elite 200 V2
 Sensor node (backup) ── UDP 4210 ───┘
+Camera nodes ── UDP 4220 / 4221 ────┘
 ```
 
 The hub runs its own Wi-Fi network and needs no router or internet. All
@@ -111,6 +117,10 @@ Open items, roughly in order:
 - Remember the setpoint across a power cut. Today a restart puts the hub in
   Monitor only with the default setpoint (the comfort band, battery-rule
   levels, fridge saver switch and fuel settings are kept).
+- Re-test the camper's camera (OV3660) with the current hub. The OV2640
+  board has been tested and works.
+- Measure the camera's standby current. The WROVER board has no power-down
+  pin, so the sensor stays powered in standby.
 - Later: the MaxxAir fans and the ceiling LEDs.
 
 ## Getting started

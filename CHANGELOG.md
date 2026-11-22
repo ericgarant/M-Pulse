@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Cameras (hub)**: keeps a list of up to 8 cameras announced on UDP port
+  4220 and starts them only while a viewer asks. New Cameras page with Watch,
+  Rotate and Stop, a Home tile, and `GET /api/cameras` with `POST
+  /api/cameras/<name>/start` or `/stop`. The access point now takes 8
+  connections, up from 4. See `hub/README.md` (Cameras).
+- **Cameras (camera node)**: new firmware in `camera-node/` for the Freenove
+  ESP32-WROVER with an OV3660. It waits in standby until the hub asks, then
+  streams MJPEG, and returns to standby on stop or after 30 s with no viewer.
+  Name set with `M_PULSE_CAMERA_NAME`. An OV2640 board has also been tested.
+- **Cameras (core)**: `core/src/camera.rs` holds the UDP messages (announce,
+  start, stop), the camera states and the name rules, with tests.
+
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It
   finds the sensor at 0x44 or 0x45 by itself, checks every reading's CRC,

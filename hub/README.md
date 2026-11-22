@@ -489,6 +489,59 @@ and back to Max when it is up to the high level again (defaults 30 % and
 - The low level can be 5 to 95 %, and the high level at least 5 points above
   it.
 
+## Cameras
+
+The Cameras page (the last tab) shows one tile per camera on the hub's
+network: its name, whether it is streaming, starting, asleep or offline, and
+its video while it streams. A camera appears once it has announced itself.
+The Home page has a Cameras tile that shows how many are online.
+
+- Each camera announces its name and state to the hub every 5 s on UDP port
+  4220, and the hub takes the camera's address from that packet. A camera
+  with no announcement for 15 s is offline.
+- Cameras sleep until someone asks. Opening the Cameras page asks for every
+  camera. Each tile has three buttons:
+  - **Watch** asks the hub to start that camera.
+  - **Rotate** turns the picture 90 degrees each time you press it. The
+    setting is saved per camera in that browser only, so other devices are
+    not changed.
+  - **Stop** asks the hub to stop that camera.
+- Leaving the page, switching to another browser tab, or closing the browser
+  asks the hub to stop the cameras that page had started. A request also
+  lapses after 60 s without renewal. The page renews it every 20 s while a
+  tile shows a stream, so a closed browser cannot keep a camera on for more
+  than a minute.
+- A camera that streams with no viewer for 30 s goes back to standby on its
+  own. The hub then ends that request instead of starting the camera again.
+  To wake it, press Stop and then Watch.
+- If the picture stops for 10 s (Wi-Fi lost, phone asleep), the tile says
+  "Video paused" and stops renewing, so the camera sleeps within about a
+  minute.
+- The hub sends `start` once a second until the camera says it is streaming,
+  for 15 tries at most. After that the tile says "No answer from the camera".
+- The video is the camera's own `/stream`, loaded only while its tile is on
+  screen.
+- Names are set when the camera firmware is built, with
+  `M_PULSE_CAMERA_NAME` (see [camera-node](../camera-node/README.md)). The
+  default is `camper`. The second camera is `cab`.
+- The API is `GET /api/cameras` (a JSON array with name, ip, state, online,
+  wanted, note, stream_url and still_url), and `POST
+  /api/cameras/<name>/start` or `/stop`, which return one entry. An unknown
+  name gets an error.
+- The access point takes up to 8 connections (it was 4), for the phone, the
+  tablet, the sensor node and two cameras.
+
+The messages are in [`core/src/camera.rs`](../core/src/camera.rs), and the
+hub's side is in `src/camera.rs`.
+
+Tested: a second camera board with an OV2640 (sensor ID 0x0026) also works.
+The camper's camera (Freenove WROVER with an OV3660, sensor ID 0x3660) still
+needs a test with the current hub.
+
+Not measured: the standby current. The WROVER board has no power-down pin,
+so standby only stops the camera clock and the sensor stays powered. See
+[camera-node](../camera-node/README.md#power).
+
 ## Build and flash
 
 Set up the toolchain first: [../docs/mac-setup.md](../docs/mac-setup.md).

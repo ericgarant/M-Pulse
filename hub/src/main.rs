@@ -3,7 +3,8 @@
 //! Owns the BLE links to the BougeRV diesel heater, the BougeRV Rocky 50
 //! fridge and the Bluetti Elite 200 V2 power station, reads the cabin from its
 //! own SHT3x (falling back to the sensor node over Wi-Fi), runs the
-//! thermostat, and serves the dashboard.
+//! thermostat, starts the cameras when a viewer asks, and serves the
+//! dashboard.
 //!
 //! After every restart the hub is in Monitor mode and the thermostat sends
 //! no switch commands. The heater is switched only from the dashboard's On
@@ -17,6 +18,7 @@
 
 mod bluetti;
 mod cabin;
+mod camera;
 mod clock;
 mod control;
 mod fridge;
@@ -118,6 +120,7 @@ fn main() -> anyhow::Result<()> {
         state.clone(),
     )?;
     cabin::spawn(state.clone())?;
+    camera::spawn(state.clone())?;
     control::spawn(state.clone(), fuel_store, rules_store, thermo_store)?;
     let _server = web::start(state.clone())?;
 

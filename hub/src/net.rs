@@ -58,7 +58,7 @@ pub fn start(
             .map_err(|_| anyhow::anyhow!("M_PULSE_AP_PASS is too long"))?,
         auth_method: AuthMethod::WPA2Personal,
         channel: 6,
-        max_connections: 4,
+        max_connections: 8,
         ..Default::default()
     };
     anyhow::ensure!(
