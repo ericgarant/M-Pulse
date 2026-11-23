@@ -67,6 +67,10 @@
   sending start, and the camera kept retrying its driver, for as long as
   the page was open. The page no longer wakes a camera that gave no
   answer.
+- **Stalled stream ends after 10 s (camera node)**: a stream with no frame
+  for 10 s of wall-clock time ends. The limit was 200 tries meant as 10 s,
+  but each try can wait 4 s in the driver, so a stalled sensor kept the
+  stream, and the camera, on for about 13 minutes.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

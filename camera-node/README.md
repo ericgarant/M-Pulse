@@ -155,6 +155,10 @@ joined to the hub's `M-Pulse` network with the dashboard open.
 Other lines to check in the logs:
 
 - `stream started` and `stream stopped`: a viewer connected and left.
+- `No frames for <N> s: ending the stream`: the sensor gave no frame for
+  10 s (up to about 14 s, as one try can wait 4 s in the driver). The
+  stream ends, so a stalled camera can go to standby instead of staying on
+  for the viewer.
 - `Stream SVGA q12: 9.7 fps, 16 KB per frame, 163 KB/s, RSSI -36 dBm; RAM
   ... KB free, largest DMA block ... KB, PSRAM ... KB free`: every 10 s
   while streaming, the frame rate, average frame size, throughput, Wi-Fi

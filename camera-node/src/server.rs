@@ -7,7 +7,7 @@
 
 use std::sync::atomic::Ordering;
 use std::sync::RwLockReadGuard;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use esp_idf_svc::http::server::{Configuration, EspHttpConnection, EspHttpServer, Request};
 use esp_idf_svc::http::Method;
@@ -111,10 +111,12 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
         &[("Content-Type", "multipart/x-mixed-replace;boundary=frame")],
     )?;
     let conn: &mut EspHttpConnection = resp.connection();
-    // Frames that cannot be grabbed for this long end the stream, so a viewer who
-    // has gone without any frame cannot keep the camera running with no one watching.
-    const NO_FRAME_LIMIT: u32 = 200; // 200 x 50 ms = 10 s
-    let mut no_frame = 0u32;
+    // A stream with no good frame for this long ends, so a viewer who gets no
+    // frames cannot keep the camera running with no one watching. It is timed,
+    // not counted: one failed grab can wait 4 s in the driver, so the stream
+    // ends between 10 and about 14 s after the last frame.
+    const NO_FRAME_LIMIT: Duration = Duration::from_secs(10);
+    let mut last_frame = Instant::now();
     // Stream statistics, logged every 10 s to compare quality settings.
     let mut stats_from = std::time::Instant::now();
     let (mut stats_frames, mut stats_bytes) = (0u32, 0usize);
@@ -123,15 +125,17 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
             break; // the hub stopped the camera or the driver went to standby
         }
         let Some(held) = grab() else {
-            no_frame += 1;
-            if no_frame >= NO_FRAME_LIMIT {
-                log::warn!("No frames for 10 s: ending the stream");
+            if last_frame.elapsed() >= NO_FRAME_LIMIT {
+                log::warn!(
+                    "No frames for {} s: ending the stream",
+                    last_frame.elapsed().as_secs()
+                );
                 break;
             }
             std::thread::sleep(Duration::from_millis(50));
             continue;
         };
-        no_frame = 0;
+        last_frame = Instant::now();
         let jpeg = held.frame.bytes();
         let head = format!(
             "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
