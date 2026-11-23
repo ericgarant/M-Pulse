@@ -71,7 +71,11 @@ the stats line below.
 - It listens on UDP port 4221 for `MPC1 start` and `MPC1 stop` from the hub.
   On the hub's `M-Pulse` network it takes them only from the hub (the
   network's gateway) and ignores any other sender. On your home network the
-  hub has another address, so there it takes them from any sender. It takes
+  hub has another address, so there it takes them from any sender. When the
+  link drops it takes none until it has joined a network again. If the
+  hub's network ever reports no gateway, it takes them from any sender
+  rather than shut out the hub, and logs `... with no gateway: commands from
+  anyone`. It takes
   a start only 2 s after it last started or stopped, and a stop at any
   time. The hub resends start every 2 s to match, so each of its tries
   reaches the camera.

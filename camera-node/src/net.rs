@@ -46,10 +46,21 @@ const CHECK_EVERY: Duration = Duration::from_secs(10);
 #[derive(Clone)]
 pub struct Online {
     up: Arc<AtomicBool>,
-    /// On the hub's network, the hub's address (the network's gateway): the
-    /// only sender whose commands count. `None` on your own network, where
-    /// the hub has another address, so commands from any sender count.
-    hub: Arc<Mutex<Option<Ipv4Addr>>>,
+    senders: Arc<Mutex<Senders>>,
+}
+
+/// Whose start and stop commands count.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Senders {
+    /// No link, or one being joined: nobody's. Set whenever the link drops, so
+    /// an old network's hub address never carries over to the next link.
+    Nobody,
+    /// On the hub's network: only the hub's, which is the network's gateway.
+    Hub(Ipv4Addr),
+    /// On your own network, where the hub has another address, or on the
+    /// hub's network if it reports no gateway (rather than refusing the hub):
+    /// anyone's.
+    Anyone,
 }
 
 impl Online {
@@ -58,16 +69,17 @@ impl Online {
     }
 
     /// Whether a command from `from` counts: on the hub's network only the
-    /// hub's, on your own network anyone's.
+    /// hub's, on your own network anyone's, and with no link nobody's.
     pub fn takes_commands_from(&self, from: IpAddr) -> bool {
-        match *self.hub.lock().unwrap_or_else(|e| e.into_inner()) {
-            Some(hub) => from == IpAddr::V4(hub),
-            None => true,
+        match *self.senders.lock().unwrap_or_else(|e| e.into_inner()) {
+            Senders::Nobody => false,
+            Senders::Hub(hub) => from == IpAddr::V4(hub),
+            Senders::Anyone => true,
         }
     }
 
-    fn set_hub(&self, hub: Option<Ipv4Addr>) {
-        *self.hub.lock().unwrap_or_else(|e| e.into_inner()) = hub;
+    fn set_senders(&self, senders: Senders) {
+        *self.senders.lock().unwrap_or_else(|e| e.into_inner()) = senders;
     }
 }
 
@@ -86,7 +98,7 @@ pub fn start(
 
     let online = Online {
         up: Arc::new(AtomicBool::new(false)),
-        hub: Arc::new(Mutex::new(None)),
+        senders: Arc::new(Mutex::new(Senders::Nobody)),
     };
     let flag = online.clone();
     thread::Builder::new()
@@ -109,18 +121,23 @@ fn keep_joined(mut wifi: BlockingWifi<EspWifi<'static>>, online: Online) {
             online.up.store(true, Ordering::Relaxed);
         } else {
             online.up.store(false, Ordering::Relaxed);
+            online.set_senders(Senders::Nobody);
             let (ssid, pass) = networks[next];
             next = (next + 1) % networks.len();
             match join(&mut wifi, ssid, pass) {
                 Ok((ip, gateway)) => {
-                    // On its own network the hub is the gateway. A network with
-                    // no gateway leaves commands open rather than refusing the hub.
-                    let hub = (ssid == HUB_SSID && !gateway.is_unspecified()).then_some(gateway);
-                    match hub {
-                        Some(hub) => info!("Joined \"{ssid}\" as {ip}; commands only from the hub at {hub}"),
-                        None => info!("Joined \"{ssid}\" as {ip}"),
-                    }
-                    online.set_hub(hub);
+                    // On its own network the hub is the gateway.
+                    let senders = if ssid != HUB_SSID {
+                        info!("Joined \"{ssid}\" as {ip}");
+                        Senders::Anyone
+                    } else if gateway.is_unspecified() {
+                        warn!("Joined \"{ssid}\" as {ip} with no gateway: commands from anyone");
+                        Senders::Anyone
+                    } else {
+                        info!("Joined \"{ssid}\" as {ip}; commands only from the hub at {gateway}");
+                        Senders::Hub(gateway)
+                    };
+                    online.set_senders(senders);
                     online.up.store(true, Ordering::Relaxed);
                 }
                 Err(err) => {
