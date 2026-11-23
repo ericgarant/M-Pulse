@@ -71,6 +71,11 @@
   for 10 s of wall-clock time ends. The limit was 200 tries meant as 10 s,
   but each try can wait 4 s in the driver, so a stalled sensor kept the
   stream, and the camera, on for about 13 minutes.
+- **Frame size and an open stream (camera node, hub)**: the camera refuses a
+  new frame size with `409` while a viewer has the stream open, because the
+  driver restart would stall that stream. The quality alone still changes
+  while watching. The Quality (test) picker closes its tile's video for the
+  change and opens it again after.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

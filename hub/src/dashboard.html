@@ -2465,7 +2465,7 @@ function camTile(name) {
   $("cm-list").append(el);
   const c = { name, el, img, badge, msg, watch, stop, rotate, photo, qsel, pmsg, want: false, stopping: false, renew: null,
     // Without an observer every tile counts as on screen, as before.
-    visible: !camIO, offTimer: null, userStopped: false,
+    visible: !camIO, offTimer: null, userStopped: false, paused: false, conn: 0,
     shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
   // Each frame of the MJPEG stream fires a load event; remember when the last one came.
   img.addEventListener("load", () => { c.lastFrame = Date.now(); });
@@ -2507,7 +2507,9 @@ async function camRotate(c) {
 }
 
 // Temporary: sends the picked size and quality to the camera's /settings and
-// shows its reply. A new size restarts the camera's driver for a moment.
+// shows its reply. A new size restarts the camera's driver, which the camera
+// refuses while anyone watches, so the tile closes its own video first, gives
+// the camera a moment to see it go, and opens it again after.
 async function camQuality(c) {
   const e = c.last;
   if (!e || !e.ip || !c.qsel.value) return;
@@ -2515,6 +2517,9 @@ async function camQuality(c) {
   c.qsel.value = "";
   c.pmsg.hidden = false;
   c.pmsg.textContent = "Changing to " + size + ", quality " + quality + "...";
+  c.paused = true;
+  paintStream(c);
+  await new Promise(done => setTimeout(done, 1500));
   try {
     const r = await fetch("http://" + e.ip + "/settings", {
       method: "POST",
@@ -2526,6 +2531,9 @@ async function camQuality(c) {
   } catch (err) {
     c.pmsg.textContent = "Could not reach the camera.";
   }
+  c.paused = false;
+  c.conn++;   // a new address, so the browser opens a new stream
+  paintStream(c);
 }
 
 // Turns a JPEG by a rotation in degrees (clockwise, as the tile shows it) and
@@ -2582,8 +2590,11 @@ async function camPhoto(c) {
 
 // Sets the video to the stream only while this page wants the camera and the
 // tile is on screen; anything else closes the connection (src "").
+// While the quality picker works, the video stays closed (c.paused). After it,
+// c.conn adds ?n= to the address so the browser does not reuse the old stream.
 function paintStream(c) {
-  const url = camsOn && c.want && c.visible && c.stream ? c.stream : null;
+  const url = camsOn && c.want && c.visible && c.stream && !c.paused
+    ? c.stream + (c.conn ? "?n=" + c.conn : "") : null;
   if (url === c.shown) return;
   c.shown = url;
   c.img.src = url || "";

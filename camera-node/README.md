@@ -51,7 +51,10 @@ values can only be applied to a running sensor), and `500` if the sensor
 rejects the change. A `500` leaves the old values in place. The values are
 kept in memory, so the next start uses them. They reset to `SVGA` and
 quality `12` on reboot. A new frame size restarts the camera driver for a
-moment, because the driver sizes its frame buffers when it starts.
+moment, because the driver sizes its frame buffers when it starts. So a new
+frame size is refused with `409` (`Someone is watching...`) while a viewer
+has the stream open; close the video first. The quality alone can change
+while someone watches.
 
 On the bench, one camera at a time, SVGA at quality 12 ran at about 5 to 12
 frames a second on a good board (85 to 290 KB/s). Boards differ a lot: one

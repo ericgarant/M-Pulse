@@ -286,6 +286,18 @@ fn post_settings(mut req: Request<&mut EspHttpConnection>) -> anyhow::Result<()>
             "The camera is not streaming. Start it, then change the settings.\n",
         );
     }
+    // A new frame size restarts the driver under a viewer's open stream, which
+    // would stall on the restart. Refused while anyone watches; the quality
+    // alone changes on the running sensor.
+    if size != state::settings().size && state::VIEWERS.load(Ordering::SeqCst) > 0 {
+        return text(
+            req,
+            409,
+            "Conflict",
+            "Someone is watching. A new frame size restarts the camera, so close the video first. \
+             The quality alone can change while watching.\n",
+        );
+    }
     match camera::change_settings(size, quality) {
         Ok(applied) => text(req, 200, "OK", &settings_text(applied)),
         Err(err) => {
