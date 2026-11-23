@@ -512,6 +512,8 @@ The Home page has a Cameras tile that shows how many are online.
   leave the Cameras page, close the browser or reload. The browser keeps
   the list (`localStorage`, key `mpulse-cam-stopped`), so each phone or
   tablet has its own, and clearing the browser's site data forgets it.
+  Tabs of the same browser share it: a Stop or Watch in one tab does not
+  undo another tab's.
   Each tile has four buttons and a picker:
   - **Watch** asks the hub to start that camera.
   - **Rotate** turns the picture 90 degrees each time you press it and saves

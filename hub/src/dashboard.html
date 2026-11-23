@@ -2408,13 +2408,19 @@ let camTimer = null;
 // Names of the cameras stopped with Stop, kept in this browser so they stay
 // asleep across visits and reloads. Only Stop adds a name, only Watch removes it.
 const CAM_STOPPED_KEY = "mpulse-cam-stopped";
-const camStopped = (() => {
-  try { return new Set(JSON.parse(localStorage.getItem(CAM_STOPPED_KEY) || "[]")); } catch (e) { return new Set(); }
-})();
+// The stored names, or null if storage cannot be read.
+function camStoppedRead() {
+  try { return new Set(JSON.parse(localStorage.getItem(CAM_STOPPED_KEY) || "[]")); } catch (e) { return null; }
+}
+const camStopped = camStoppedRead() || new Set();
+// Changes one name. The list is read again just before writing, so a Stop or
+// Watch in another tab of this browser is not overwritten by this tab's copy.
 function camSetStopped(c, stopped) {
   c.userStopped = stopped;
   if (stopped) camStopped.add(c.name); else camStopped.delete(c.name);
-  try { localStorage.setItem(CAM_STOPPED_KEY, JSON.stringify([...camStopped])); } catch (e) {}
+  const saved = camStoppedRead() || new Set(camStopped);
+  if (stopped) saved.add(c.name); else saved.delete(c.name);
+  try { localStorage.setItem(CAM_STOPPED_KEY, JSON.stringify([...saved])); } catch (e) {}
 }
 const camIO = "IntersectionObserver" in window
   ? new IntersectionObserver(entries => entries.forEach(e => {

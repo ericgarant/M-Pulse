@@ -42,7 +42,8 @@
   one scrolled past streamed to nobody for about a minute. Stop sticks: a
   camera stopped with Stop stays asleep on that device until its Watch is
   pressed, across visits to the page and reloads. The browser remembers it
-  in `localStorage`.
+  in `localStorage`, and each Stop or Watch changes only its own camera
+  there, so two tabs do not overwrite each other.
 - **Turned photos (hub)**: Photo saves the picture turned to the camera's
   saved rotation, as the video shows it. Before, the photo kept the
   camera's own orientation.
