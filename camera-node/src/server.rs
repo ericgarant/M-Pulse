@@ -151,13 +151,18 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
         let elapsed = stats_from.elapsed();
         if elapsed >= Duration::from_secs(10) {
             let s = state::settings();
+            // Signal strength of the link to the access point, in dBm (closer to 0 is stronger).
+            let mut rssi: core::ffi::c_int = 0;
+            let rssi_ok = unsafe { esp_idf_svc::sys::esp_wifi_sta_get_rssi(&mut rssi) }
+                == esp_idf_svc::sys::ESP_OK;
             log::info!(
-                "Stream {} q{}: {:.1} fps, {} KB per frame, {} KB/s",
+                "Stream {} q{}: {:.1} fps, {} KB per frame, {} KB/s, RSSI {} dBm",
                 s.size.name(),
                 s.quality,
                 stats_frames as f32 / elapsed.as_secs_f32(),
                 stats_bytes / stats_frames.max(1) as usize / 1024,
-                (stats_bytes as f32 / elapsed.as_secs_f32() / 1024.0) as u32
+                (stats_bytes as f32 / elapsed.as_secs_f32() / 1024.0) as u32,
+                if rssi_ok { rssi.to_string() } else { "?".to_string() }
             );
             stats_from = std::time::Instant::now();
             stats_frames = 0;

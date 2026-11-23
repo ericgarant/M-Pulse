@@ -26,7 +26,8 @@
   a Quality (test) picker on each tile uses it. The stream moved to its own
   server on port 81, so a photo or a settings change no longer waits for the
   stream. Wi-Fi power save is off while streaming, and the TCP send buffer
-  is 32 KB. The camera logs frame rate and throughput every 10 s.
+  is 32 KB. The camera logs frame rate, throughput and Wi-Fi signal
+  strength (RSSI) every 10 s.
 - **Bluetooth and video (hub)**: while a camera streams, scans for the fridge
   and the Bluetti wait up to 60 s, because scans took radio time from Wi-Fi
   and made the video erratic. Heater scans are never held back.

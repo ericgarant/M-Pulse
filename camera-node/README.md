@@ -53,9 +53,12 @@ kept in memory, so the next start uses them. They reset to `SVGA` and
 quality `12` on reboot. A new frame size restarts the camera driver for a
 moment, because the driver sizes its frame buffers when it starts.
 
-On the bench, SVGA at quality 12 ran at about 2 to 3 frames a second, VGA
-at about 10, and XGA at about 1.5. Quality 10 made frames only about 10%
-bigger and slower, with no visible gain.
+On the bench, one camera at a time, SVGA at quality 12 ran at about 5 to 12
+frames a second on a good board (85 to 290 KB/s). Boards differ a lot: one
+board managed only 1 to 2 frames a second with a strong signal and was
+retired. Quality 10 made frames only about 10% bigger and slower, with no
+visible gain. To compare boards, run each alone on the same scene and read
+the stats line below.
 
 ## What it sends and receives
 
@@ -138,8 +141,9 @@ joined to the hub's `M-Pulse` network with the dashboard open.
 Other lines to check in the logs:
 
 - `stream started` and `stream stopped`: a viewer connected and left.
-- `Stream SVGA q12: 2.8 fps, 33 KB per frame, 92 KB/s`: every 10 s while
-  streaming, the frame rate, average frame size and throughput.
+- `Stream SVGA q12: 9.7 fps, 16 KB per frame, 163 KB/s, RSSI -36 dBm`:
+  every 10 s while streaming, the frame rate, average frame size,
+  throughput and Wi-Fi signal strength (closer to 0 is stronger).
 - `Could not start the camera: ...`: the sensor did not start. The camera
   returns to standby and the hub reports no answer after 15 tries.
 - `Ignoring a command from ...`: something other than the hub sent a

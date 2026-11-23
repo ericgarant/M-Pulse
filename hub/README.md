@@ -529,10 +529,12 @@ The Home page has a Cameras tile that shows how many are online.
   and the Bluetti for up to 60 s, because a scan takes radio time from
   Wi-Fi. Scans for the heater are never held back, since the thermostat and
   the low-battery stop depend on that link.
-- Measured on the bench, with the heater out of range and scanning: VGA
-  about 10 frames a second, SVGA about 2 to 3, XGA about 1.5. Throughput
-  levels off near 100 KB/s, which is probably the hub's access point, since
-  every frame crosses its radio twice. Not yet measured in the camper.
+- Measured on the bench at SVGA quality 12, one camera at a time, with the
+  heater out of range and scanning: the camper board about 5 to 12 frames a
+  second (110 to 290 KB/s), the cab board about 5 to 10 (85 to 165 KB/s).
+  Boards differ: one earlier cab board managed only 1 to 2 frames a second
+  with a strong signal, and was replaced. Two cameras streaming at once
+  share the hub's radio and each gets less. Not yet measured in the camper.
 - Names are set when the camera firmware is built, with
   `M_PULSE_CAMERA_NAME` (see [camera-node](../camera-node/README.md)). The
   default is `camper`. The second camera is `cab`.
