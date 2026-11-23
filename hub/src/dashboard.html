@@ -2477,7 +2477,7 @@ function camTile(name) {
   $("cm-list").append(el);
   const c = { name, el, img, badge, msg, watch, stop, rotate, photo, qsel, pmsg, want: false, stopping: false, renew: null,
     // Without an observer every tile counts as on screen, as before.
-    visible: !camIO, offTimer: null, userStopped: camStopped.has(name), paused: false, conn: 0,
+    visible: !camIO, offTimer: null, userStopped: camStopped.has(name), paused: false, conn: 0, qbusy: false,
     shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
   // Each frame of the MJPEG stream fires a load event; remember when the last one came.
   img.addEventListener("load", () => { c.lastFrame = Date.now(); });
@@ -2522,12 +2522,16 @@ async function camRotate(c) {
 // shows its reply. A quality change applies at once. A new size restarts the
 // camera's driver, which the camera refuses while anyone watches, this tile
 // included: then the tile closes its own video and tries again, up to 3 times
-// 1 s apart, and opens the video again after.
+// 1 s apart, and opens the video again after. One change at a time per tile:
+// the picker stays disabled (c.qbusy) until the change and its retries end.
 async function camQuality(c) {
   const e = c.last;
   if (!e || !e.ip || !c.qsel.value) return;
+  if (c.qbusy) { c.qsel.value = ""; return; }
   const [size, quality] = c.qsel.value.split(",");
   c.qsel.value = "";
+  c.qbusy = true;
+  c.qsel.disabled = true;
   c.pmsg.hidden = false;
   c.pmsg.textContent = "Changing to " + size + ", quality " + quality + "...";
   const post = async () => {
@@ -2558,6 +2562,8 @@ async function camQuality(c) {
     c.conn++;   // a new address, so the browser opens a new stream
     paintStream(c);
   }
+  c.qbusy = false;
+  c.qsel.disabled = !(c.last && c.last.stream_url);
 }
 
 // Turns a JPEG by a rotation in degrees (clockwise, as the tile shows it) and
@@ -2631,7 +2637,7 @@ function camPaint(c) {
   c.rot = camRotOf(e);
   camRotApply(c);
   c.photo.disabled = !e.stream_url;
-  c.qsel.disabled = !e.stream_url;
+  c.qsel.disabled = !e.stream_url || c.qbusy;
   const streaming = e.online && e.state === "streaming";
   if (!streaming) c.stopping = false;
   const [text, cls] = !e.online ? ["Offline", "bad"]

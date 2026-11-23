@@ -528,6 +528,7 @@ The Home page has a Cameras tile that shows how many are online.
     watches, this tile included, so the tile then closes its own video and
     tries again, up to 3 times 1 s apart, and opens the video again after.
     If another device is watching, the tile says the change was refused.
+    The picker is greyed out until a change and its retries are done.
 - Leaving the page, switching to another browser tab, or closing the browser
   asks the hub to stop the cameras that page had started. While the page is
   open and the tile is on screen, the page renews the request every 20 s,

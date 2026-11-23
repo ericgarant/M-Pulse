@@ -81,6 +81,7 @@
   while watching. When the camera refuses a new size, the Quality (test)
   picker closes its tile's video and tries again, up to 3 times 1 s apart,
   then opens the video again; a quality change alone does not close it.
+  The picker takes one change at a time per tile.
 - **Starts at most every 2 s (camera node, hub)**: the camera takes a start
   only 2 s after it last started or stopped, so a flood of commands can no
   longer cycle the driver and its memory. A stop is never held back, and a
