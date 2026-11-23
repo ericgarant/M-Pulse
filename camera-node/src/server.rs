@@ -145,6 +145,9 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
             break;
         }
         state::touch_viewed();
+        if let Some(after) = state::first_frame_since_start() {
+            log::info!("First frame {} ms after start", after.as_millis());
+        }
         stats_frames += 1;
         stats_bytes += jpeg.len();
         drop(held);
@@ -156,13 +159,14 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
             let rssi_ok = unsafe { esp_idf_svc::sys::esp_wifi_sta_get_rssi(&mut rssi) }
                 == esp_idf_svc::sys::ESP_OK;
             log::info!(
-                "Stream {} q{}: {:.1} fps, {} KB per frame, {} KB/s, RSSI {} dBm",
+                "Stream {} q{}: {:.1} fps, {} KB per frame, {} KB/s, RSSI {} dBm; {}",
                 s.size.name(),
                 s.quality,
                 stats_frames as f32 / elapsed.as_secs_f32(),
                 stats_bytes / stats_frames.max(1) as usize / 1024,
                 (stats_bytes as f32 / elapsed.as_secs_f32() / 1024.0) as u32,
-                if rssi_ok { rssi.to_string() } else { "?".to_string() }
+                if rssi_ok { rssi.to_string() } else { "?".to_string() },
+                camera::memory()
             );
             stats_from = std::time::Instant::now();
             stats_frames = 0;

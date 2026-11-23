@@ -31,6 +31,11 @@
 - **Bluetooth and video (hub)**: while a camera streams, scans for the fridge
   and the Bluetti wait up to 60 s, because scans took radio time from Wi-Fi
   and made the video erratic. Heater scans are never held back.
+- **Camera logs (camera node)**: the reset reason at boot; free memory
+  (internal RAM, the largest DMA block, PSRAM) at each start and stop and in
+  the 10 s stats line; how long the camera took to start and how long after
+  the start command the first frame went out. A failed start names the
+  ESP-IDF error.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

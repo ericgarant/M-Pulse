@@ -43,8 +43,9 @@ fn run_commands(socket: UdpSocket) {
         let Ok((len, from)) = socket.recv_from(&mut buf) else {
             continue;
         };
+        let received = Instant::now();
         match Command::parse(&buf[..len]) {
-            Some(Command::Start) => start(),
+            Some(Command::Start) => start(received),
             Some(Command::Stop) => stop(),
             None => warn!("Ignoring a command from {from}"),
         }
@@ -54,22 +55,27 @@ fn run_commands(socket: UdpSocket) {
 // Start and stop check and change the state only while holding the write
 // lock, so they cannot interleave: the state always matches the driver.
 
-fn start() {
+/// `received` is when the command arrived, for the first frame's delay.
+fn start(received: Instant) {
     let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
     if state::state() != CameraState::Standby {
         return; // already starting or streaming; repeats from the hub are harmless
     }
     state::set_state(CameraState::Starting);
-    info!("Start requested: powering up the camera");
-    match camera::power_up() {
+    info!("Start received: powering up the camera");
+    let init_from = Instant::now();
+    let result = camera::power_up();
+    let init_ms = init_from.elapsed().as_millis();
+    match result {
         Ok(()) => {
             state::touch_viewed();
+            state::set_started_at(Some(received));
             crate::net::set_power_save(false);
             state::set_state(CameraState::Streaming);
-            info!("Camera streaming");
+            info!("Camera streaming: init took {init_ms} ms; {}", camera::memory());
         }
         Err(err) => {
-            warn!("Could not start the camera: {err}");
+            warn!("Could not start the camera after {init_ms} ms: {err}; {}", camera::memory());
             state::set_state(CameraState::Standby);
         }
     }
@@ -87,8 +93,9 @@ fn stop_locked() {
     }
     camera::power_down();
     state::set_state(CameraState::Standby);
+    state::set_started_at(None);
     crate::net::set_power_save(true);
-    info!("Camera in standby");
+    info!("Camera in standby; {}", camera::memory());
 }
 
 /// Sends an announcement whenever the state changes, and every few seconds otherwise.

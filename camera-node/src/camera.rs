@@ -45,13 +45,32 @@ pub fn power_up() -> Result<()> {
 
     let err = unsafe { camera::esp_camera_init(&config) };
     if err != sys::ESP_OK {
-        bail!("camera init failed: {err}");
+        bail!("camera init failed: {}", err_name(err));
     }
     let sensor = unsafe { camera::esp_camera_sensor_get() };
     if !sensor.is_null() {
         info!("Camera sensor PID 0x{:04x}", unsafe { (*sensor).id.PID });
     }
     Ok(())
+}
+
+/// The ESP-IDF name of an error code, such as `ESP_ERR_NOT_FOUND (0x105)`.
+fn err_name(err: sys::esp_err_t) -> String {
+    let name = unsafe { std::ffi::CStr::from_ptr(sys::esp_err_to_name(err)) };
+    format!("{} (0x{err:x})", name.to_string_lossy())
+}
+
+/// Free memory for the logs, in KB: internal RAM, the largest block the
+/// driver's DMA can use (each start allocates one) and PSRAM.
+pub fn memory() -> String {
+    let free = |caps| unsafe { sys::heap_caps_get_free_size(caps) } / 1024;
+    let dma = unsafe { sys::heap_caps_get_largest_free_block(sys::MALLOC_CAP_DMA) } / 1024;
+    format!(
+        "RAM {} KB free, largest DMA block {} KB, PSRAM {} KB free",
+        free(sys::MALLOC_CAP_INTERNAL),
+        dma,
+        free(sys::MALLOC_CAP_SPIRAM)
+    )
 }
 
 /// Stops the camera clock and driver. Callers must hold the write lock.

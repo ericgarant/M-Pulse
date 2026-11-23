@@ -116,6 +116,7 @@ joined to the hub's `M-Pulse` network with the dashboard open.
    monitor opens after the flash.
 2. Check the boot log, in this order:
    - `M-Pulse camera node "<name>" starting, camera in standby`
+   - `Reset reason: power on` (see below for the other reasons)
    - `Joined "M-Pulse" as <address>` (or your home network's name, if
      `M_PULSE_WIFI_SSID` is set and it joins that first)
    - `HTTP up: port 80 (page, still, settings), port 81 (stream)`
@@ -123,9 +124,11 @@ joined to the hub's `M-Pulse` network with the dashboard open.
    tile for the camera should appear within a few seconds. The hub's log
    should show `Camera "<name>" announced from <address>`.
 4. Opening the page starts the camera. The camera log should show
-   `Start requested: powering up the camera`, then
+   `Start received: powering up the camera`, then
    `Camera sensor PID 0x3660` (or `0x0026` for the OV2640 board), then
-   `Camera streaming`. The tile should show the picture.
+   `Camera streaming: init took <N> ms` with the free memory. The tile
+   should show the picture, and the log `First frame <N> ms after start`:
+   the time from the hub's start command to the first frame sent.
 5. Press Rotate once to check the picture turns, then leave the page. The
    camera log should show `Camera in standby` within a few seconds.
 6. Standby on its own: with the page still open, scroll the camera's tile
@@ -141,11 +144,21 @@ joined to the hub's `M-Pulse` network with the dashboard open.
 Other lines to check in the logs:
 
 - `stream started` and `stream stopped`: a viewer connected and left.
-- `Stream SVGA q12: 9.7 fps, 16 KB per frame, 163 KB/s, RSSI -36 dBm`:
-  every 10 s while streaming, the frame rate, average frame size,
-  throughput and Wi-Fi signal strength (closer to 0 is stronger).
-- `Could not start the camera: ...`: the sensor did not start. The camera
-  returns to standby and the hub reports no answer after 15 tries.
+- `Stream SVGA q12: 9.7 fps, 16 KB per frame, 163 KB/s, RSSI -36 dBm; RAM
+  ... KB free, largest DMA block ... KB, PSRAM ... KB free`: every 10 s
+  while streaming, the frame rate, average frame size, throughput, Wi-Fi
+  signal strength (closer to 0 is stronger) and free memory.
+- `Camera in standby; RAM ... KB free, largest DMA block ... KB, ...`: after
+  each stop. Each start needs one DMA block of up to 32 KB, so if the
+  largest DMA block keeps shrinking over many starts, memory is
+  fragmenting.
+- `Could not start the camera after <N> ms: camera init failed:
+  ESP_ERR_... (0x...)`: the sensor did not start, with the ESP-IDF error
+  name. The camera returns to standby and the hub reports no answer after
+  15 tries.
+- `Reset reason: ...` at boot: `power on` or `reset pin` are normal;
+  `brownout (the supply voltage dropped)` points to the power supply, and
+  `panic` or a watchdog to a firmware fault.
 - `Ignoring a command from ...`: something other than the hub sent a
   message to port 4221.
 - `Announce failed: ...`: the broadcast to the hub did not send.

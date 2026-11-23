@@ -18,6 +18,8 @@ pub static CAMERA: RwLock<()> = RwLock::new(());
 
 static STATE: Mutex<CameraState> = Mutex::new(CameraState::Standby);
 static LAST_VIEWED: Mutex<Option<Instant>> = Mutex::new(None);
+/// When the running start's command arrived, until its first frame is served.
+static STARTED_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
 /// Number of open `/stream` connections.
 pub static VIEWERS: AtomicUsize = AtomicUsize::new(0);
@@ -118,6 +120,21 @@ pub fn idle_for() -> Duration {
         .unwrap_or_else(|e| e.into_inner())
         .map(|t| t.elapsed())
         .unwrap_or(Duration::ZERO)
+}
+
+/// Records when the start command for the running start arrived (`None` at stop).
+pub fn set_started_at(at: Option<Instant>) {
+    *STARTED_AT.lock().unwrap_or_else(|e| e.into_inner()) = at;
+}
+
+/// The time from the start command to now, the first time it is asked after
+/// a start, and `None` after that: the first frame's delay.
+pub fn first_frame_since_start() -> Option<Duration> {
+    STARTED_AT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+        .map(|t| t.elapsed())
 }
 
 /// Takes the read lock. Reads never fail; a poisoned lock is still usable here.

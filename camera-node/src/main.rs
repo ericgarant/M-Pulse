@@ -44,6 +44,7 @@ fn main() -> anyhow::Result<()> {
 
     anyhow::ensure!(valid_name(NAME), "invalid camera name \"{NAME}\"");
     info!("M-Pulse camera node \"{NAME}\" starting, camera in standby");
+    info!("Reset reason: {}", reset_reason());
 
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
@@ -58,4 +59,23 @@ fn main() -> anyhow::Result<()> {
     loop {
         std::thread::sleep(std::time::Duration::from_secs(60));
     }
+}
+
+/// Why the chip last restarted, for the boot log. A brownout points to the
+/// power supply.
+fn reset_reason() -> String {
+    let reason = unsafe { sys::esp_reset_reason() };
+    let name = match reason {
+        sys::esp_reset_reason_t_ESP_RST_POWERON => "power on",
+        sys::esp_reset_reason_t_ESP_RST_EXT => "reset pin",
+        sys::esp_reset_reason_t_ESP_RST_SW => "software restart",
+        sys::esp_reset_reason_t_ESP_RST_PANIC => "panic",
+        sys::esp_reset_reason_t_ESP_RST_INT_WDT => "interrupt watchdog",
+        sys::esp_reset_reason_t_ESP_RST_TASK_WDT => "task watchdog",
+        sys::esp_reset_reason_t_ESP_RST_WDT => "other watchdog",
+        sys::esp_reset_reason_t_ESP_RST_DEEPSLEEP => "wake from deep sleep",
+        sys::esp_reset_reason_t_ESP_RST_BROWNOUT => "brownout (the supply voltage dropped)",
+        _ => return format!("code {reason}"),
+    };
+    name.to_string()
 }
