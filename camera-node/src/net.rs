@@ -78,6 +78,10 @@ impl Online {
         }
     }
 
+    fn senders(&self) -> Senders {
+        *self.senders.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn set_senders(&self, senders: Senders) {
         *self.senders.lock().unwrap_or_else(|e| e.into_inner()) = senders;
     }
@@ -117,9 +121,18 @@ fn keep_joined(mut wifi: BlockingWifi<EspWifi<'static>>, online: Online) {
 
     let mut next = 0;
     loop {
-        if wifi.is_up().unwrap_or(false) {
+        let up = wifi.is_up().unwrap_or(false);
+        // A join sets whose commands count before the link counts as up, so up
+        // with nobody's should not happen. If it does (a failed join whose
+        // link came up after all), the camera would announce but refuse the
+        // hub: treat the link as down and join again.
+        let unheard = up && online.senders() == Senders::Nobody;
+        if up && !unheard {
             online.up.store(true, Ordering::Relaxed);
         } else {
+            if unheard {
+                warn!("Wi-Fi is up but takes nobody's commands: joining again");
+            }
             online.up.store(false, Ordering::Relaxed);
             online.set_senders(Senders::Nobody);
             let (ssid, pass) = networks[next];

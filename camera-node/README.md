@@ -190,6 +190,9 @@ Other lines to check in the logs:
   something other than the hub sent a message to port 4221.
 - `Ignoring a command from <address>`: a message on port 4221 that is not
   `MPC1 start` or `MPC1 stop`.
+- `Wi-Fi is up but takes nobody's commands: joining again`: should not
+  appear. The link was up while the camera still refused every sender, so
+  it leaves the network and joins again rather than refuse the hub.
 - `Start ignored: under 2 s since the camera last started or stopped`: a
   start that came too soon after the last change. The hub sends it again,
   so after a quick Stop then Watch the camera starts about 2 s later.

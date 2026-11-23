@@ -53,7 +53,8 @@
 - **Commands only from the hub (camera node)**: on the hub's network a
   camera takes start and stop only from the hub (its gateway). On a home
   network it still takes them from any sender, and with no link it takes
-  none, so an old network's hub address never carries over. The README had
+  none, so an old network's hub address never carries over. A link found up
+  while the camera takes nobody's commands is joined again. The README had
   said other senders were already ignored; they were not.
 - **Camera registry in core, with tests**: the hub's camera list (start
   and stop wishes, retries, rotations and their flash record) moved from
