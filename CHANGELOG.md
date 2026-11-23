@@ -36,6 +36,10 @@
   the 10 s stats line; how long the camera took to start and how long after
   the start command the first frame went out. A failed start names the
   ESP-IDF error.
+- **Cameras wake only on screen (hub)**: the Cameras page asks for a camera
+  only while its tile is on screen, and lets it sleep after its tile has
+  been off screen for 10 s. Before, opening the page woke every camera, and
+  one scrolled past streamed to nobody for about a minute.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

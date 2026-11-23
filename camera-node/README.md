@@ -123,7 +123,8 @@ joined to the hub's `M-Pulse` network with the dashboard open.
 3. On the hub's network, open the dashboard and go to the Cameras page. The
    tile for the camera should appear within a few seconds. The hub's log
    should show `Camera "<name>" announced from <address>`.
-4. Opening the page starts the camera. The camera log should show
+4. Opening the page starts the camera if its tile is on screen. The camera
+   log should show
    `Start received: powering up the camera`, then
    `Camera sensor PID 0x3660` (or `0x0026` for the OV2640 board), then
    `Camera streaming: init took <N> ms` with the free memory. The tile
@@ -131,11 +132,14 @@ joined to the hub's `M-Pulse` network with the dashboard open.
    the time from the hub's start command to the first frame sent.
 5. Press Rotate once to check the picture turns, then leave the page. The
    camera log should show `Camera in standby` within a few seconds.
-6. Standby on its own: with the page still open, scroll the camera's tile
-   off screen so nothing is viewing the stream. After 5 minutes the camera
-   log shows `No viewers for 300 s: camera to standby`. This is the backup;
-   the hub's Stop is the normal way to sleep. The hub does not start it
-   again; press Stop and then Watch to wake it.
+6. Off screen: with the page still open, scroll the camera's tile off
+   screen. After about 10 s the hub's log shows
+   `Dashboard let camera <name> sleep` and the camera log shows
+   `Camera in standby`. Scroll the tile back: the camera starts again. On a
+   phone with two cameras, opening the page should start only the camera
+   whose tile is on screen. The camera's own
+   `No viewers for 300 s: camera to standby` is a backup for a stop that
+   never arrives; you should rarely see it.
 7. Settings: with the camera streaming, `curl -d "size=SVGA&quality=14"
    http://<camera>/settings` should reply `size=SVGA` and `quality=14`. The
    camera log shows `Settings: SVGA quality 14`. Check the picture is

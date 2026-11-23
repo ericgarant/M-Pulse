@@ -499,8 +499,13 @@ The Home page has a Cameras tile that shows how many are online.
 - Each camera announces its name and state to the hub every 5 s on UDP port
   4220, and the hub takes the camera's address from that packet. A camera
   with no announcement for 15 s is offline.
-- Cameras sleep until someone asks. Opening the Cameras page asks for every
-  camera. Each tile has four buttons and a picker:
+- Cameras sleep until someone asks. On the Cameras page, a camera is asked
+  for while its tile is on screen: opening the page asks for the cameras
+  you can see, and scrolling a tile into view asks for that one. A tile off
+  screen for 10 s lets its camera sleep, so on a phone the camera you
+  scrolled past does not keep streaming. A tile where you pressed Stop stays
+  asleep until you press Watch or open the page again. Each tile has four
+  buttons and a picker:
   - **Watch** asks the hub to start that camera.
   - **Rotate** turns the picture 90 degrees each time you press it and saves
     the angle on the hub, so every device shows the same picture.
