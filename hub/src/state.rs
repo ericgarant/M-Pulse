@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use m_pulse_core::actuator::Switch;
 use m_pulse_core::bluetti;
+use m_pulse_core::camera::Cameras;
 use m_pulse_core::eco_guard::{self, EcoGuard};
 use m_pulse_core::fridge::{self, RunMode};
 use m_pulse_core::fuel;
@@ -18,8 +19,6 @@ use m_pulse_core::heater_cutoff::{self, Cutoff};
 use m_pulse_core::history::History;
 use m_pulse_core::protocol::Status;
 use m_pulse_core::thermostat::{Config, Decision};
-
-use crate::camera::Cameras;
 
 /// Where a cabin reading came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -26,6 +26,7 @@ use std::time::{Duration, Instant};
 
 use log::{info, warn};
 use m_pulse_core::actuator::{self, Switch};
+use m_pulse_core::camera;
 use m_pulse_core::filter::MedianFilter;
 use m_pulse_core::fuel::{Meter, Saved, Seen};
 use m_pulse_core::heater_cutoff;
@@ -34,7 +35,6 @@ use m_pulse_core::protocol::RunState;
 use m_pulse_core::rules;
 use m_pulse_core::thermostat::{Decision, Reason, Sample, Saved as ThermostatSaved, Thermostat};
 
-use crate::camera;
 use crate::state::{FridgeCommand, Mode, Shared};
 use crate::store::Store;
 

@@ -487,7 +487,7 @@ fn rotation_reply(
     if !cam::valid_name(name) || !cameras.knows(name) {
         return Err((404, "{\"error\":\"no such camera\"}"));
     }
-    let Some(degrees) = crate::camera::parse_rotation(body) else {
+    let Some(degrees) = cam::parse_rotation(body) else {
         return Err((400, "{\"error\":\"rotation must be 0, 90, 180 or 270\"}"));
     };
     cameras.set_rotation(name, degrees);

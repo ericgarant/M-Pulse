@@ -107,7 +107,7 @@ fn main() -> anyhow::Result<()> {
 
     // The camera rotations live in flash too. Without it they go back to 0
     // after every restart.
-    let camera_store = match store::Store::<camera::Saved>::open(nvs.clone()) {
+    let camera_store = match store::Store::<m_pulse_core::camera::Saved>::open(nvs.clone()) {
         Ok((store, saved)) => {
             if let Some(saved) = saved {
                 state.cameras().restore(&saved);

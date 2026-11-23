@@ -51,6 +51,11 @@
   camera takes start and stop only from the hub (its gateway). On a home
   network it still takes them from any sender. The README had said other
   senders were already ignored; they were not.
+- **Camera registry in core, with tests**: the hub's camera list (start
+  and stop wishes, retries, rotations and their flash record) moved from
+  the hub to `core/src/camera.rs`, so it runs under `cargo test`. Tests
+  cover Stop then Watch, wish expiry, making room for a rotation, and
+  loading version 1 rotation records. No change in behavior.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

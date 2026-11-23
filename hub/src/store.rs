@@ -9,15 +9,13 @@
 //! Four records use it: the fuel gauge (`m_pulse_core::fuel::Saved`), the
 //! battery rules (`m_pulse_core::rules::Saved`), the thermostat's
 //! comfort band (`m_pulse_core::thermostat::Saved`) and the camera
-//! rotations (`crate::camera::Saved`).
+//! rotations (`m_pulse_core::camera::Saved`).
 
 use std::fmt::Debug;
 
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition};
 use log::{info, warn};
-use m_pulse_core::{fuel, rules, thermostat};
-
-use crate::camera;
+use m_pulse_core::{camera, fuel, rules, thermostat};
 
 /// Something saved by a [`Store`].
 pub trait Record: Sized + Debug {

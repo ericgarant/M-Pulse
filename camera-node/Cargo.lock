@@ -1089,6 +1089,7 @@ name = "m-pulse-core"
 version = "1.0.0"
 dependencies = [
  "aes",
+ "log",
  "md-5",
  "p256",
 ]

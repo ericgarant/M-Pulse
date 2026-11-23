@@ -561,8 +561,10 @@ The Home page has a Cameras tile that shows how many are online.
 - The access point takes up to 8 connections (it was 4), for the phone, the
   tablet, the sensor node and two cameras.
 
-The messages are in [`core/src/camera.rs`](../core/src/camera.rs), and the
-hub's side is in `src/camera.rs`.
+The messages and the hub's registry (when to send start and stop, and the
+saved rotations) are in [`core/src/camera.rs`](../core/src/camera.rs), with
+tests that run with `cargo test` in `core/`. The hub's UDP side is in
+`src/camera.rs`.
 
 Tested: a second camera board with an OV2640 (sensor ID 0x0026) also works.
 The camper's camera (Freenove WROVER with an OV3660, sensor ID 0x3660) still
