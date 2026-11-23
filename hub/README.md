@@ -509,7 +509,10 @@ The Home page has a Cameras tile that shows how many are online.
   - **Watch** asks the hub to start that camera.
   - **Rotate** turns the picture 90 degrees each time you press it and saves
     the angle on the hub, so every device shows the same picture.
-  - **Photo** saves a still JPEG of the camera while it streams.
+  - **Photo** saves a still JPEG of the camera while it streams, turned to
+    the camera's rotation like the video. A turned photo is encoded again
+    by the browser (JPEG quality 0.92); at 0 degrees it is the camera's own
+    file.
   - **Stop** asks the hub to stop that camera.
   - **Quality (test)** sets the camera's frame size and JPEG quality until
     the camera restarts. The default is SVGA (800 by 600), quality 12. This

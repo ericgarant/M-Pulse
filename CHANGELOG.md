@@ -40,6 +40,9 @@
   only while its tile is on screen, and lets it sleep after its tile has
   been off screen for 10 s. Before, opening the page woke every camera, and
   one scrolled past streamed to nobody for about a minute.
+- **Turned photos (hub)**: Photo saves the picture turned to the camera's
+  saved rotation, as the video shows it. Before, the photo kept the
+  camera's own orientation.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

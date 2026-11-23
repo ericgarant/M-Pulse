@@ -2506,8 +2506,6 @@ async function camRotate(c) {
   }
 }
 
-// Saves a still JPEG of the current frame as a download. The page does not wait
-// for it; the result shows as a short message in the tile.
 // Temporary: sends the picked size and quality to the camera's /settings and
 // shows its reply. A new size restarts the camera's driver for a moment.
 async function camQuality(c) {
@@ -2530,13 +2528,41 @@ async function camQuality(c) {
   }
 }
 
+// Turns a JPEG by a rotation in degrees (clockwise, as the tile shows it) and
+// encodes it again. A rotation of 0 keeps the camera's own file.
+async function camTurnJpeg(blob, rot) {
+  if (!rot) return blob;
+  const src = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const w = img.naturalWidth, h = img.naturalHeight, quarter = rot % 180 !== 0;
+    const cv = document.createElement("canvas");
+    cv.width = quarter ? h : w;
+    cv.height = quarter ? w : h;
+    const g = cv.getContext("2d");
+    g.translate(cv.width / 2, cv.height / 2);
+    g.rotate(rot * Math.PI / 180);
+    g.drawImage(img, -w / 2, -h / 2);
+    const out = await new Promise(done => cv.toBlob(done, "image/jpeg", 0.92));
+    if (!out) throw new Error("encode");
+    return out;
+  } finally {
+    URL.revokeObjectURL(src);
+  }
+}
+
+// Saves a still JPEG of the current frame as a download, turned like the
+// tile's picture. The page does not wait for it; a failure shows as a short
+// message in the tile.
 async function camPhoto(c) {
   const src = c.last && c.last.still_url;
   try {
     if (!src) throw new Error("no still");
     const r = await fetch(src, { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
-    const url = URL.createObjectURL(await r.blob());
+    const url = URL.createObjectURL(await camTurnJpeg(await r.blob(), c.rot));
     const d = new Date(), p = n => String(n).padStart(2, "0");
     const stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
     const a = document.createElement("a");
