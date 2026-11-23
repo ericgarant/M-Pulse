@@ -520,10 +520,11 @@ The Home page has a Cameras tile that shows how many are online.
   - **Stop** asks the hub to stop that camera.
   - **Quality (test)** sets the camera's frame size and JPEG quality until
     the camera restarts. The default is SVGA (800 by 600), quality 12. This
-    picker is for comparing settings and may be removed. The camera refuses
-    a new frame size while anyone watches, so the tile closes its own video
-    for a moment while it changes the settings, then opens it again. If
-    another device is watching, the tile says the change was refused.
+    picker is for comparing settings and may be removed. A quality change
+    applies at once. The camera refuses a new frame size while anyone
+    watches, this tile included, so the tile then closes its own video and
+    tries again, up to 3 times 1 s apart, and opens the video again after.
+    If another device is watching, the tile says the change was refused.
 - Leaving the page, switching to another browser tab, or closing the browser
   asks the hub to stop the cameras that page had started. While the page is
   open and the tile is on screen, the page renews the request every 20 s,

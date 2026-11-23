@@ -74,8 +74,9 @@
 - **Frame size and an open stream (camera node, hub)**: the camera refuses a
   new frame size with `409` while a viewer has the stream open, because the
   driver restart would stall that stream. The quality alone still changes
-  while watching. The Quality (test) picker closes its tile's video for the
-  change and opens it again after.
+  while watching. When the camera refuses a new size, the Quality (test)
+  picker closes its tile's video and tries again, up to 3 times 1 s apart,
+  then opens the video again; a quality change alone does not close it.
 - **Starts at most every 2 s (camera node, hub)**: the camera takes a start
   only 2 s after it last started or stopped, so a flood of commands can no
   longer cycle the driver and its memory. A stop is never held back, and a

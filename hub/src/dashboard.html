@@ -2507,9 +2507,10 @@ async function camRotate(c) {
 }
 
 // Temporary: sends the picked size and quality to the camera's /settings and
-// shows its reply. A new size restarts the camera's driver, which the camera
-// refuses while anyone watches, so the tile closes its own video first, gives
-// the camera a moment to see it go, and opens it again after.
+// shows its reply. A quality change applies at once. A new size restarts the
+// camera's driver, which the camera refuses while anyone watches, this tile
+// included: then the tile closes its own video and tries again, up to 3 times
+// 1 s apart, and opens the video again after.
 async function camQuality(c) {
   const e = c.last;
   if (!e || !e.ip || !c.qsel.value) return;
@@ -2517,23 +2518,34 @@ async function camQuality(c) {
   c.qsel.value = "";
   c.pmsg.hidden = false;
   c.pmsg.textContent = "Changing to " + size + ", quality " + quality + "...";
-  c.paused = true;
-  paintStream(c);
-  await new Promise(done => setTimeout(done, 1500));
-  try {
+  const post = async () => {
     const r = await fetch("http://" + e.ip + "/settings", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: "size=" + size + "&quality=" + quality,
     });
-    const t = (await r.text()).trim().replace(/\n/g, ", ");
-    c.pmsg.textContent = (r.ok ? "Now " : "Not changed: ") + t;
+    return { r, t: (await r.text()).trim() };
+  };
+  const watched = a => a.r.status === 409 && a.t.startsWith("Someone is watching");
+  try {
+    let a = await post();
+    if (watched(a)) {
+      c.paused = true;
+      paintStream(c);
+      for (let i = 0; i < 3 && watched(a); i++) {
+        await new Promise(done => setTimeout(done, 1000));
+        a = await post();
+      }
+    }
+    c.pmsg.textContent = (a.r.ok ? "Now " : "Not changed: ") + a.t.replace(/\n/g, ", ");
   } catch (err) {
     c.pmsg.textContent = "Could not reach the camera.";
   }
-  c.paused = false;
-  c.conn++;   // a new address, so the browser opens a new stream
-  paintStream(c);
+  if (c.paused) {
+    c.paused = false;
+    c.conn++;   // a new address, so the browser opens a new stream
+    paintStream(c);
+  }
 }
 
 // Turns a JPEG by a rotation in degrees (clockwise, as the tile shows it) and
