@@ -61,6 +61,12 @@
   30 s while it announces. Before, the hub sent one `stop`; if it was lost,
   or the hub restarted while a camera streamed, the camera streamed to
   nobody for 5 minutes and Bluetooth scans waited.
+- **No answer stays no answer (hub)**: after 15 unanswered starts, only the
+  Watch button (`start?watch=1`) tries again. Before, the page's renewals
+  and wake-ups reset the count, so "No answer" flickered and the hub kept
+  sending start, and the camera kept retrying its driver, for as long as
+  the page was open. The page no longer wakes a camera that gave no
+  answer.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

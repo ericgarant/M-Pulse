@@ -533,7 +533,9 @@ The Home page has a Cameras tile that shows how many are online.
 - If the picture stops for 10 s (Wi-Fi lost, phone asleep), the tile says
   "Video paused" and reconnects when it can.
 - The hub sends `start` once a second until the camera says it is streaming,
-  for 15 tries at most. After that the tile says "No answer from the camera".
+  for 15 tries at most. After that the tile says "No answer from the camera"
+  and the page stops asking. Press Stop, then Watch, to try again: only the
+  Watch button starts a fresh round of 15 tries, not the page's renewals.
 - The hub sends `stop` when a request ends. If a camera nobody asks for
   still says it is starting or streaming (the stop was lost, or the hub
   restarted while it streamed), the hub sends `stop` again every 3 s, 10
@@ -557,7 +559,9 @@ The Home page has a Cameras tile that shows how many are online.
 - The API is `GET /api/cameras` (a JSON array with name, ip, state, online,
   wanted, rotation, note, stream_url and still_url), and `POST
   /api/cameras/<name>/start` or `/stop`, which return one entry. An unknown
-  name gets an error.
+  name gets an error. `start?watch=1` is the Watch button: after a no answer
+  it starts a fresh round of tries, which a plain `start` (a renewal) does
+  not.
 - The rotation (0, 90, 180 or 270 degrees, default 0) is kept per camera
   name in flash, in the same two-copy store as the thermostat settings, and
   written only when it changes. `POST /api/cameras/<name>/rotation` takes the

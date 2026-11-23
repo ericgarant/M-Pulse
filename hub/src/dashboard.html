@@ -2469,7 +2469,7 @@ function camTile(name) {
     shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
   // Each frame of the MJPEG stream fires a load event; remember when the last one came.
   img.addEventListener("load", () => { c.lastFrame = Date.now(); });
-  watch.onclick = () => camWatch(name);
+  watch.onclick = () => camWatch(name, true);
   rotate.onclick = () => camRotate(c);
   photo.onclick = () => camPhoto(c);
   qsel.onchange = () => camQuality(c);
@@ -2620,7 +2620,9 @@ function camPaint(c) {
   c.stop.hidden = !c.want;
   // A tile on screen that still wants the camera asks again when the camera has
   // gone to standby, at most every 5 s, so it does not stay at "Waking camera...".
-  if (c.want && e.online && e.state === "standby" && c.visible && Date.now() - c.lastWake > CAM_WAKE_MS) {
+  // Not after "No answer": only Watch retries a camera that did not answer.
+  if (c.want && e.online && e.state === "standby" && e.note !== "no answer" && c.visible
+      && Date.now() - c.lastWake > CAM_WAKE_MS) {
     c.lastWake = Date.now();
     camPost(c.name, "start");
   }
@@ -2671,13 +2673,15 @@ async function camPost(name, action) {
   }
 }
 
-function camWatch(name) {
+// byUser: the Watch button, which also asks the hub to try a camera that gave
+// no answer again. Waking a tile that comes on screen is not.
+function camWatch(name, byUser = false) {
   const c = camTile(name);
   c.want = true;
   c.stopping = false;
   c.userStopped = false;
   camPaint(c);
-  camPost(name, "start").then(e => { if (!e) toast("Could not reach " + name, "bad"); });
+  camPost(name, byUser ? "start?watch=1" : "start").then(e => { if (!e) toast("Could not reach " + name, "bad"); });
 }
 
 // byUser: the Stop button, which keeps the tile asleep when it comes back on

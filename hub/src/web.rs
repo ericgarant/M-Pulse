@@ -422,11 +422,15 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
 
     let s = state.clone();
     server.fn_handler::<anyhow::Error, _>("/api/cameras/*", Method::Post, move |mut req| {
-        // The path is /api/cameras/<name>/<start|stop|rotation>. Copied out
-        // first, as the request is consumed when the response is written.
+        // The path is /api/cameras/<name>/<start|stop|rotation>, and
+        // `start?watch=1` is the Watch button. Copied out first, as the
+        // request is consumed when the response is written.
         let uri = req.uri().to_string();
-        let rest = uri.strip_prefix("/api/cameras/").unwrap_or_default();
+        let (path, query) = uri.split_once('?').unwrap_or((uri.as_str(), ""));
+        let rest = path.strip_prefix("/api/cameras/").unwrap_or_default();
         let (name, action) = rest.split_once('/').unwrap_or_default();
+        // Only Watch retries a camera that gave no answer; renewals don't.
+        let watch = query.split('&').any(|pair| pair == "watch=1");
         let now = Instant::now();
         if action == "rotation" {
             let text = read_body(&mut req)?;
@@ -447,7 +451,7 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
             let mut cameras = s.cameras();
             let known = cam::valid_name(name)
                 && match action {
-                    "start" => cameras.want(name, now),
+                    "start" => cameras.want(name, now, watch),
                     "stop" => cameras.unwant(name),
                     _ => false,
                 };
@@ -456,7 +460,7 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         match entry {
             Some(body) => {
                 if action == "start" {
-                    info!("Dashboard asked for camera {name}");
+                    info!("Dashboard asked for camera {name}{}", if watch { " (Watch)" } else { "" });
                 } else {
                     info!("Dashboard let camera {name} sleep");
                 }

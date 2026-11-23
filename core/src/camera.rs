@@ -251,8 +251,12 @@ impl Cameras {
     }
 
     /// A viewer wants the camera. Starts it, or renews a wish that is already
-    /// running. Returns false for a camera the hub has never heard from.
-    pub fn want(&mut self, name: &str, now: Instant) -> bool {
+    /// running. `watch` is the dashboard's Watch button: after a no answer
+    /// (15 starts unanswered), only it starts a fresh round of tries. Renewals
+    /// and the page's own wake-ups pass false, so a camera that does not answer
+    /// is not retried forever. Returns false for a camera the hub has never
+    /// heard from.
+    pub fn want(&mut self, name: &str, now: Instant, watch: bool) -> bool {
         let Some(c) = self.list.iter_mut().find(|c| c.name == name) else {
             return false;
         };
@@ -264,8 +268,8 @@ impl Cameras {
         match &mut c.wish {
             Some(w) => {
                 w.until = now + WISH_FOR;
-                // Asking again after a no answer starts a fresh round of tries.
-                if w.tries >= MAX_TRIES && !streaming {
+                // Watch after a no answer starts a fresh round of tries.
+                if watch && w.tries >= MAX_TRIES && !streaming {
                     w.tries = 0;
                     w.last_sent = None;
                 }
@@ -586,14 +590,14 @@ mod tests {
         assert!(!cams.announce(heard("cab", CameraState::Standby), ip, t0));
         assert!(cams.announce(heard("cab", CameraState::Streaming), ip, t0));
         assert!(cams.knows("cab"));
-        assert!(!cams.want("camper", t0), "a camera never heard from");
+        assert!(!cams.want("camper", t0, true), "a camera never heard from");
     }
 
     #[test]
     fn start_is_resent_until_streaming() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Standby, t0);
-        cams.want("cab", t0);
+        cams.want("cab", t0, true);
         assert_eq!(sent(cams.due(t0)), [Command::Start]);
         assert!(cams.due(t0).is_empty(), "not again within a second");
         assert_eq!(sent(cams.due(t0 + secs(1))), [Command::Start]);
@@ -607,12 +611,12 @@ mod tests {
         let t0 = Instant::now();
         let ip = Ipv4Addr::new(192, 168, 71, 2);
         let mut cams = with_cab(CameraState::Streaming, t0);
-        cams.want("cab", t0);
+        cams.want("cab", t0, true);
         assert!(cams.due(t0).is_empty(), "already streaming");
 
         cams.unwant("cab");
         assert_eq!(sent(cams.due(t0 + secs(1))), [Command::Stop]);
-        cams.want("cab", t0 + secs(2)); // Watch again straight away
+        cams.want("cab", t0 + secs(2), true); // Watch again straight away
         // The camera obeys the stop. That is not stopping on its own, so the
         // new wish stays and starts it again.
         cams.announce(heard("cab", CameraState::Standby), ip, t0 + secs(3));
@@ -624,9 +628,9 @@ mod tests {
     fn watch_before_the_stop_goes_out_cancels_it() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Streaming, t0);
-        cams.want("cab", t0);
+        cams.want("cab", t0, true);
         cams.unwant("cab");
-        cams.want("cab", t0);
+        cams.want("cab", t0, true);
         assert!(cams.due(t0 + secs(1)).is_empty(), "no stop, and still streaming");
     }
 
@@ -634,7 +638,7 @@ mod tests {
     fn standby_on_its_own_ends_the_wish() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Streaming, t0);
-        cams.want("cab", t0);
+        cams.want("cab", t0, true);
         // No stop from the hub: the camera's own idle timer put it to sleep.
         cams.announce(heard("cab", CameraState::Standby), Ipv4Addr::new(192, 168, 71, 2), t0 + secs(5));
         assert!(entry(&cams, t0 + secs(5)).contains("\"wanted\":false"));
@@ -645,7 +649,7 @@ mod tests {
     fn wish_expires_without_renewal() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Streaming, t0);
-        cams.want("cab", t0);
+        cams.want("cab", t0, true);
         assert!(cams.due(t0 + secs(59)).is_empty());
         assert!(entry(&cams, t0 + secs(59)).contains("\"wanted\":true"));
         assert_eq!(sent(cams.due(t0 + WISH_FOR)), [Command::Stop]);
@@ -653,9 +657,46 @@ mod tests {
 
         // A renewal before the minute is up keeps it.
         let mut cams = with_cab(CameraState::Streaming, t0);
-        cams.want("cab", t0);
-        cams.want("cab", t0 + secs(40));
+        cams.want("cab", t0, true);
+        cams.want("cab", t0 + secs(40), false);
         assert!(cams.due(t0 + secs(70)).is_empty());
+    }
+
+    #[test]
+    fn no_answer_waits_for_watch() {
+        let t0 = Instant::now();
+        let mut cams = with_cab(CameraState::Standby, t0);
+        cams.want("cab", t0, true);
+        let starts: usize = (0..20).map(|s| sent(cams.due(t0 + secs(s))).len()).sum();
+        assert_eq!(starts, usize::from(MAX_TRIES));
+        let later = t0 + secs(20);
+        assert!(entry(&cams, later).contains("\"note\":\"no answer\""));
+
+        // Renewals and the page's wake-ups keep the wish but do not try again.
+        cams.want("cab", later, false);
+        assert!(cams.due(later).is_empty());
+        assert!(cams.due(later + secs(5)).is_empty());
+        assert!(entry(&cams, later + secs(5)).contains("\"note\":\"no answer\""));
+
+        // The Watch button does.
+        let watch = later + secs(6);
+        cams.want("cab", watch, true);
+        assert!(entry(&cams, watch).contains("\"note\":null"));
+        assert_eq!(sent(cams.due(watch)), [Command::Start]);
+    }
+
+    #[test]
+    fn watch_does_not_restart_tries_that_are_still_running() {
+        let t0 = Instant::now();
+        let mut cams = with_cab(CameraState::Standby, t0);
+        cams.want("cab", t0, true);
+        for s in 0..5 {
+            cams.due(t0 + secs(s));
+        }
+        // A second Watch while the first round is under way: 10 tries left.
+        cams.want("cab", t0 + secs(5), true);
+        let starts: usize = (5..30).map(|s| sent(cams.due(t0 + secs(s))).len()).sum();
+        assert_eq!(starts, usize::from(MAX_TRIES) - 5);
     }
 
     /// The seconds, from 1 to `until`, at which the hub sends `stop` while the
@@ -676,7 +717,7 @@ mod tests {
     fn lost_stop_is_sent_again() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Streaming, t0);
-        cams.want("cab", t0);
+        cams.want("cab", t0, true);
         cams.unwant("cab");
         assert_eq!(sent(cams.due(t0)), [Command::Stop]);
         // The camera keeps streaming: every 3 s for 10 stops, then every 30 s.
@@ -699,8 +740,8 @@ mod tests {
     fn no_stop_while_wanted_in_standby_or_offline() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Streaming, t0);
-        cams.want("cab", t0);
-        cams.want("cab", t0 + secs(30));
+        cams.want("cab", t0, true);
+        cams.want("cab", t0 + secs(30), false);
         assert!(stops_while(&mut cams, CameraState::Streaming, t0, 40).is_empty(), "wanted");
 
         let mut cams = with_cab(CameraState::Standby, t0);
