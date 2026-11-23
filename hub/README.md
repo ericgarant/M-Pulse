@@ -112,8 +112,12 @@ the repository. Git ignores this file, so the password stays on your computer:
 export M_PULSE_AP_PASS="password for the M-Pulse network"   # 8+ characters
 ```
 
-Without it the password is `mpulse-heater`. If you run the sensor node,
-flash it from the same `wifi.env`, or it cannot join.
+A release build (`cargo build --release`) stops with an error without it,
+because the fallback password, `mpulse-heater`, is public in this
+repository. A debug build (no `--release`) still uses that fallback, for the
+bench. Flash the cameras and the sensor node from the same `wifi.env`, or
+they cannot join. If a board ever ran with the fallback, change the
+password: anyone who has read this repository could join.
 
 ### Joining another Wi-Fi (optional, untested)
 
@@ -572,7 +576,8 @@ so standby only stops the camera clock and the sensor stays powered. See
 
 Set up the toolchain first: [../docs/mac-setup.md](../docs/mac-setup.md).
 
-If you have no `wifi.env`, skip the `source` line.
+A release build needs `M_PULSE_AP_PASS` from `wifi.env` (see
+[Networks](#networks)); without it the build stops with an error.
 
 ```sh
 source ../wifi.env
@@ -765,7 +770,7 @@ see `../core/src/rules.rs`). Erasing the flash brings back the defaults.
 - Auto waits the minimum on and off times after any switch, including one
   made with the manual buttons, and gives up after 3 start attempts.
 - Anyone on the `M-Pulse` network can use the dashboard. Set your own
-  `M_PULSE_AP_PASS`.
+  `M_PULSE_AP_PASS` (release builds require it).
 - The hub only sends a command while it has a fresh status from the heater
   (under 10 seconds old).
 - The hub restarts in Monitor mode. After a power cut it will not resume

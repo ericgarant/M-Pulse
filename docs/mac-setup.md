@@ -57,8 +57,13 @@ Plug the board in with a USB-C data cable, then:
 
 ```sh
 cd hub            # or sensor-node, only if you use the backup sensor
+source ../wifi.env
 cargo run --release
 ```
+
+A release build of the hub or a camera stops with an error unless
+`wifi.env` sets `M_PULSE_AP_PASS`, the password of the hub's network (see
+[../hub/README.md](../hub/README.md#networks)).
 
 The first build downloads and compiles ESP-IDF, which takes 10 to 20 minutes
 and about 5 GB of disk. Later builds take well under a minute.
@@ -69,8 +74,9 @@ back in Monitor mode with its default low-battery levels.
 
 To check the shared logic without a board, run `cargo test` in `core/`.
 
-The hub README explains the optional `wifi.env` file with the network
-password; build with it loaded (`source ../wifi.env`) when you have one.
+The hub README explains the `wifi.env` file with the network password.
+Create it before the first release build, and build with it loaded
+(`source ../wifi.env`).
 
 ## Troubleshooting
 

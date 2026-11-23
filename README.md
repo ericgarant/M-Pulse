@@ -35,9 +35,10 @@ and tests on any computer with `cargo test`.
   (off until you turn it on).
 
 - **Dashboard.** The hub serves one page for the camper's Android tablet
-  and your phone: join the hub's `M-Pulse` Wi-Fi (password `mpulse-heater`
-  unless you set your own in `wifi.env`) and open http://192.168.71.1. It
-  needs no internet. It opens on a Home summary with a tile per service,
+  and your phone: join the hub's `M-Pulse` Wi-Fi (with the password you set
+  as `M_PULSE_AP_PASS` in `wifi.env`, which release builds require) and
+  open http://192.168.71.1. It needs no internet. It opens on a Home
+  summary with a tile per service,
   and Climate, Fridge, Power and Rules each have their own page, laid out
   for a phone, a tablet or a laptop. It has live status chips and alerts at
   the top, four-hour trend charts of the cabin temperature and the Bluetti's

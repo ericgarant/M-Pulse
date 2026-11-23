@@ -11,4 +11,16 @@ fn main() {
     ] {
         println!("cargo:rerun-if-env-changed={var}");
     }
+
+    // The fallback password for the hub's network is public in this
+    // repository, so a release build must use the hub's own. Debug builds keep
+    // the fallback for the bench.
+    let ap_pass = std::env::var("M_PULSE_AP_PASS").unwrap_or_default();
+    if std::env::var("PROFILE").as_deref() == Ok("release") && ap_pass.is_empty() {
+        eprintln!(
+            "M_PULSE_AP_PASS is not set. A release build needs the hub network's own \
+             password: run `source ../wifi.env` first (see ../hub/README.md, Networks)."
+        );
+        std::process::exit(1);
+    }
 }

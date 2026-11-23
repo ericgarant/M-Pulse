@@ -66,6 +66,9 @@ the stats line below.
   `MPC1 announce <name> <state>` to UDP port 4220 on the hub.
   The state is `standby`, `starting` or `streaming`.
 - It listens on UDP port 4221 for `MPC1 start` and `MPC1 stop` from the hub.
+  On the hub's `M-Pulse` network it takes them only from the hub (the
+  network's gateway) and ignores any other sender. On your home network the
+  hub has another address, so there it takes them from any sender.
 
 ## Build settings
 
@@ -78,6 +81,9 @@ Set these the same way as the sensor node (see
 - `M_PULSE_WIFI_SSID`, `M_PULSE_WIFI_PASS`, `M_PULSE_AP_PASS`: as for the
   sensor node. If `M_PULSE_WIFI_SSID` is set, the camera tries that network
   first and then the hub's `M-Pulse` network, in turns, until one answers.
+- A release build stops with an error if `M_PULSE_AP_PASS` is not set,
+  because the fallback password (`mpulse-heater`) is public in this
+  repository. A debug build (no `--release`) still uses the fallback.
 
 ## Build and flash
 
@@ -117,7 +123,8 @@ joined to the hub's `M-Pulse` network with the dashboard open.
 2. Check the boot log, in this order:
    - `M-Pulse camera node "<name>" starting, camera in standby`
    - `Reset reason: power on` (see below for the other reasons)
-   - `Joined "M-Pulse" as <address>` (or your home network's name, if
+   - `Joined "M-Pulse" as <address>; commands only from the hub at
+     192.168.71.1` (or `Joined "<your network>" as <address>`, if
      `M_PULSE_WIFI_SSID` is set and it joins that first)
    - `HTTP up: port 80 (page, still, settings), port 81 (stream)`
 3. On the hub's network, open the dashboard and go to the Cameras page. The
@@ -163,6 +170,8 @@ Other lines to check in the logs:
 - `Reset reason: ...` at boot: `power on` or `reset pin` are normal;
   `brownout (the supply voltage dropped)` points to the power supply, and
   `panic` or a watchdog to a firmware fault.
-- `Ignoring a command from ...`: something other than the hub sent a
-  message to port 4221.
+- `Ignoring a command from <address>: not the hub`: on the hub's network,
+  something other than the hub sent a message to port 4221.
+- `Ignoring a command from <address>`: a message on port 4221 that is not
+  `MPC1 start` or `MPC1 stop`.
 - `Announce failed: ...`: the broadcast to the hub did not send.

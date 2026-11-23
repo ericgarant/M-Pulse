@@ -20,10 +20,11 @@ const IDLE_CHECK: Duration = Duration::from_secs(5);
 /// Starts the command, announce and idle threads.
 pub fn spawn(name: &'static str, online: Online) -> anyhow::Result<()> {
     let commands = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, COMMAND_PORT))?;
+    let senders = online.clone();
     thread::Builder::new()
         .name("commands".into())
         .stack_size(8 * 1024)
-        .spawn(move || run_commands(commands))?;
+        .spawn(move || run_commands(commands, senders))?;
 
     thread::Builder::new()
         .name("announce".into())
@@ -37,13 +38,18 @@ pub fn spawn(name: &'static str, online: Online) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_commands(socket: UdpSocket) {
+/// `senders` says whose commands count: on the hub's network, only the hub's.
+fn run_commands(socket: UdpSocket, senders: Online) {
     let mut buf = [0u8; 128];
     loop {
         let Ok((len, from)) = socket.recv_from(&mut buf) else {
             continue;
         };
         let received = Instant::now();
+        if !senders.takes_commands_from(from.ip()) {
+            warn!("Ignoring a command from {from}: not the hub");
+            continue;
+        }
         match Command::parse(&buf[..len]) {
             Some(Command::Start) => start(received),
             Some(Command::Stop) => stop(),

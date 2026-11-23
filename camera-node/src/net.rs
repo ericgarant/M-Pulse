@@ -3,7 +3,8 @@
 //! Tries your Wi-Fi first when it is configured, then the hub's own network,
 //! and keeps alternating until one works. Rejoins whenever the link drops.
 //! Wi-Fi power save is on, so the radio sleeps between beacons while the
-//! camera is in standby.
+//! camera is in standby. On the hub's network the camera takes start and
+//! stop commands only from the hub (see [`Online`]).
 //!
 //! Build settings (environment variables, the same ones the hub uses):
 //!
@@ -11,8 +12,9 @@
 //! - `M_PULSE_AP_PASS`: password of the hub's network. Defaults to
 //!   `mpulse-heater`.
 
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -39,13 +41,33 @@ const HOME_PASS: &str = match option_env!("M_PULSE_WIFI_PASS") {
 /// How often the link is checked, and the pause after a failed attempt.
 const CHECK_EVERY: Duration = Duration::from_secs(10);
 
-/// Whether the node currently has a network to send on.
+/// Whether the node currently has a network to send on, and whose start and
+/// stop commands it takes.
 #[derive(Clone)]
-pub struct Online(Arc<AtomicBool>);
+pub struct Online {
+    up: Arc<AtomicBool>,
+    /// On the hub's network, the hub's address (the network's gateway): the
+    /// only sender whose commands count. `None` on your own network, where
+    /// the hub has another address, so commands from any sender count.
+    hub: Arc<Mutex<Option<Ipv4Addr>>>,
+}
 
 impl Online {
     pub fn is_up(&self) -> bool {
-        self.0.load(Ordering::Relaxed)
+        self.up.load(Ordering::Relaxed)
+    }
+
+    /// Whether a command from `from` counts: on the hub's network only the
+    /// hub's, on your own network anyone's.
+    pub fn takes_commands_from(&self, from: IpAddr) -> bool {
+        match *self.hub.lock().unwrap_or_else(|e| e.into_inner()) {
+            Some(hub) => from == IpAddr::V4(hub),
+            None => true,
+        }
+    }
+
+    fn set_hub(&self, hub: Option<Ipv4Addr>) {
+        *self.hub.lock().unwrap_or_else(|e| e.into_inner()) = hub;
     }
 }
 
@@ -62,7 +84,10 @@ pub fn start(
     // Standby: the radio sleeps between beacons. Streaming turns this off.
     set_power_save(true);
 
-    let online = Online(Arc::new(AtomicBool::new(false)));
+    let online = Online {
+        up: Arc::new(AtomicBool::new(false)),
+        hub: Arc::new(Mutex::new(None)),
+    };
     let flag = online.clone();
     thread::Builder::new()
         .name("wifi".into())
@@ -81,15 +106,22 @@ fn keep_joined(mut wifi: BlockingWifi<EspWifi<'static>>, online: Online) {
     let mut next = 0;
     loop {
         if wifi.is_up().unwrap_or(false) {
-            online.0.store(true, Ordering::Relaxed);
+            online.up.store(true, Ordering::Relaxed);
         } else {
-            online.0.store(false, Ordering::Relaxed);
+            online.up.store(false, Ordering::Relaxed);
             let (ssid, pass) = networks[next];
             next = (next + 1) % networks.len();
             match join(&mut wifi, ssid, pass) {
-                Ok(ip) => {
-                    info!("Joined \"{ssid}\" as {ip}");
-                    online.0.store(true, Ordering::Relaxed);
+                Ok((ip, gateway)) => {
+                    // On its own network the hub is the gateway. A network with
+                    // no gateway leaves commands open rather than refusing the hub.
+                    let hub = (ssid == HUB_SSID && !gateway.is_unspecified()).then_some(gateway);
+                    match hub {
+                        Some(hub) => info!("Joined \"{ssid}\" as {ip}; commands only from the hub at {hub}"),
+                        None => info!("Joined \"{ssid}\" as {ip}"),
+                    }
+                    online.set_hub(hub);
+                    online.up.store(true, Ordering::Relaxed);
                 }
                 Err(err) => {
                     warn!("Could not join \"{ssid}\": {err}");
@@ -105,7 +137,7 @@ fn join(
     wifi: &mut BlockingWifi<EspWifi<'static>>,
     ssid: &str,
     pass: &str,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<(Ipv4Addr, Ipv4Addr)> {
     let _ = wifi.disconnect();
     wifi.set_configuration(&Configuration::Client(ClientConfiguration {
         ssid: ssid
@@ -124,7 +156,8 @@ fn join(
     info!("Joining \"{ssid}\"");
     wifi.connect()?;
     wifi.wait_netif_up()?;
-    Ok(wifi.wifi().sta_netif().get_ip_info()?.ip.to_string())
+    let info = wifi.wifi().sta_netif().get_ip_info()?;
+    Ok((info.ip, info.subnet.gateway))
 }
 
 /// Wi-Fi power save on in standby (the radio sleeps between beacons) and off

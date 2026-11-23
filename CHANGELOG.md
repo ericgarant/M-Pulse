@@ -43,6 +43,14 @@
 - **Turned photos (hub)**: Photo saves the picture turned to the camera's
   saved rotation, as the video shows it. Before, the photo kept the
   camera's own orientation.
+- **Network password required for release builds (hub, camera node)**: a
+  release build stops with an error unless `M_PULSE_AP_PASS` is set,
+  because the fallback password is public in this repository. Debug builds
+  keep the fallback.
+- **Commands only from the hub (camera node)**: on the hub's network a
+  camera takes start and stop only from the hub (its gateway). On a home
+  network it still takes them from any sender. The README had said other
+  senders were already ignored; they were not.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It
