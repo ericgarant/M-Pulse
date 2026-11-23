@@ -56,6 +56,11 @@
   the hub to `core/src/camera.rs`, so it runs under `cargo test`. Tests
   cover Stop then Watch, wish expiry, making room for a rotation, and
   loading version 1 rotation records. No change in behavior.
+- **Stop sent again (hub)**: a camera nobody asks for that still says it is
+  starting or streaming gets `stop` again every 3 s, 10 times, then every
+  30 s while it announces. Before, the hub sent one `stop`; if it was lost,
+  or the hub restarted while a camera streamed, the camera streamed to
+  nobody for 5 minutes and Bluetooth scans waited.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

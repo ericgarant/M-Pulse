@@ -161,6 +161,13 @@ pub const RESEND_EVERY: Duration = Duration::from_secs(1);
 /// A camera going to standby this soon after the hub's `stop` is obeying
 /// that stop, not stopping on its own.
 const STOP_ECHO: Duration = Duration::from_secs(10);
+/// A camera nobody wants that still says it is starting or streaming is sent
+/// `stop` again: every STOP_AGAIN for STOP_AGAIN_TRIES times, then every
+/// STOP_AGAIN_SLOW. The first stop may have been lost, or the hub restarted
+/// while the camera streamed.
+const STOP_AGAIN: Duration = Duration::from_secs(3);
+const STOP_AGAIN_TRIES: u8 = 10;
+const STOP_AGAIN_SLOW: Duration = Duration::from_secs(30);
 /// The picture rotations the dashboard may set, in degrees.
 pub const ROTATIONS: [u16; 4] = [0, 90, 180, 270];
 
@@ -188,6 +195,9 @@ pub struct Camera {
     stop_due: bool,
     /// When the hub last sent this camera `stop`.
     stop_sent: Option<Instant>,
+    /// Stops sent again since the camera last said it was in standby or was
+    /// last wanted.
+    stops_again: u8,
 }
 
 #[derive(Default)]
@@ -215,6 +225,9 @@ impl Cameras {
                     info!("Camera \"{}\" went to standby on its own: wish ended", c.name);
                 }
             }
+            if a.state == CameraState::Standby {
+                c.stops_again = 0;
+            }
             c.state = a.state;
             c.last_seen = now;
             return video;
@@ -232,6 +245,7 @@ impl Cameras {
             wish: None,
             stop_due: false,
             stop_sent: None,
+            stops_again: 0,
         });
         video
     }
@@ -246,6 +260,7 @@ impl Cameras {
         // A Stop that has not gone out yet is cancelled by a new Watch, so a quick
         // Stop then Watch keeps the camera streaming.
         c.stop_due = false;
+        c.stops_again = 0;
         match &mut c.wish {
             Some(w) => {
                 w.until = now + WISH_FOR;
@@ -278,7 +293,9 @@ impl Cameras {
     }
 
     /// Works out what to send at `now`: `start` resends for wanted cameras,
-    /// and the one `stop` for each wish that just ended. Expires old wishes.
+    /// the `stop` for each wish that just ended, and `stop` again for a
+    /// camera nobody wants that still says it is starting or streaming.
+    /// Expires old wishes.
     pub fn due(&mut self, now: Instant) -> Vec<(SocketAddr, Command)> {
         let mut out = Vec::new();
         for c in &mut self.list {
@@ -297,6 +314,21 @@ impl Cameras {
                     if w.tries == MAX_TRIES {
                         warn!("Camera \"{}\": no answer to {MAX_TRIES} start commands", c.name);
                     }
+                }
+            }
+            // Nobody wants it, yet it says it is on: the stop was lost, or the
+            // hub restarted while it streamed. Only while it announces.
+            let online = now.duration_since(c.last_seen) < Duration::from_secs(OFFLINE_AFTER_S);
+            if c.wish.is_none() && c.state != CameraState::Standby && online && !c.stop_due {
+                let every = if c.stops_again < STOP_AGAIN_TRIES { STOP_AGAIN } else { STOP_AGAIN_SLOW };
+                if c.stop_sent.is_none_or(|t| now.duration_since(t) >= every) {
+                    c.stops_again = c.stops_again.saturating_add(1);
+                    if c.stops_again == 1 {
+                        info!("Camera \"{}\" is {} with nobody watching: sending stop", c.name, c.state.as_str());
+                    } else if c.stops_again == STOP_AGAIN_TRIES {
+                        warn!("Camera \"{}\" still {}: sending stop every 30 s", c.name, c.state.as_str());
+                    }
+                    c.stop_due = true;
                 }
             }
             if c.stop_due {
@@ -624,6 +656,74 @@ mod tests {
         cams.want("cab", t0);
         cams.want("cab", t0 + secs(40));
         assert!(cams.due(t0 + secs(70)).is_empty());
+    }
+
+    /// The seconds, from 1 to `until`, at which the hub sends `stop` while the
+    /// camera keeps announcing `state` once a second.
+    fn stops_while(cams: &mut Cameras, state: CameraState, t0: Instant, until: u64) -> Vec<u64> {
+        let ip = Ipv4Addr::new(192, 168, 71, 2);
+        let mut at = Vec::new();
+        for s in 1..=until {
+            cams.announce(heard("cab", state), ip, t0 + secs(s));
+            if sent(cams.due(t0 + secs(s))).contains(&Command::Stop) {
+                at.push(s);
+            }
+        }
+        at
+    }
+
+    #[test]
+    fn lost_stop_is_sent_again() {
+        let t0 = Instant::now();
+        let mut cams = with_cab(CameraState::Streaming, t0);
+        cams.want("cab", t0);
+        cams.unwant("cab");
+        assert_eq!(sent(cams.due(t0)), [Command::Stop]);
+        // The camera keeps streaming: every 3 s for 10 stops, then every 30 s.
+        let expected: Vec<u64> = (1..=10).map(|n| n * 3).chain([60, 90]).collect();
+        assert_eq!(stops_while(&mut cams, CameraState::Streaming, t0, 90), expected);
+    }
+
+    #[test]
+    fn hub_restart_stops_a_camera_nobody_wants() {
+        let t0 = Instant::now();
+        // A fresh registry, as after a hub restart, hears a streaming camera.
+        let mut cams = with_cab(CameraState::Streaming, t0);
+        assert_eq!(sent(cams.due(t0)), [Command::Stop]);
+        // Starting counts too.
+        let mut cams = with_cab(CameraState::Starting, t0);
+        assert_eq!(sent(cams.due(t0)), [Command::Stop]);
+    }
+
+    #[test]
+    fn no_stop_while_wanted_in_standby_or_offline() {
+        let t0 = Instant::now();
+        let mut cams = with_cab(CameraState::Streaming, t0);
+        cams.want("cab", t0);
+        cams.want("cab", t0 + secs(30));
+        assert!(stops_while(&mut cams, CameraState::Streaming, t0, 40).is_empty(), "wanted");
+
+        let mut cams = with_cab(CameraState::Standby, t0);
+        assert!(stops_while(&mut cams, CameraState::Standby, t0, 40).is_empty(), "standby");
+
+        // A camera that stops announcing is offline after 15 s: no more stops.
+        let mut cams = with_cab(CameraState::Streaming, t0);
+        assert_eq!(sent(cams.due(t0)), [Command::Stop]);
+        assert_eq!(sent(cams.due(t0 + secs(3))), [Command::Stop]);
+        assert!(cams.due(t0 + secs(15)).is_empty());
+        assert!(cams.due(t0 + secs(18)).is_empty());
+    }
+
+    #[test]
+    fn stop_resends_start_over_after_standby() {
+        let t0 = Instant::now();
+        let mut cams = with_cab(CameraState::Streaming, t0);
+        assert_eq!(stops_while(&mut cams, CameraState::Streaming, t0, 30).len(), 10);
+        // It obeys, then later streams again unwanted: fast resends again.
+        cams.announce(heard("cab", CameraState::Standby), Ipv4Addr::new(192, 168, 71, 2), t0 + secs(31));
+        assert!(cams.due(t0 + secs(31)).is_empty());
+        let later = t0 + secs(100);
+        assert_eq!(stops_while(&mut cams, CameraState::Streaming, later, 6), [1, 4]);
     }
 
     #[test]

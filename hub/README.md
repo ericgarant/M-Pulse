@@ -534,6 +534,10 @@ The Home page has a Cameras tile that shows how many are online.
   "Video paused" and reconnects when it can.
 - The hub sends `start` once a second until the camera says it is streaming,
   for 15 tries at most. After that the tile says "No answer from the camera".
+- The hub sends `stop` when a request ends. If a camera nobody asks for
+  still says it is starting or streaming (the stop was lost, or the hub
+  restarted while it streamed), the hub sends `stop` again every 3 s, 10
+  times, then every 30 s, for as long as the camera keeps announcing.
 - The video is the camera's own stream on port 81, loaded only while its
   tile is on screen. One viewer can watch a camera at a time; a second viewer
   waits until the first stops.
