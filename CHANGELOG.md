@@ -65,7 +65,7 @@
   30 s while it announces. Before, the hub sent one `stop`; if it was lost,
   or the hub restarted while a camera streamed, the camera streamed to
   nobody for 5 minutes and Bluetooth scans waited.
-- **No answer stays no answer (hub)**: after 15 unanswered starts, only the
+- **No answer stays no answer (hub)**: after 10 unanswered starts, only the
   Watch button (`start?watch=1`) tries again. Before, the page's renewals
   and wake-ups reset the count, so "No answer" flickered and the hub kept
   sending start, and the camera kept retrying its driver, for as long as
@@ -85,9 +85,11 @@
   only 2 s after it last started or stopped, so a flood of commands can no
   longer cycle the driver and its memory. A stop is never held back, and a
   start whose init failed does not hold back the next one. The hub resends
-  start every 2 s (was every second), so each of its 15 tries reaches the
-  camera; giving up now takes about 30 s. Repeats that change nothing are
-  skipped without waiting on the camera lock.
+  start every 3 s (was every second), the camera's 2 s gap and a second of
+  margin, so each try reaches the camera even when power save delays a
+  packet; both use `START_GAP` in `core/src/camera.rs`. The hub tries 10
+  times (was 15), so giving up still takes about 30 s. Repeats that change
+  nothing are skipped without waiting on the camera lock.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

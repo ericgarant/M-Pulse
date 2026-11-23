@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use log::{info, warn};
 use m_pulse_core::camera::{
-    Announce, CameraState, Command, ANNOUNCE_EVERY_S, ANNOUNCE_PORT, COMMAND_PORT,
+    Announce, CameraState, Command, ANNOUNCE_EVERY_S, ANNOUNCE_PORT, COMMAND_PORT, START_GAP,
 };
 
 use crate::camera;
@@ -19,9 +19,9 @@ const IDLE_CHECK: Duration = Duration::from_secs(5);
 
 /// After a start or stop that changed the camera's state, a start is taken
 /// only this much later, so a flood of starts cannot cycle the driver and its
-/// memory. The hub resends start every 2 s to match, so each of its tries
-/// reaches the driver. A stop is never held back.
-const COMMAND_GAP: Duration = Duration::from_secs(2);
+/// memory. Shared with the hub, which resends start a second more apart, so
+/// each of its tries reaches the driver. A stop is never held back.
+const COMMAND_GAP: Duration = START_GAP;
 
 /// Starts the command, announce and idle threads.
 pub fn spawn(name: &'static str, online: Online) -> anyhow::Result<()> {

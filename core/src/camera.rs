@@ -40,6 +40,10 @@ pub const ANNOUNCE_EVERY_S: u64 = 5;
 pub const OFFLINE_AFTER_S: u64 = 15;
 /// Longest name a camera may announce.
 pub const MAX_NAME_LEN: usize = 16;
+/// A camera takes a `start` only this long after its last start or stop that
+/// changed its state, so a flood of starts cannot cycle its driver. The hub
+/// paces its start resends by it (one second more, see `START_AGAIN`).
+pub const START_GAP: Duration = Duration::from_secs(2);
 
 const TAG: &str = "MPC1";
 
@@ -141,7 +145,7 @@ pub fn valid_name(name: &str) -> bool {
 // ---------------------------------------------------------------------------
 //
 // A camera is started only while a viewer wants it: the hub resends `start`
-// every 2 s until the camera says it is streaming (15 tries at most),
+// every 3 s until the camera says it is streaming (10 tries at most),
 // sends `stop` once when a wish ends, and drops a wish that nobody has
 // renewed for 60 s, so a closed browser does not keep a camera on.
 //
@@ -152,16 +156,18 @@ pub fn valid_name(name: &str) -> bool {
 /// Most cameras the registry keeps. Announcements from a new name past this
 /// are ignored.
 const MAX_CAMERAS: usize = 8;
-/// Sends of `start` before the hub stops trying and reports no answer.
-const MAX_TRIES: u8 = 15;
+/// Sends of `start` before the hub stops trying and reports no answer: 10,
+/// START_AGAIN apart, is about 30 s.
+const MAX_TRIES: u8 = 10;
 /// How long a viewer's request keeps a camera wanted without a renewal.
 const WISH_FOR: Duration = Duration::from_secs(60);
 /// How often the hub works out what to send.
 pub const SEND_EVERY: Duration = Duration::from_secs(1);
-/// Pause between `start` resends. A camera takes a start only 2 s after it
-/// last started or stopped (`COMMAND_GAP` in camera-node/src/control.rs), so
-/// at this pace each resend reaches its driver and counts as a real try.
-const START_AGAIN: Duration = Duration::from_secs(2);
+/// Pause between `start` resends: the camera's START_GAP and one second more.
+/// After a Stop, the first start may land inside the camera's gap; the next
+/// comes a full START_AGAIN later, clear of it even when Wi-Fi power save
+/// delays a packet to the next beacon, so it reaches the driver.
+const START_AGAIN: Duration = START_GAP.saturating_add(Duration::from_secs(1));
 /// A camera going to standby this soon after the hub's `stop` is obeying
 /// that stop, not stopping on its own.
 const STOP_ECHO: Duration = Duration::from_secs(10);
@@ -256,7 +262,7 @@ impl Cameras {
 
     /// A viewer wants the camera. Starts it, or renews a wish that is already
     /// running. `watch` is the dashboard's Watch button: after a no answer
-    /// (15 starts unanswered), only it starts a fresh round of tries. Renewals
+    /// (MAX_TRIES starts unanswered), only it starts a fresh round of tries. Renewals
     /// and the page's own wake-ups pass false, so a camera that does not answer
     /// is not retried forever. Returns false for a camera the hub has never
     /// heard from.
@@ -603,18 +609,30 @@ mod tests {
         let mut cams = with_cab(CameraState::Standby, t0);
         cams.want("cab", t0, true);
         assert_eq!(sent(cams.due(t0)), [Command::Start], "the first start goes out at once");
-        assert!(cams.due(t0 + secs(1)).is_empty(), "not again within 2 s");
-        assert_eq!(sent(cams.due(t0 + secs(2))), [Command::Start]);
+        assert!(cams.due(t0 + secs(1)).is_empty(), "not again within 3 s");
+        assert!(cams.due(t0 + secs(2)).is_empty(), "not again within 3 s");
+        assert_eq!(sent(cams.due(t0 + secs(3))), [Command::Start]);
         // The hub works out what to send every second, but resends start only
-        // every 2 s, the camera's own gap between starts, so each one counts.
-        let at: Vec<u64> = (3..=10).filter(|&s| !cams.due(t0 + secs(s)).is_empty()).collect();
-        assert_eq!(at, [4, 6, 8, 10]);
-        assert!(START_AGAIN >= Duration::from_secs(2), "COMMAND_GAP in camera-node/src/control.rs");
-        assert_eq!(SEND_EVERY, Duration::from_secs(1));
+        // every 3 s: the camera's 2 s gap between starts and a second more.
+        let at: Vec<u64> = (4..=12).filter(|&s| !cams.due(t0 + secs(s)).is_empty()).collect();
+        assert_eq!(at, [6, 9, 12]);
 
-        cams.announce(heard("cab", CameraState::Streaming), Ipv4Addr::new(192, 168, 71, 2), t0 + secs(11));
-        assert!(cams.due(t0 + secs(12)).is_empty());
-        assert!(entry(&cams, t0 + secs(12)).contains("\"stream_url\":\"http://192.168.71.2:81/stream\""));
+        cams.announce(heard("cab", CameraState::Streaming), Ipv4Addr::new(192, 168, 71, 2), t0 + secs(13));
+        assert!(cams.due(t0 + secs(14)).is_empty());
+        assert!(entry(&cams, t0 + secs(14)).contains("\"stream_url\":\"http://192.168.71.2:81/stream\""));
+    }
+
+    #[test]
+    fn start_resends_clear_the_camera_gap() {
+        // The camera (camera-node/src/control.rs) takes a start only START_GAP
+        // after its last change. After a Stop, the hub's first start can land
+        // inside that gap; the next must come well after it, even when power
+        // save holds a packet to the next beacon (100-300 ms).
+        assert!(START_AGAIN >= START_GAP + Duration::from_secs(1), "a second of margin");
+        assert!(SEND_EVERY <= Duration::from_secs(1), "the hub checks often enough to keep that pace");
+        // Giving up takes about 30 s: the last try at (MAX_TRIES - 1) resends.
+        let give_up = START_AGAIN * u32::from(MAX_TRIES - 1);
+        assert!(give_up >= Duration::from_secs(25) && give_up <= Duration::from_secs(35), "{give_up:?}");
     }
 
     #[test]
@@ -678,10 +696,14 @@ mod tests {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Standby, t0);
         cams.want("cab", t0, true);
-        // 15 starts, 2 s apart: the last at 28 s.
-        let starts: usize = (0..40).map(|s| sent(cams.due(t0 + secs(s))).len()).sum();
-        assert_eq!(starts, usize::from(MAX_TRIES));
+        // 10 starts, 3 s apart: the last at 27 s, and still waking until then.
+        let starts: usize = (0..27).map(|s| sent(cams.due(t0 + secs(s))).len()).sum();
+        assert_eq!(starts, usize::from(MAX_TRIES) - 1);
+        assert!(entry(&cams, t0 + secs(26)).contains("\"note\":null"));
+        assert_eq!(sent(cams.due(t0 + secs(27))), [Command::Start]);
+        assert!(entry(&cams, t0 + secs(27)).contains("\"note\":\"no answer\""));
         let later = t0 + secs(40);
+        assert!(cams.due(later).is_empty());
         assert!(entry(&cams, later).contains("\"note\":\"no answer\""));
 
         // Renewals and the page's wake-ups keep the wish but do not try again.
@@ -703,8 +725,8 @@ mod tests {
         let mut cams = with_cab(CameraState::Standby, t0);
         cams.want("cab", t0, true);
         let first: usize = (0..5).map(|s| sent(cams.due(t0 + secs(s))).len()).sum();
-        assert_eq!(first, 3, "at 0, 2 and 4 s");
-        // A second Watch while the first round is under way: 12 tries left.
+        assert_eq!(first, 2, "at 0 and 3 s");
+        // A second Watch while the first round is under way: 8 tries left.
         cams.want("cab", t0 + secs(5), true);
         let rest: usize = (5..60).map(|s| sent(cams.due(t0 + secs(s))).len()).sum();
         assert_eq!(rest, usize::from(MAX_TRIES) - first);

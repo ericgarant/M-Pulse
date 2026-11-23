@@ -77,8 +77,9 @@ the stats line below.
   rather than shut out the hub, and logs `... with no gateway: commands from
   anyone`. It takes
   a start only 2 s after it last started or stopped, and a stop at any
-  time. The hub resends start every 2 s to match, so each of its tries
-  reaches the camera.
+  time. The hub resends start every 3 s, a second more than that gap, so
+  each of its tries reaches the camera. Both use `START_GAP` in
+  [core/src/camera.rs](../core/src/camera.rs).
 
 ## Build settings
 
@@ -181,7 +182,7 @@ Other lines to check in the logs:
 - `Could not start the camera after <N> ms: camera init failed:
   ESP_ERR_... (0x...)`: the sensor did not start, with the ESP-IDF error
   name. The camera returns to standby and the hub reports no answer after
-  15 tries.
+  10 tries (about 30 s).
 - `Reset reason: ...` at boot: `power on` or `reset pin` are normal;
   `brownout (the supply voltage dropped)` points to the power supply, and
   `panic` or a watchdog to a firmware fault.
