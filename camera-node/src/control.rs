@@ -17,6 +17,12 @@ use crate::state::{self, IDLE_OFF};
 /// How often the idle timer checks for viewers.
 const IDLE_CHECK: Duration = Duration::from_secs(5);
 
+/// A start or stop that would change the camera's state is taken at most this
+/// often, so a flood of commands cannot cycle the driver and its memory. The
+/// hub sends start again every second and stop every 3 s, so one dropped here
+/// is not lost.
+const COMMAND_GAP: Duration = Duration::from_secs(2);
+
 /// Starts the command, announce and idle threads.
 pub fn spawn(name: &'static str, online: Online) -> anyhow::Result<()> {
     let commands = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, COMMAND_PORT))?;
@@ -41,6 +47,8 @@ pub fn spawn(name: &'static str, online: Online) -> anyhow::Result<()> {
 /// `senders` says whose commands count: on the hub's network, only the hub's.
 fn run_commands(socket: UdpSocket, senders: Online) {
     let mut buf = [0u8; 128];
+    // When the last start or stop that changed the state was taken.
+    let mut last_change: Option<Instant> = None;
     loop {
         let Ok((len, from)) = socket.recv_from(&mut buf) else {
             continue;
@@ -50,10 +58,31 @@ fn run_commands(socket: UdpSocket, senders: Online) {
             warn!("Ignoring a command from {from}: not the hub");
             continue;
         }
-        match Command::parse(&buf[..len]) {
-            Some(Command::Start) => start(received),
-            Some(Command::Stop) => stop(),
-            None => warn!("Ignoring a command from {from}"),
+        let Some(command) = Command::parse(&buf[..len]) else {
+            warn!("Ignoring a command from {from}");
+            continue;
+        };
+        // A start while starting or streaming, or a stop in standby, changes
+        // nothing (the hub repeats its commands): skipped without the lock.
+        let changes = match command {
+            Command::Start => state::state() == CameraState::Standby,
+            Command::Stop => state::state() != CameraState::Standby,
+        };
+        if !changes {
+            continue;
+        }
+        if last_change.is_some_and(|t| received.duration_since(t) < COMMAND_GAP) {
+            info!(
+                "{} ignored: under {} s since the last start or stop",
+                command.encode(),
+                COMMAND_GAP.as_secs()
+            );
+            continue;
+        }
+        last_change = Some(received);
+        match command {
+            Command::Start => start(received),
+            Command::Stop => stop(),
         }
     }
 }
