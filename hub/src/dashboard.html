@@ -1012,7 +1012,7 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
       <h2 id="h-cameras">Cameras</h2>
       <span class="badge" id="cm-badge">--</span>
     </div>
-    <p class="note">A camera wakes while its tile is on screen, and sleeps when you leave this page or scroll its tile away.</p>
+    <p class="note">A camera wakes while its tile is on screen, and sleeps when you leave this page or scroll its tile away. After Stop it stays asleep on this device until you press Watch.</p>
     <p class="note" id="cm-none" hidden>No cameras yet. A camera shows up here once it announces itself on the hub's network.</p>
     <div class="cams" id="cm-list"></div>
   </section>
@@ -2388,8 +2388,9 @@ setInterval(() => { if (!document.hidden) loadHistory(); }, 60000);
 /* ---------- Cameras ---------- */
 // A camera is started only while its tile is on screen on the Cameras page:
 // a tile that comes on screen asks for its camera, a tile off screen for
-// CAM_OFFSCREEN_MS lets it sleep, and leaving the page asks for a stop. A tile
-// whose Stop was pressed stays asleep until Watch or the next visit. The hub
+// CAM_OFFSCREEN_MS lets it sleep, and leaving the page asks for a stop. A
+// camera stopped with Stop stays asleep on this device until Watch, even after
+// leaving the page or a reload (camStopped). The hub
 // keeps a wish for a minute, and this page renews it every 20 s while a tile
 // is wanted and on screen, whatever the video is doing. The video is set only
 // while the tile is on screen.
@@ -2404,6 +2405,17 @@ const CAM_WAKE_MS = 5000;
 const cams = new Map();     // name -> tile state
 let camsOn = false;         // the Cameras page is showing
 let camTimer = null;
+// Names of the cameras stopped with Stop, kept in this browser so they stay
+// asleep across visits and reloads. Only Stop adds a name, only Watch removes it.
+const CAM_STOPPED_KEY = "mpulse-cam-stopped";
+const camStopped = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem(CAM_STOPPED_KEY) || "[]")); } catch (e) { return new Set(); }
+})();
+function camSetStopped(c, stopped) {
+  c.userStopped = stopped;
+  if (stopped) camStopped.add(c.name); else camStopped.delete(c.name);
+  try { localStorage.setItem(CAM_STOPPED_KEY, JSON.stringify([...camStopped])); } catch (e) {}
+}
 const camIO = "IntersectionObserver" in window
   ? new IntersectionObserver(entries => entries.forEach(e => {
       const c = cams.get(e.target.dataset.name);
@@ -2465,7 +2477,7 @@ function camTile(name) {
   $("cm-list").append(el);
   const c = { name, el, img, badge, msg, watch, stop, rotate, photo, qsel, pmsg, want: false, stopping: false, renew: null,
     // Without an observer every tile counts as on screen, as before.
-    visible: !camIO, offTimer: null, userStopped: false, paused: false, conn: 0,
+    visible: !camIO, offTimer: null, userStopped: camStopped.has(name), paused: false, conn: 0,
     shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
   // Each frame of the MJPEG stream fires a load event; remember when the last one came.
   img.addEventListener("load", () => { c.lastFrame = Date.now(); });
@@ -2702,18 +2714,19 @@ function camWatch(name, byUser = false) {
   const c = camTile(name);
   c.want = true;
   c.stopping = false;
-  c.userStopped = false;
+  if (byUser) camSetStopped(c, false);
   camPaint(c);
   camPost(name, byUser ? "start?watch=1" : "start").then(e => { if (!e) toast("Could not reach " + name, "bad"); });
 }
 
-// byUser: the Stop button, which keeps the tile asleep when it comes back on
-// screen. Off screen, the page stops a camera itself (byUser false).
+// byUser: the Stop button, which keeps the camera asleep on this device until
+// Watch (camSetStopped). Off screen, the page stops a camera itself (byUser
+// false), and the tile wakes it again when it comes back on screen.
 function camStop(name, byUser = true) {
   const c = camTile(name);
   c.want = false;
   c.stopping = true;
-  c.userStopped = byUser;
+  if (byUser) camSetStopped(c, true);
   camPaint(c);
   camPost(name, "stop");
 }
@@ -2726,13 +2739,13 @@ function camHubStop(name) {
   fetch(url, { method: "POST", keepalive: true }).catch(() => {});
 }
 
-// Wakes the cameras whose tiles are on screen. Coming from another page, no
-// tile is on screen yet: the observer wakes each one as the page shows it.
+// Wakes the cameras whose tiles are on screen, except those stopped with Stop.
+// Coming from another page, no tile is on screen yet: the observer wakes each
+// one as the page shows it.
 function camEnter() {
   camsOn = true;
   cams.forEach((c, name) => {
-    c.userStopped = false;
-    if (c.visible && !c.want) camWatch(name);
+    if (c.visible && !c.want && !c.userStopped) camWatch(name);
   });
 }
 
@@ -2772,7 +2785,7 @@ function camList(list) {
     const fresh = !cams.has(e.name);
     camShow(e);
     // A new tile wakes its camera once the observer sees it on screen.
-    if (fresh && camsOn && !camIO) camWatch(e.name);
+    if (fresh && camsOn && !camIO && !cams.get(e.name).userStopped) camWatch(e.name);
   });
   renderCamHome(list);
 }

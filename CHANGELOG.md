@@ -39,7 +39,10 @@
 - **Cameras wake only on screen (hub)**: the Cameras page asks for a camera
   only while its tile is on screen, and lets it sleep after its tile has
   been off screen for 10 s. Before, opening the page woke every camera, and
-  one scrolled past streamed to nobody for about a minute.
+  one scrolled past streamed to nobody for about a minute. Stop sticks: a
+  camera stopped with Stop stays asleep on that device until its Watch is
+  pressed, across visits to the page and reloads. The browser remembers it
+  in `localStorage`.
 - **Turned photos (hub)**: Photo saves the picture turned to the camera's
   saved rotation, as the video shows it. Before, the photo kept the
   camera's own orientation.

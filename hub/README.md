@@ -507,9 +507,12 @@ The Home page has a Cameras tile that shows how many are online.
   for while its tile is on screen: opening the page asks for the cameras
   you can see, and scrolling a tile into view asks for that one. A tile off
   screen for 10 s lets its camera sleep, so on a phone the camera you
-  scrolled past does not keep streaming. A tile where you pressed Stop stays
-  asleep until you press Watch or open the page again. Each tile has four
-  buttons and a picker:
+  scrolled past does not keep streaming. Stop sticks: a camera you stopped
+  stays asleep on that device until you press its Watch, even after you
+  leave the Cameras page, close the browser or reload. The browser keeps
+  the list (`localStorage`, key `mpulse-cam-stopped`), so each phone or
+  tablet has its own, and clearing the browser's site data forgets it.
+  Each tile has four buttons and a picker:
   - **Watch** asks the hub to start that camera.
   - **Rotate** turns the picture 90 degrees each time you press it and saves
     the angle on the hub, so every device shows the same picture.

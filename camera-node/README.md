@@ -140,8 +140,9 @@ joined to the hub's `M-Pulse` network with the dashboard open.
 3. On the hub's network, open the dashboard and go to the Cameras page. The
    tile for the camera should appear within a few seconds. The hub's log
    should show `Camera "<name>" announced from <address>`.
-4. Opening the page starts the camera if its tile is on screen. The camera
-   log should show
+4. Opening the page starts the camera if its tile is on screen, unless you
+   stopped it with Stop on this device (then press Watch). The camera log
+   should show
    `Start received: powering up the camera`, then
    `Camera sensor PID 0x3660` (or `0x0026` for the OV2640 board), then
    `Camera streaming: init took <N> ms` with the free memory. The tile
