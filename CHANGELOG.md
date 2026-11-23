@@ -76,10 +76,13 @@
   driver restart would stall that stream. The quality alone still changes
   while watching. The Quality (test) picker closes its tile's video for the
   change and opens it again after.
-- **At most one start or stop every 2 s (camera node)**: a flood of
-  commands can no longer cycle the driver and its memory. Repeats that
-  change nothing are skipped without waiting on the camera lock. The hub
-  resends its commands, so one dropped for coming too soon is not lost.
+- **Starts at most every 2 s (camera node, hub)**: the camera takes a start
+  only 2 s after it last started or stopped, so a flood of commands can no
+  longer cycle the driver and its memory. A stop is never held back, and a
+  start whose init failed does not hold back the next one. The hub resends
+  start every 2 s (was every second), so each of its 15 tries reaches the
+  camera; giving up now takes about 30 s. Repeats that change nothing are
+  skipped without waiting on the camera lock.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

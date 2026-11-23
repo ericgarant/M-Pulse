@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use log::{info, warn};
-use m_pulse_core::camera::{self, Announce, RESEND_EVERY};
+use m_pulse_core::camera::{self, Announce, SEND_EVERY};
 
 use crate::state::Shared;
 
@@ -68,7 +68,7 @@ fn send_loop(state: &Shared) {
         }
     };
     loop {
-        thread::sleep(RESEND_EVERY);
+        thread::sleep(SEND_EVERY);
         let due = state.cameras().due(Instant::now());
         for (to, command) in due {
             if let Err(err) = socket.send_to(command.encode().as_bytes(), to) {

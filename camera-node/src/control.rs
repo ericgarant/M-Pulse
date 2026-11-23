@@ -17,10 +17,10 @@ use crate::state::{self, IDLE_OFF};
 /// How often the idle timer checks for viewers.
 const IDLE_CHECK: Duration = Duration::from_secs(5);
 
-/// A start or stop that would change the camera's state is taken at most this
-/// often, so a flood of commands cannot cycle the driver and its memory. The
-/// hub sends start again every second and stop every 3 s, so one dropped here
-/// is not lost.
+/// After a start or stop that changed the camera's state, a start is taken
+/// only this much later, so a flood of starts cannot cycle the driver and its
+/// memory. The hub resends start every 2 s to match, so each of its tries
+/// reaches the driver. A stop is never held back.
 const COMMAND_GAP: Duration = Duration::from_secs(2);
 
 /// Starts the command, announce and idle threads.
@@ -47,7 +47,7 @@ pub fn spawn(name: &'static str, online: Online) -> anyhow::Result<()> {
 /// `senders` says whose commands count: on the hub's network, only the hub's.
 fn run_commands(socket: UdpSocket, senders: Online) {
     let mut buf = [0u8; 128];
-    // When the last start or stop that changed the state was taken.
+    // When the last start or stop that changed the state finished.
     let mut last_change: Option<Instant> = None;
     loop {
         let Ok((len, from)) = socket.recv_from(&mut buf) else {
@@ -71,18 +71,23 @@ fn run_commands(socket: UdpSocket, senders: Online) {
         if !changes {
             continue;
         }
-        if last_change.is_some_and(|t| received.duration_since(t) < COMMAND_GAP) {
-            info!(
-                "{} ignored: under {} s since the last start or stop",
-                command.encode(),
-                COMMAND_GAP.as_secs()
-            );
-            continue;
-        }
-        last_change = Some(received);
-        match command {
-            Command::Start => start(received),
+        let changed = match command {
             Command::Stop => stop(),
+            Command::Start => {
+                if last_change.is_some_and(|t| received.saturating_duration_since(t) < COMMAND_GAP) {
+                    info!(
+                        "Start ignored: under {} s since the camera last started or stopped",
+                        COMMAND_GAP.as_secs()
+                    );
+                    continue;
+                }
+                start(received)
+            }
+        };
+        // Only a real change holds back the next start. A start whose init
+        // failed does not, so the hub's next try reaches the driver.
+        if changed {
+            last_change = Some(Instant::now());
         }
     }
 }
@@ -91,10 +96,11 @@ fn run_commands(socket: UdpSocket, senders: Online) {
 // lock, so they cannot interleave: the state always matches the driver.
 
 /// `received` is when the command arrived, for the first frame's delay.
-fn start(received: Instant) {
+/// Returns true if the camera is now streaming.
+fn start(received: Instant) -> bool {
     let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
     if state::state() != CameraState::Standby {
-        return; // already starting or streaming; repeats from the hub are harmless
+        return false; // already starting or streaming; repeats from the hub are harmless
     }
     state::set_state(CameraState::Starting);
     info!("Start received: powering up the camera");
@@ -108,29 +114,34 @@ fn start(received: Instant) {
             crate::net::set_power_save(false);
             state::set_state(CameraState::Streaming);
             info!("Camera streaming: init took {init_ms} ms; {}", camera::memory());
+            true
         }
         Err(err) => {
             warn!("Could not start the camera after {init_ms} ms: {err}; {}", camera::memory());
             state::set_state(CameraState::Standby);
+            false
         }
     }
 }
 
-fn stop() {
+/// Returns true if the camera was on and is now in standby.
+fn stop() -> bool {
     let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
-    stop_locked();
+    stop_locked()
 }
 
-/// Stops the driver. The caller holds the write lock.
-fn stop_locked() {
+/// Stops the driver. The caller holds the write lock. Returns true if the
+/// camera was on.
+fn stop_locked() -> bool {
     if state::state() == CameraState::Standby {
-        return;
+        return false;
     }
     camera::power_down();
     state::set_state(CameraState::Standby);
     state::set_started_at(None);
     crate::net::set_power_save(true);
     info!("Camera in standby; {}", camera::memory());
+    true
 }
 
 /// Sends an announcement whenever the state changes, and every few seconds otherwise.

@@ -71,9 +71,10 @@ the stats line below.
 - It listens on UDP port 4221 for `MPC1 start` and `MPC1 stop` from the hub.
   On the hub's `M-Pulse` network it takes them only from the hub (the
   network's gateway) and ignores any other sender. On your home network the
-  hub has another address, so there it takes them from any sender. It acts
-  on at most one start or stop every 2 s; the hub sends them again, so one
-  that comes too soon is not lost.
+  hub has another address, so there it takes them from any sender. It takes
+  a start only 2 s after it last started or stopped, and a stop at any
+  time. The hub resends start every 2 s to match, so each of its tries
+  reaches the camera.
 
 ## Build settings
 
@@ -183,7 +184,7 @@ Other lines to check in the logs:
   something other than the hub sent a message to port 4221.
 - `Ignoring a command from <address>`: a message on port 4221 that is not
   `MPC1 start` or `MPC1 stop`.
-- `MPC1 start ignored: under 2 s since the last start or stop` (or `stop`):
-  a command that came too soon after the last one. The hub sends it again,
-  so after a quick Stop then Watch the camera starts a second or two later.
+- `Start ignored: under 2 s since the camera last started or stopped`: a
+  start that came too soon after the last change. The hub sends it again,
+  so after a quick Stop then Watch the camera starts about 2 s later.
 - `Announce failed: ...`: the broadcast to the hub did not send.
