@@ -22,8 +22,9 @@ static LAST_VIEWED: Mutex<Option<Instant>> = Mutex::new(None);
 /// Number of open `/stream` connections.
 pub static VIEWERS: AtomicUsize = AtomicUsize::new(0);
 
-/// Most viewers allowed at once. The stream is per-viewer work, so keep this small.
-pub const MAX_VIEWERS: usize = 2;
+/// Most viewers allowed at once. The stream server handles one request at a
+/// time, so a second viewer waits until the first leaves; one is the real limit.
+pub const MAX_VIEWERS: usize = 1;
 
 /// How long a streaming camera waits with no viewer before it goes to standby.
 /// This is only a backup for a camera the hub forgot to stop: the hub's stop

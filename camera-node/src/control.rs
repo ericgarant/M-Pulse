@@ -51,17 +51,17 @@ fn run_commands(socket: UdpSocket) {
     }
 }
 
+// Start and stop check and change the state only while holding the write
+// lock, so they cannot interleave: the state always matches the driver.
+
 fn start() {
+    let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
     if state::state() != CameraState::Standby {
         return; // already starting or streaming; repeats from the hub are harmless
     }
     state::set_state(CameraState::Starting);
     info!("Start requested: powering up the camera");
-    let result = {
-        let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
-        camera::power_up()
-    };
-    match result {
+    match camera::power_up() {
         Ok(()) => {
             state::touch_viewed();
             crate::net::set_power_save(false);
@@ -76,10 +76,15 @@ fn start() {
 }
 
 fn stop() {
+    let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
+    stop_locked();
+}
+
+/// Stops the driver. The caller holds the write lock.
+fn stop_locked() {
     if state::state() == CameraState::Standby {
         return;
     }
-    let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
     camera::power_down();
     state::set_state(CameraState::Standby);
     crate::net::set_power_save(true);
@@ -140,8 +145,13 @@ fn run_idle() {
             continue;
         }
         if state::idle_for() >= IDLE_OFF {
-            info!("No viewers for {} s: camera to standby", IDLE_OFF.as_secs());
-            stop();
+            // Re-check under the lock: a stop and a new start may have run since.
+            let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
+            let viewers = state::VIEWERS.load(std::sync::atomic::Ordering::SeqCst);
+            if state::state() == CameraState::Streaming && viewers == 0 && state::idle_for() >= IDLE_OFF {
+                info!("No viewers for {} s: camera to standby", IDLE_OFF.as_secs());
+                stop_locked();
+            }
         }
     }
 }

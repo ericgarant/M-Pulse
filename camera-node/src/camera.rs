@@ -59,10 +59,6 @@ pub fn power_down() {
     unsafe { camera::esp_camera_deinit() };
 }
 
-/// Changes size and quality on the running sensor and stores them for the next
-/// start. Callers must hold the read lock with the camera streaming. If the
-/// quality step fails, the old frame size is put back, so the sensor and the
-/// stored settings never disagree. On error the stored settings are unchanged.
 /// Applies new settings to a streaming camera. The caller must hold the write
 /// lock. Quality changes on the running sensor. A new frame size restarts the
 /// driver, because the driver sizes its frame buffers when it starts.
@@ -77,6 +73,7 @@ pub fn change_settings(size: Size, quality: u8) -> Result<Settings> {
         if let Err(err) = power_up() {
             state::set_settings(old);
             state::set_state(CameraState::Standby);
+            crate::net::set_power_save(true);
             return Err(err.context("restart with the new frame size failed; the camera is now in standby"));
         }
     } else {
@@ -84,7 +81,7 @@ pub fn change_settings(size: Size, quality: u8) -> Result<Settings> {
         anyhow::ensure!(!sensor.is_null(), "no camera sensor");
         let set_quality = unsafe { (*sensor).set_quality }.context("sensor has no set_quality")?;
         let ret = unsafe { set_quality(sensor, i32::from(quality)) };
-        anyhow::ensure!(ret == 0, "set JPEG quality {quality} failed: error {ret}");
+        anyhow::ensure!(ret == 0, "set JPEG quality {quality} failed: error {ret}; settings unchanged");
         state::set_settings(new);
     }
 

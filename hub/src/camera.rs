@@ -33,6 +33,9 @@ const MAX_TRIES: u8 = 15;
 const WISH_FOR: Duration = Duration::from_secs(60);
 /// Pause between `start` resends.
 const RESEND_EVERY: Duration = Duration::from_secs(1);
+/// A camera going to standby this soon after the hub's `stop` is obeying
+/// that stop, not stopping on its own.
+const STOP_ECHO: Duration = Duration::from_secs(10);
 /// The picture rotations the dashboard may set, in degrees.
 pub const ROTATIONS: [u16; 4] = [0, 90, 180, 270];
 
@@ -58,6 +61,8 @@ pub struct Camera {
     wish: Option<Wish>,
     /// A `stop` is waiting to be sent (set when a wish ends).
     stop_due: bool,
+    /// When the hub last sent this camera `stop`.
+    stop_sent: Option<Instant>,
 }
 
 #[derive(Default)]
@@ -76,9 +81,11 @@ impl Cameras {
         if let Some(c) = self.list.iter_mut().find(|c| c.name == a.name) {
             c.ip = ip;
             // A camera that was streaming and is now in standby has stopped on
-            // its own (nobody watched). A wish still running would only start
-            // it again, so end the wish here.
-            if c.state == CameraState::Streaming && a.state == CameraState::Standby {
+            // its own (nobody watched), unless the hub just told it to stop. On
+            // its own, a wish still running would only start it again, so end
+            // it. After the hub's stop, a wish is a new Watch and must stay.
+            let hub_stopped = c.stop_sent.is_some_and(|t| now.duration_since(t) < STOP_ECHO);
+            if c.state == CameraState::Streaming && a.state == CameraState::Standby && !hub_stopped {
                 if c.wish.take().is_some() {
                     info!("Camera \"{}\" went to standby on its own: wish ended", c.name);
                 }
@@ -99,6 +106,7 @@ impl Cameras {
             last_seen: now,
             wish: None,
             stop_due: false,
+            stop_sent: None,
         });
     }
 
@@ -167,6 +175,7 @@ impl Cameras {
             }
             if c.stop_due {
                 c.stop_due = false;
+                c.stop_sent = Some(now);
                 out.push((addr(c.ip), Command::Stop));
             }
         }
@@ -186,7 +195,18 @@ impl Cameras {
         }
         match self.rotations.iter_mut().find(|(n, _)| n == name) {
             Some(entry) => entry.1 = degrees,
-            None => self.rotations.push((name.to_string(), degrees)),
+            None => {
+                // Only MAX_CAMERAS rotations fit in flash. Make room by dropping
+                // names the hub no longer hears from, then the oldest entry.
+                if self.rotations.len() >= MAX_CAMERAS {
+                    let list = &self.list;
+                    self.rotations.retain(|(n, _)| list.iter().any(|c| &c.name == n));
+                }
+                while self.rotations.len() >= MAX_CAMERAS {
+                    self.rotations.remove(0);
+                }
+                self.rotations.push((name.to_string(), degrees));
+            }
         }
     }
 
@@ -231,7 +251,8 @@ impl Cameras {
 
 /// The picture rotations kept in flash, so a restart keeps them. Each camera
 /// is one slot, so the record is a fixed size: a version, the count, the
-/// slots (name length, name padded to [`MAX_NAME_LEN`], rotation in degrees),
+/// slots (name length, name padded to [`MAX_NAME_LEN`], rotation as quarter
+/// turns 0 to 3),
 /// then a sequence number and a checksum. The layout follows
 /// `thermostat::Saved`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -240,7 +261,9 @@ pub struct Saved {
 }
 
 impl Saved {
-    const VERSION: u8 = 1;
+    /// Version 2 stores quarter turns (0-3). Version 1 stored degrees in one
+    /// byte, so 270 was written as 14; it is still read, with 14 as 270.
+    const VERSION: u8 = 2;
     const SLOT: usize = 1 + MAX_NAME_LEN + 1;
     /// Bytes in [`Saved::encode`]'s output.
     pub const LEN: usize = 2 + MAX_CAMERAS * Self::SLOT + 8;
@@ -254,7 +277,7 @@ impl Saved {
             let at = 2 + i * Self::SLOT;
             out[at] = name.len() as u8;
             out[at + 1..at + 1 + name.len()].copy_from_slice(name.as_bytes());
-            out[at + Self::SLOT - 1] = *degrees as u8;
+            out[at + Self::SLOT - 1] = (*degrees / 90) as u8;
         }
         let seq_at = Self::LEN - 8;
         out[seq_at..seq_at + 4].copy_from_slice(&seq.to_le_bytes());
@@ -267,9 +290,10 @@ impl Saved {
     /// damaged, from another version, or with a name or rotation the hub
     /// could not have saved.
     pub fn decode(bytes: &[u8]) -> Option<(Self, u32)> {
-        if bytes.len() != Self::LEN || bytes[0] != Self::VERSION {
+        if bytes.len() != Self::LEN || !(bytes[0] == 1 || bytes[0] == Self::VERSION) {
             return None;
         }
+        let version = bytes[0];
         let seq_at = Self::LEN - 8;
         let word = |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
         if fnv1a(&bytes[..seq_at + 4]) != word(seq_at + 4) {
@@ -290,10 +314,13 @@ impl Saved {
             if !camera::valid_name(name) {
                 return None;
             }
-            let degrees = u16::from(bytes[at + Self::SLOT - 1]);
-            if !ROTATIONS.contains(&degrees) {
-                return None;
-            }
+            let byte = bytes[at + Self::SLOT - 1];
+            let degrees = match (version, byte) {
+                (Self::VERSION, 0..=3) => u16::from(byte) * 90,
+                (1, 0 | 90 | 180) => u16::from(byte),
+                (1, 14) => 270, // version 1 wrote 270 as one byte
+                _ => return None,
+            };
             rotations.push((name.to_string(), degrees));
         }
         Some((Self { rotations }, word(seq_at)))

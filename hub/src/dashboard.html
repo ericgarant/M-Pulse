@@ -2431,7 +2431,7 @@ function camTile(name) {
   const qsel = document.createElement("select");
   qsel.setAttribute("aria-label", "Quality test setting for " + name);
   qsel.style.cssText = "width:100%;min-width:0;padding:8px;border-radius:10px";
-  [["", "Quality (test)…"], ["VGA,12", "VGA 640×480, q12 (default)"], ["SVGA,12", "SVGA 800×600, q12"],
+  [["", "Quality (test)…"], ["VGA,12", "VGA 640×480, q12"], ["SVGA,12", "SVGA 800×600, q12 (default)"],
    ["XGA,12", "XGA 1024×768, q12"], ["SXGA,12", "SXGA 1280×1024, q12"],
    ["XGA,10", "XGA 1024×768, q10"], ["SXGA,10", "SXGA 1280×1024, q10"]].forEach(([v, t]) => {
     const o = document.createElement("option"); o.value = v; o.textContent = t; qsel.append(o);

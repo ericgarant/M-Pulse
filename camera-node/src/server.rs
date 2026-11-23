@@ -286,7 +286,7 @@ fn post_settings(mut req: Request<&mut EspHttpConnection>) -> anyhow::Result<()>
                 req,
                 500,
                 "Internal Server Error",
-                &format!("{err:#}\nSettings unchanged.\n"),
+                &format!("{err:#}\n"),
             )
         }
     }
