@@ -2567,8 +2567,7 @@ async function camQuality(c) {
   }
   if (c.paused) {
     c.paused = false;
-    c.conn++;   // a new address, so the browser opens a new stream
-    paintStream(c);
+    paintStream(c);   // opens the video again, on a new address
   }
   c.qbusy = false;
   c.qsel.disabled = !(c.last && c.last.stream_url);
@@ -2628,14 +2627,15 @@ async function camPhoto(c) {
 
 // Sets the video to the stream only while this page wants the camera and the
 // tile is on screen; anything else closes the connection (src "").
-// While the quality picker works, the video stays closed (c.paused). After it,
-// c.conn adds ?n= to the address so the browser does not reuse the old stream.
+// While the quality picker works, the video stays closed (c.paused).
+// Each time the video opens it gets a new address (?n=): a browser can keep an
+// MJPEG stream that ended (the camera restarted) as a finished image, and
+// would show its last frame again for the same address instead of connecting.
 function paintStream(c) {
-  const url = camsOn && c.want && c.visible && c.stream && !c.paused
-    ? c.stream + (c.conn ? "?n=" + c.conn : "") : null;
+  const url = camsOn && c.want && c.visible && c.stream && !c.paused ? c.stream : null;
   if (url === c.shown) return;
   c.shown = url;
-  c.img.src = url || "";
+  c.img.src = url ? url + "?n=" + (++c.conn) : "";
   c.img.hidden = !url;
 }
 

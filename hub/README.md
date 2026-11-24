@@ -559,7 +559,9 @@ The Home page has a Cameras tile that shows how many are online.
   times, then every 30 s, for as long as the camera keeps announcing.
 - The video is the camera's own stream on port 81, loaded only while its
   tile is on screen. One viewer can watch a camera at a time; a second viewer
-  waits until the first stops.
+  waits until the first stops. Each time the tile opens the video it adds a
+  new `?n=` to the address, so after the camera restarts the browser connects
+  again instead of showing the last frame of the old stream.
 - While a camera streams, the hub holds back Bluetooth scans for the fridge
   and the Bluetti for up to 60 s, because a scan takes radio time from
   Wi-Fi. Scans for the heater are never held back, since the thermostat and

@@ -105,6 +105,12 @@
   0.8 s after the camera gets the start (was about 2.3 s), and the whole
   wake from the camera joining Wi-Fi to the first frame went from about
   6.2 s to 3.3 s.
+- **No frozen picture after a camera restart (hub)**: the tile opens the video
+  on a new address (`?n=`) each time. Reusing the same address let the
+  browser show the last frame of a stream that had ended instead of
+  connecting again: on the bench the camper tile stayed frozen after the
+  camera restarted, while the camera streamed to nobody. The "Video paused"
+  reconnect now really reconnects too.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It
