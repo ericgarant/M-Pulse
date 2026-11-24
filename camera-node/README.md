@@ -56,12 +56,23 @@ frame size is refused with `409` (`Someone is watching...`) while a viewer
 has the stream open; close the video first. The quality alone can change
 while someone watches.
 
-On the bench, one camera at a time, SVGA at quality 12 ran at about 5 to 12
-frames a second on a good board (85 to 290 KB/s). Boards differ a lot: one
-board managed only 1 to 2 frames a second with a strong signal and was
-retired. Quality 10 made frames only about 10% bigger and slower, with no
-visible gain. To compare boards, run each alone on the same scene and read
-the stats line below.
+On the bench, one camera at a time, SVGA at quality 12, a phone watching on
+the hub's network (medians of the 10 s stats lines, November 2026):
+
+- cab: about 13 frames a second (14 KB per frame, about 200 KB/s), up from
+  about 5 before the stream stopped pausing 50 ms after each frame and the
+  driver got a third frame buffer;
+- camper: about 7 frames a second (13 to 28 KB per frame, depending on the
+  scene and light), up from about 3.5, on a weaker link.
+
+The frame rate swings a lot from minute to minute (from 1 to over 25 frames
+a second), with the hub's Bluetooth and the shared air: the link is the
+limit, not the camera, so a smaller frame gives more frames a second. Frame
+sizes on camper: SVGA q12 about 13 KB, SVGA q14 about 12, VGA q12 about 10.5,
+VGA q14 about 8. Quality 10 made frames only about 10% bigger and slower,
+with no visible gain. Boards differ: one board managed only 1 to 2 frames a
+second with a strong signal and was retired. To compare boards, run each
+alone on the same scene and read the stats line below.
 
 ## What it sends and receives
 

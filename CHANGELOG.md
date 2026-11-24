@@ -97,6 +97,13 @@
   50 ms after each frame; the next grab already waits for the driver's next
   frame. On the bench (cab, SVGA q12, about 5 minutes each) the median went
   from 5.0 to 6.9 frames a second.
+- **Three frame buffers (camera node)**: with two, the driver had nowhere to
+  capture while one frame was being sent and the other waited, so frames
+  went out late. A third costs 96 KB of PSRAM at SVGA. Together with the
+  change above, the bench median went from 5.0 to 13.4 frames a second on
+  the cab and from 3.5 to 6.8 on the camper. Moving the driver's task to
+  core 1 and running the CPU at 240 MHz were also measured and not kept:
+  no gain, and more driver warnings.
 - **Faster wake (hub, camera node)**: the hub sends start or stop as soon as
   the page asks instead of at its next once-a-second check, the camera
   announces a change of state at once instead of at its next one-second

@@ -566,9 +566,11 @@ The Home page has a Cameras tile that shows how many are online.
   and the Bluetti for up to 60 s, because a scan takes radio time from
   Wi-Fi. Scans for the heater are never held back, since the thermostat and
   the low-battery stop depend on that link.
-- Measured on the bench at SVGA quality 12, one camera at a time, with the
-  heater out of range and scanning: the camper board about 5 to 12 frames a
-  second (110 to 290 KB/s), the cab board about 5 to 10 (85 to 165 KB/s).
+- Measured on the bench at SVGA quality 12, one camera at a time (medians,
+  November 2026): the cab board about 13 frames a second (about 200 KB/s),
+  the camper board about 7 on a weaker link; both were about 5 and 3.5
+  before the camera firmware's frame-rate changes. The rate swings from 1
+  to over 25 within minutes, with the hub's Bluetooth and the shared air.
   Boards differ: one earlier cab board managed only 1 to 2 frames a second
   with a strong signal, and was replaced. Two cameras streaming at once
   share the hub's radio and each gets less. Not yet measured in the camper.
