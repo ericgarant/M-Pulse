@@ -171,6 +171,12 @@ const START_AGAIN: Duration = START_GAP.saturating_add(Duration::from_secs(1));
 /// A camera going to standby this soon after the hub's `stop` is obeying
 /// that stop, not stopping on its own.
 const STOP_ECHO: Duration = Duration::from_secs(10);
+/// After a stop the camera takes no start for START_GAP (from when its stop
+/// finished). The hub holds a start back until this long after it sent the
+/// stop, the gap and a margin for the stop itself, so a quick Stop then
+/// Watch does not spend a try on the camera's gate. `start_held_for` tells
+/// the sender when to send it.
+const START_AFTER_STOP: Duration = START_GAP.saturating_add(Duration::from_millis(500));
 /// A camera nobody wants that still says it is starting or streaming is sent
 /// `stop` again: every STOP_AGAIN for STOP_AGAIN_TRIES times, then every
 /// STOP_AGAIN_SLOW. The first stop may have been lost, or the hub restarted
@@ -319,9 +325,11 @@ impl Cameras {
                 c.stop_due = true;
             }
             let streaming = c.state == CameraState::Streaming;
+            // Just after a stop the camera would ignore a start: hold it.
+            let held = c.stop_sent.is_some_and(|t| now.duration_since(t) < START_AFTER_STOP);
             if let Some(w) = &mut c.wish {
                 let due = w.last_sent.is_none_or(|t| now.duration_since(t) >= START_AGAIN);
-                if !streaming && w.tries < MAX_TRIES && due {
+                if !streaming && w.tries < MAX_TRIES && due && !held {
                     w.tries += 1;
                     w.last_sent = Some(now);
                     out.push((addr(c.ip), Command::Start));
@@ -352,6 +360,23 @@ impl Cameras {
             }
         }
         out
+    }
+
+    /// How long until a start held back after a stop may go out (the soonest
+    /// among the cameras), or `None` if no start is held. The hub's sender
+    /// waits no longer than this, so the start goes out as soon as it may.
+    pub fn start_held_for(&self, now: Instant) -> Option<Duration> {
+        self.list
+            .iter()
+            .filter_map(|c| {
+                let w = c.wish.as_ref()?;
+                if c.state == CameraState::Streaming || w.tries >= MAX_TRIES {
+                    return None;
+                }
+                let since = now.duration_since(c.stop_sent?);
+                START_AFTER_STOP.checked_sub(since).filter(|left| !left.is_zero())
+            })
+            .min()
     }
 
     /// Whether the hub has heard from a camera with this name.
@@ -647,10 +672,42 @@ mod tests {
         assert_eq!(sent(cams.due(t0 + secs(1))), [Command::Stop]);
         cams.want("cab", t0 + secs(2), true); // Watch again straight away
         // The camera obeys the stop. That is not stopping on its own, so the
-        // new wish stays and starts it again.
+        // new wish stays and starts it again, once the camera's gap after the
+        // stop has passed.
         cams.announce(heard("cab", CameraState::Standby), ip, t0 + secs(3));
         assert!(entry(&cams, t0 + secs(3)).contains("\"wanted\":true"));
-        assert_eq!(sent(cams.due(t0 + secs(3))), [Command::Start]);
+        assert!(cams.due(t0 + secs(3)).is_empty());
+        assert_eq!(sent(cams.due(t0 + secs(1) + START_AFTER_STOP)), [Command::Start]);
+    }
+
+    #[test]
+    fn start_after_a_stop_waits_for_the_camera_gap() {
+        let t0 = Instant::now();
+        let ms = Duration::from_millis;
+        let ip = Ipv4Addr::new(192, 168, 71, 2);
+        let mut cams = with_cab(CameraState::Streaming, t0);
+        cams.want("cab", t0, true);
+        cams.unwant("cab");
+        assert_eq!(sent(cams.due(t0)), [Command::Stop]);
+        // Watch again at once; the camera obeys the stop and says standby.
+        cams.want("cab", t0 + ms(300), true);
+        cams.announce(heard("cab", CameraState::Standby), ip, t0 + ms(400));
+        // The camera ignores a start for START_GAP after its stop: the hub
+        // holds it, and says how long, instead of spending a try.
+        assert!(START_AFTER_STOP > START_GAP);
+        assert!(cams.due(t0 + secs(1)).is_empty());
+        assert_eq!(cams.start_held_for(t0 + secs(1)), Some(START_AFTER_STOP - secs(1)));
+        assert!(cams.due(t0 + secs(2)).is_empty());
+        assert_eq!(sent(cams.due(t0 + START_AFTER_STOP)), [Command::Start]);
+        assert_eq!(cams.start_held_for(t0 + START_AFTER_STOP), None);
+        // It was the first try: the rest come START_AGAIN apart as usual.
+        assert!(cams.due(t0 + START_AFTER_STOP + secs(2)).is_empty());
+        assert_eq!(sent(cams.due(t0 + START_AFTER_STOP + START_AGAIN)), [Command::Start]);
+        // No stop for a long time: nothing is held.
+        let mut fresh = with_cab(CameraState::Standby, t0);
+        fresh.want("cab", t0, true);
+        assert_eq!(fresh.start_held_for(t0), None);
+        assert_eq!(sent(fresh.due(t0)), [Command::Start]);
     }
 
     #[test]

@@ -549,10 +549,12 @@ The Home page has a Cameras tile that shows how many are online.
 - The hub sends `start` every 3 s until the camera says it is streaming, for
   10 tries (about 30 s) at most. The camera takes a start only 2 s after it
   last started or stopped, so a second of margin lets each try reach it,
-  even when Wi-Fi power save delays a packet. After that the tile says "No
-  answer from the camera" and the page stops asking. Press Stop, then
-  Watch, to try again: only the Watch button starts a fresh round of 10
-  tries, not the page's renewals.
+  even when Wi-Fi power save delays a packet. Right after a stop, the hub
+  holds the first start until 2.5 s after the stop and sends it then, so a
+  quick Stop then Watch does not spend a try on that gap. After the 10 tries
+  the tile says "No answer from the camera" and the page stops asking.
+  Press Stop, then Watch, to try again: only the Watch button starts a fresh
+  round of 10 tries, not the page's renewals.
 - The hub sends `stop` when a request ends. If a camera nobody asks for
   still says it is starting or streaming (the stop was lost, or the hub
   restarted while it streamed), the hub sends `stop` again every 3 s, 10

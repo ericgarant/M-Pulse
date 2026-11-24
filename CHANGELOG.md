@@ -92,7 +92,10 @@
   margin, so each try reaches the camera even when power save delays a
   packet; both use `START_GAP` in `core/src/camera.rs`. The hub tries 10
   times (was 15), so giving up still takes about 30 s. Repeats that change
-  nothing are skipped without waiting on the camera lock.
+  nothing are skipped without waiting on the camera lock. Right after a
+  stop, the hub holds the first start until 2.5 s after the stop and sends
+  it then, so a quick Stop then Watch does not spend a try on the camera's
+  gap.
 - **No pause between frames (camera node)**: the stream no longer sleeps
   50 ms after each frame; the next grab already waits for the driver's next
   frame. On the bench (cab, SVGA q12, about 5 minutes each) the median went

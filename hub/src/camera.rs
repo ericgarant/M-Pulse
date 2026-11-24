@@ -68,18 +68,18 @@ pub fn send_now() {
     wake.notify_one();
 }
 
-/// Waits for the next tick, or less if [`send_now`] is called.
-fn wait_for_tick() {
+/// Waits up to `timeout`, or less if [`send_now`] is called.
+fn wait_for_tick(timeout: Duration) {
     let (woken, wake) = &WAKE;
     let guard = woken.lock().unwrap_or_else(|e| e.into_inner());
     let (mut guard, _) = wake
-        .wait_timeout_while(guard, SEND_EVERY, |woken| !*woken)
+        .wait_timeout_while(guard, timeout, |woken| !*woken)
         .unwrap_or_else(|e| e.into_inner());
     *guard = false;
 }
 
-/// Once a second, and at once when the dashboard asks, sends whatever the
-/// registry says is due.
+/// Once a second, at once when the dashboard asks, and when a start held
+/// back after a stop may go, sends whatever the registry says is due.
 fn send_loop(state: &Shared) {
     let socket = loop {
         match UdpSocket::bind(("0.0.0.0", 0)) {
@@ -91,7 +91,9 @@ fn send_loop(state: &Shared) {
         }
     };
     loop {
-        wait_for_tick();
+        // A start held back after a stop goes out the moment it may.
+        let held = state.cameras().start_held_for(Instant::now());
+        wait_for_tick(held.map_or(SEND_EVERY, |left| left.min(SEND_EVERY)));
         let due = state.cameras().due(Instant::now());
         for (to, command) in due {
             if let Err(err) = socket.send_to(command.encode().as_bytes(), to) {
