@@ -39,7 +39,7 @@ pub fn power_up() -> Result<()> {
     config.pixel_format = camera::pixformat_t_PIXFORMAT_JPEG;
     config.frame_size = settings.size.framesize();
     config.jpeg_quality = i32::from(settings.quality);
-    config.fb_count = 2;
+    config.fb_count = 3;
     config.fb_location = camera::camera_fb_location_t_CAMERA_FB_IN_PSRAM;
     config.grab_mode = camera::camera_grab_mode_t_CAMERA_GRAB_LATEST;
 
