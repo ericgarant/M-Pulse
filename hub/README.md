@@ -541,7 +541,11 @@ The Home page has a Cameras tile that shows how many are online.
   to standby on its own. The hub ends that request, and a tile still on
   screen asks for the camera again within 5 s.
 - If the picture stops for 10 s (Wi-Fi lost, phone asleep), the tile says
-  "Video paused" and reconnects when it can.
+  "Video paused" and reconnects when it can. A stream that fails to open
+  (the camera refused it, or the connection broke) is tried again at the
+  page's next check, within a few seconds. When the tile moves to a new
+  stream it closes the old one first and opens the new one 0.4 s later, as
+  the camera serves one viewer at a time.
 - Waking is quick: the hub sends `start` or `stop` the moment the page asks
   (not at its next once-a-second check), the camera announces each change of
   state at once, and the page checks every 0.5 s (instead of 2 s) while a

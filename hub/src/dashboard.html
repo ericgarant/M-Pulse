@@ -2397,6 +2397,8 @@ setInterval(() => { if (!document.hidden) loadHistory(); }, 60000);
 const CAM_RENEW_MS = 20000, CAM_POLL_MS = 2000;
 // Poll this often while a camera on screen is waking (see camWaking).
 const CAM_FAST_MS = 500;
+// Gap between closing one stream and opening the next (see paintStream).
+const CAM_REOPEN_MS = 400;
 // A tile off screen this long lets its camera sleep.
 const CAM_OFFSCREEN_MS = 10000;
 // Frames that stop for this long count as a stalled video (Wi-Fi lost, phone
@@ -2486,9 +2488,15 @@ function camTile(name) {
   const c = { name, el, img, badge, msg, watch, stop, rotate, photo, qsel, pmsg, want: false, stopping: false, renew: null,
     // Without an observer every tile counts as on screen, as before.
     visible: !camIO, offTimer: null, userStopped: camStopped.has(name), paused: false, conn: 0, qbusy: false,
+    openTimer: null,
     shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
   // Each frame of the MJPEG stream fires a load event; remember when the last one came.
   img.addEventListener("load", () => { c.lastFrame = Date.now(); });
+  // A stream that fails (the camera answered 503, or the connection broke)
+  // opens again at the next paint, within a poll or two, not at the next
+  // renewal 20 s later. An empty src also fires error in some browsers: not
+  // a stream, so ignored.
+  img.addEventListener("error", () => { if (img.getAttribute("src")) c.shown = null; });
   watch.onclick = () => camWatch(name, true);
   rotate.onclick = () => camRotate(c);
   photo.onclick = () => camPhoto(c);
@@ -2631,12 +2639,21 @@ async function camPhoto(c) {
 // Each time the video opens it gets a new address (?n=): a browser can keep an
 // MJPEG stream that ended (the camera restarted) as a finished image, and
 // would show its last frame again for the same address instead of connecting.
+// Moving from one stream to another (a stall, an error, a new camera address)
+// closes the old one first and opens the new one CAM_REOPEN_MS later: the
+// camera serves one viewer and frees its slot only when a write to the old
+// connection fails.
 function paintStream(c) {
   const url = camsOn && c.want && c.visible && c.stream && !c.paused ? c.stream : null;
   if (url === c.shown) return;
   c.shown = url;
-  c.img.src = url ? url + "?n=" + (++c.conn) : "";
+  clearTimeout(c.openTimer);
+  c.openTimer = null;
   c.img.hidden = !url;
+  const open = () => { c.openTimer = null; c.img.src = url + "?n=" + (++c.conn); };
+  if (!url) c.img.src = "";
+  else if (c.img.getAttribute("src")) { c.img.src = ""; c.openTimer = setTimeout(open, CAM_REOPEN_MS); }
+  else open();
 }
 
 function camPaint(c) {

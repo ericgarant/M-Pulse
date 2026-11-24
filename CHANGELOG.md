@@ -126,7 +126,10 @@
   connecting again: on the bench the camper tile stayed frozen after the
   camera restarted, while the camera streamed to nobody. The "Video paused"
   reconnect should now really reconnect too; that is not yet confirmed on
-  the phone, as it relies on the browser reporting each frame.
+  the phone, as it relies on the browser reporting each frame. A stream
+  that fails to open (a 503, a broken connection) is tried again at the
+  page's next check instead of at the next renewal 20 s later, and moving
+  to a new stream closes the old one 0.4 s before opening the new one.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It
