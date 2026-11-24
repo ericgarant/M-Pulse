@@ -459,6 +459,8 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
         };
         match entry {
             Some(body) => {
+                // Send what this changed now, not at the sender's next tick.
+                crate::camera::send_now();
                 if action == "start" {
                     info!("Dashboard asked for camera {name}{}", if watch { " (Watch)" } else { "" });
                 } else {

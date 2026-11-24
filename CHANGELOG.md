@@ -97,6 +97,14 @@
   50 ms after each frame; the next grab already waits for the driver's next
   frame. On the bench (cab, SVGA q12, about 5 minutes each) the median went
   from 5.0 to 6.9 frames a second.
+- **Faster wake (hub, camera node)**: the hub sends start or stop as soon as
+  the page asks instead of at its next once-a-second check, the camera
+  announces a change of state at once instead of at its next one-second
+  check, and the page polls every 0.5 s instead of 2 s while a camera on
+  screen is waking. On the bench (camper) the first frame now comes about
+  0.8 s after the camera gets the start (was about 2.3 s), and the whole
+  wake from the camera joining Wi-Fi to the first frame went from about
+  6.2 s to 3.3 s.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

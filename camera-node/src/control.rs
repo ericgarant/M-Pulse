@@ -160,7 +160,15 @@ fn run_announce(name: &'static str, online: Online) {
     let target = (Ipv4Addr::BROADCAST, ANNOUNCE_PORT);
     let mut last_sent: Option<(CameraState, Instant)> = None;
     loop {
-        thread::sleep(Duration::from_secs(1));
+        // Online, wake at once when the state moves away from the one last
+        // announced, so the hub (and the viewer's page) hear "streaming" without
+        // waiting for this loop's next second. Otherwise check once a second.
+        match last_sent {
+            Some((sent_state, _)) if online.is_up() => {
+                state::wait_for_change(sent_state, Duration::from_secs(1));
+            }
+            _ => thread::sleep(Duration::from_secs(1)),
+        }
         if !online.is_up() {
             continue;
         }

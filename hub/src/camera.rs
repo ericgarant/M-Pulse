@@ -9,6 +9,7 @@
 //! only long enough to update or read it; the UDP sends happen outside it.
 
 use std::net::{SocketAddr, UdpSocket};
+use std::sync::{Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -56,7 +57,29 @@ fn receive(state: &Shared) -> anyhow::Result<()> {
     }
 }
 
-/// Once a second, sends whatever the registry says is due.
+/// Set by [`send_now`] to wake the sender before its next tick.
+static WAKE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+
+/// Wakes the sender at once, so a start or stop the dashboard just asked for
+/// goes out now instead of at the next tick (up to a second later).
+pub fn send_now() {
+    let (woken, wake) = &WAKE;
+    *woken.lock().unwrap_or_else(|e| e.into_inner()) = true;
+    wake.notify_one();
+}
+
+/// Waits for the next tick, or less if [`send_now`] is called.
+fn wait_for_tick() {
+    let (woken, wake) = &WAKE;
+    let guard = woken.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut guard, _) = wake
+        .wait_timeout_while(guard, SEND_EVERY, |woken| !*woken)
+        .unwrap_or_else(|e| e.into_inner());
+    *guard = false;
+}
+
+/// Once a second, and at once when the dashboard asks, sends whatever the
+/// registry says is due.
 fn send_loop(state: &Shared) {
     let socket = loop {
         match UdpSocket::bind(("0.0.0.0", 0)) {
@@ -68,7 +91,7 @@ fn send_loop(state: &Shared) {
         }
     };
     loop {
-        thread::sleep(SEND_EVERY);
+        wait_for_tick();
         let due = state.cameras().due(Instant::now());
         for (to, command) in due {
             if let Err(err) = socket.send_to(command.encode().as_bytes(), to) {

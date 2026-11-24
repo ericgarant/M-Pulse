@@ -7,7 +7,7 @@
 
 use std::ops::RangeInclusive;
 use std::sync::atomic::AtomicUsize;
-use std::sync::{Mutex, RwLock, RwLockReadGuard};
+use std::sync::{Condvar, Mutex, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
 use esp_idf_svc::sys::camera;
@@ -17,6 +17,8 @@ use m_pulse_core::camera::CameraState;
 pub static CAMERA: RwLock<()> = RwLock::new(());
 
 static STATE: Mutex<CameraState> = Mutex::new(CameraState::Standby);
+/// Notified by [`set_state`].
+static STATE_CHANGED: Condvar = Condvar::new();
 static LAST_VIEWED: Mutex<Option<Instant>> = Mutex::new(None);
 /// When the running start's command arrived, until its first frame is served.
 static STARTED_AT: Mutex<Option<Instant>> = Mutex::new(None);
@@ -106,6 +108,17 @@ pub fn state() -> CameraState {
 
 pub fn set_state(state: CameraState) {
     *STATE.lock().unwrap_or_else(|e| e.into_inner()) = state;
+    STATE_CHANGED.notify_all();
+}
+
+/// Waits until the state is not `seen`, or `timeout` passes, and returns the
+/// state. Lets the announce thread tell the hub about a change at once.
+pub fn wait_for_change(seen: CameraState, timeout: Duration) -> CameraState {
+    let guard = STATE.lock().unwrap_or_else(|e| e.into_inner());
+    let (guard, _) = STATE_CHANGED
+        .wait_timeout_while(guard, timeout, |state| *state == seen)
+        .unwrap_or_else(|e| e.into_inner());
+    *guard
 }
 
 /// Records that someone is watching (or has just been started), which resets the idle timer.

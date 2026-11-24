@@ -2395,6 +2395,8 @@ setInterval(() => { if (!document.hidden) loadHistory(); }, 60000);
 // is wanted and on screen, whatever the video is doing. The video is set only
 // while the tile is on screen.
 const CAM_RENEW_MS = 20000, CAM_POLL_MS = 2000;
+// Poll this often while a camera on screen is waking (see camWaking).
+const CAM_FAST_MS = 500;
 // A tile off screen this long lets its camera sleep.
 const CAM_OFFSCREEN_MS = 10000;
 // Frames that stop for this long count as a stalled video (Wi-Fi lost, phone
@@ -2802,6 +2804,17 @@ function camList(list) {
   renderCamHome(list);
 }
 
+// True while a tile on screen wants a camera that is online, has not given
+// "No answer", and is not streaming yet: the page then polls every
+// CAM_FAST_MS, so the video starts as soon as the camera does.
+function camWaking() {
+  for (const c of cams.values()) {
+    const e = c.last;
+    if (camsOn && c.want && c.visible && e && e.online && e.state !== "streaming" && e.note !== "no answer") return true;
+  }
+  return false;
+}
+
 async function camLoop() {
   if (!document.hidden) {
     try {
@@ -2809,7 +2822,7 @@ async function camLoop() {
       if (r.ok) camList(await r.json());
     } catch (err) { /* the next poll tries again */ }
   }
-  camTimer = setTimeout(camLoop, CAM_POLL_MS);
+  camTimer = setTimeout(camLoop, camWaking() ? CAM_FAST_MS : CAM_POLL_MS);
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) camLeave();
