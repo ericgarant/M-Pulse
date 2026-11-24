@@ -93,6 +93,10 @@
   packet; both use `START_GAP` in `core/src/camera.rs`. The hub tries 10
   times (was 15), so giving up still takes about 30 s. Repeats that change
   nothing are skipped without waiting on the camera lock.
+- **No pause between frames (camera node)**: the stream no longer sleeps
+  50 ms after each frame; the next grab already waits for the driver's next
+  frame. On the bench (cab, SVGA q12, about 5 minutes each) the median went
+  from 5.0 to 6.9 frames a second.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

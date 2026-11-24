@@ -176,7 +176,7 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
             stats_frames = 0;
             stats_bytes = 0;
         }
-        std::thread::sleep(Duration::from_millis(50));
+        // No pause here: the next grab waits for the driver's next frame.
     }
     log::info!("stream stopped");
     Ok(())
