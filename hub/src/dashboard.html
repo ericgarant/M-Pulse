@@ -2730,6 +2730,7 @@ function camWatch(name, byUser = false) {
   c.stopping = false;
   if (byUser) camSetStopped(c, false);
   camPaint(c);
+  camKick();
   camPost(name, byUser ? "start?watch=1" : "start").then(e => { if (!e) toast("Could not reach " + name, "bad"); });
 }
 
@@ -2815,14 +2816,32 @@ function camWaking() {
   return false;
 }
 
+// One poll timer at a time (camTimer). camPolling is true while a poll waits
+// for the hub; that poll sets the next timer itself. camTimerFast says the
+// pending timer is the CAM_FAST_MS one.
+let camPolling = false, camTimerFast = false;
+
 async function camLoop() {
+  camPolling = true;
   if (!document.hidden) {
     try {
       const r = await fetch("/api/cameras", { cache: "no-store" });
       if (r.ok) camList(await r.json());
     } catch (err) { /* the next poll tries again */ }
   }
-  camTimer = setTimeout(camLoop, camWaking() ? CAM_FAST_MS : CAM_POLL_MS);
+  camPolling = false;
+  camTimerFast = camWaking();
+  camTimer = setTimeout(camLoop, camTimerFast ? CAM_FAST_MS : CAM_POLL_MS);
+}
+
+// A camera just started waking (Watch, a tile coming on screen, entering the
+// page): poll after CAM_FAST_MS instead of waiting out a pending 2 s timer.
+// Replaces the one pending timer, so polls never overlap.
+function camKick() {
+  if (camPolling || camTimerFast || !camWaking()) return;
+  clearTimeout(camTimer);
+  camTimerFast = true;
+  camTimer = setTimeout(camLoop, CAM_FAST_MS);
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) camLeave();

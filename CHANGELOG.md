@@ -108,7 +108,8 @@
   the page asks instead of at its next once-a-second check, the camera
   announces a change of state at once instead of at its next one-second
   check, and the page polls every 0.5 s instead of 2 s while a camera on
-  screen is waking. On the bench (camper) the first frame now comes about
+  screen is waking, from the moment it asks for the camera (it no longer
+  waits out a pending 2 s poll first). On the bench (camper) the first frame now comes about
   0.8 s after the camera gets the start (was about 2.3 s), and the whole
   wake from the camera joining Wi-Fi to the first frame went from about
   6.2 s to 3.3 s.
