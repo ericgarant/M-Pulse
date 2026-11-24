@@ -98,30 +98,35 @@
   gap.
 - **No pause between frames (camera node)**: the stream no longer sleeps
   50 ms after each frame; the next grab already waits for the driver's next
-  frame. On the bench (cab, SVGA q12, about 5 minutes each) the median went
-  from 5.0 to 6.9 frames a second.
-- **Three frame buffers (camera node)**: with two, the driver had nowhere to
-  capture while one frame was being sent and the other waited, so frames
-  went out late. A third costs 96 KB of PSRAM at SVGA. Together with the
-  change above, the bench median went from 5.0 to 13.4 frames a second on
-  the cab and from 3.5 to 6.8 on the camper. Moving the driver's task to
-  core 1 and running the CPU at 240 MHz were also measured and not kept:
-  no gain, and more driver warnings.
+  frame. On the bench (cab, SVGA q12, about 3 to 5 minutes over two runs)
+  the median went from 5.0 to 6.9 frames a second; on its own that is not
+  significant (p = 0.09).
+- **Three frame buffers (camera node)**: three instead of two, so that the
+  driver can keep capturing while one frame is sent and another waits (the
+  reasoning; only the frame rate was measured). The third costs 96 KB of
+  PSRAM at SVGA. Together with the change above, the bench median went
+  from 5.0 to 13.4 frames a second on the cab and from 3.5 to 6.8 on the
+  camper. The camera driver's warnings (`FB-OVF`, `NO-SOI`, each dropping a
+  frame) rose with them: from 1.1 to 4.7 a minute on the cab and from 6.9
+  to 13.2 on the camper. Also measured and not kept: the driver's task on
+  core 1 (no gain, and more warnings) and the CPU at 240 MHz (no gain;
+  `FB-OVF` fell but `NO-SOI` rose).
 - **Faster wake (hub, camera node)**: the hub sends start or stop as soon as
   the page asks instead of at its next once-a-second check, the camera
   announces a change of state at once instead of at its next one-second
   check, and the page polls every 0.5 s instead of 2 s while a camera on
   screen is waking, from the moment it asks for the camera (it no longer
-  waits out a pending 2 s poll first). On the bench (camper) the first frame now comes about
-  0.8 s after the camera gets the start (was about 2.3 s), and the whole
-  wake from the camera joining Wi-Fi to the first frame went from about
-  6.2 s to 3.3 s.
+  waits out a pending 2 s poll first). On the bench (camper, medians) the
+  first frame now comes about 0.6 s after the camera gets the start (was
+  about 2.3 s), and the whole wake from the camera joining Wi-Fi to the
+  first frame went from about 6.2 s to 2.9 s.
 - **No frozen picture after a camera restart (hub)**: the tile opens the video
   on a new address (`?n=`) each time. Reusing the same address let the
   browser show the last frame of a stream that had ended instead of
   connecting again: on the bench the camper tile stayed frozen after the
   camera restarted, while the camera streamed to nobody. The "Video paused"
-  reconnect now really reconnects too.
+  reconnect should now really reconnect too; that is not yet confirmed on
+  the phone, as it relies on the browser reporting each frame.
 
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It

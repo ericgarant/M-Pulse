@@ -569,13 +569,14 @@ The Home page has a Cameras tile that shows how many are online.
   Wi-Fi. Scans for the heater are never held back, since the thermostat and
   the low-battery stop depend on that link.
 - Measured on the bench at SVGA quality 12, one camera at a time (medians,
-  November 2026): the cab board about 13 frames a second (about 200 KB/s),
-  the camper board about 7 on a weaker link; both were about 5 and 3.5
-  before the camera firmware's frame-rate changes. The rate swings from 1
-  to over 25 within minutes, with the hub's Bluetooth and the shared air.
-  Boards differ: one earlier cab board managed only 1 to 2 frames a second
-  with a strong signal, and was replaced. Two cameras streaming at once
-  share the hub's radio and each gets less. Not yet measured in the camper.
+  November 2026): the cab board about 13 frames a second (about 200 KB/s);
+  the camper board about 7 (6.8) with bigger frames, and 4.6 on the final
+  build later on, with less getting through. They were about 5 and 3.5
+  before the camera firmware's frame-rate changes. The rate swings from
+  about 2 to over 25 within minutes; the cause was not measured. Boards
+  differ: one earlier cab board managed only 1 to 2 frames a second with a
+  strong signal, and was replaced. Two cameras streaming at once share the
+  hub's radio and each gets less. Not yet measured in the camper.
 - Names are set when the camera firmware is built, with
   `M_PULSE_CAMERA_NAME` (see [camera-node](../camera-node/README.md)). The
   default is `camper`. The second camera is `cab`.

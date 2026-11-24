@@ -62,17 +62,22 @@ the hub's network (medians of the 10 s stats lines, November 2026):
 - cab: about 13 frames a second (14 KB per frame, about 200 KB/s), up from
   about 5 before the stream stopped pausing 50 ms after each frame and the
   driver got a third frame buffer;
-- camper: about 7 frames a second (13 to 28 KB per frame, depending on the
-  scene and light), up from about 3.5, on a weaker link.
+- camper: about 7 frames a second with those two changes (6.8), up from
+  about 3.5. Its frames were bigger than the cab's (22 to 28 KB) at a
+  similar 160 to 190 KB/s. The final build, with the faster wake as well,
+  gave 4.6 later on, in poorer light (13 KB per frame) with less getting
+  through (about 60 KB/s).
 
-The frame rate swings a lot from minute to minute (from 1 to over 25 frames
-a second), with the hub's Bluetooth and the shared air: the link is the
-limit, not the camera, so a smaller frame gives more frames a second. Frame
-sizes on camper: SVGA q12 about 13 KB, SVGA q14 about 12, VGA q12 about 10.5,
-VGA q14 about 8. Quality 10 made frames only about 10% bigger and slower,
-with no visible gain. Boards differ: one board managed only 1 to 2 frames a
-second with a strong signal and was retired. To compare boards, run each
-alone on the same scene and read the stats line below.
+The frame rate swings a lot from minute to minute (from about 2 to over 25
+frames a second); the cause was not measured. The camera can go faster than
+the link carries (the cab reached about 28 frames a second), so a smaller
+frame should give more frames a second, but the bench could not show it
+through the swings. Frame sizes on camper: SVGA q12 about 13 KB, SVGA q14
+about 12, VGA q12 about 10.5, VGA q14 about 8. Quality 10 made frames only
+about 10% bigger and slower, with no visible gain. Boards differ: one board
+managed only 1 to 2 frames a second with a strong signal and was retired.
+To compare boards, run each alone on the same scene and read the stats line
+below.
 
 ## What it sends and receives
 
