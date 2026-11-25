@@ -93,14 +93,19 @@ pub fn change_settings(size: Size, quality: u8) -> Result<Settings> {
             state::set_settings(old);
             state::set_state(CameraState::Standby);
             crate::net::set_power_save(true);
-            return Err(err.context("restart with the new frame size failed; the camera is now in standby"));
+            return Err(
+                err.context("restart with the new frame size failed; the camera is now in standby")
+            );
         }
     } else {
         let sensor = unsafe { camera::esp_camera_sensor_get() };
         anyhow::ensure!(!sensor.is_null(), "no camera sensor");
         let set_quality = unsafe { (*sensor).set_quality }.context("sensor has no set_quality")?;
         let ret = unsafe { set_quality(sensor, i32::from(quality)) };
-        anyhow::ensure!(ret == 0, "set JPEG quality {quality} failed: error {ret}; settings unchanged");
+        anyhow::ensure!(
+            ret == 0,
+            "set JPEG quality {quality} failed: error {ret}; settings unchanged"
+        );
         state::set_settings(new);
     }
 

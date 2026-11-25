@@ -40,7 +40,10 @@ pub fn spawn(state: Shared) -> anyhow::Result<()> {
 
 fn receive(state: &Shared) -> anyhow::Result<()> {
     let socket = UdpSocket::bind(("0.0.0.0", camera::ANNOUNCE_PORT))?;
-    info!("Listening for cameras on UDP port {}", camera::ANNOUNCE_PORT);
+    info!(
+        "Listening for cameras on UDP port {}",
+        camera::ANNOUNCE_PORT
+    );
 
     let mut buf = [0u8; 64];
     loop {
@@ -50,7 +53,9 @@ fn receive(state: &Shared) -> anyhow::Result<()> {
             continue;
         };
         // A camera that says it is streaming holds back Bluetooth scans.
-        let video = state.cameras().announce(announce, *from.ip(), Instant::now());
+        let video = state
+            .cameras()
+            .announce(announce, *from.ip(), Instant::now());
         if video {
             crate::radio::video_seen();
         }

@@ -74,7 +74,8 @@ fn run_commands(socket: UdpSocket, senders: Online) {
         let changed = match command {
             Command::Stop => stop(),
             Command::Start => {
-                if last_change.is_some_and(|t| received.saturating_duration_since(t) < COMMAND_GAP) {
+                if last_change.is_some_and(|t| received.saturating_duration_since(t) < COMMAND_GAP)
+                {
                     info!(
                         "Start ignored: under {} s since the camera last started or stopped",
                         COMMAND_GAP.as_secs()
@@ -113,11 +114,17 @@ fn start(received: Instant) -> bool {
             state::set_started_at(Some(received));
             crate::net::set_power_save(false);
             state::set_state(CameraState::Streaming);
-            info!("Camera streaming: init took {init_ms} ms; {}", camera::memory());
+            info!(
+                "Camera streaming: init took {init_ms} ms; {}",
+                camera::memory()
+            );
             true
         }
         Err(err) => {
-            warn!("Could not start the camera after {init_ms} ms: {err}; {}", camera::memory());
+            warn!(
+                "Could not start the camera after {init_ms} ms: {err}; {}",
+                camera::memory()
+            );
             state::set_state(CameraState::Standby);
             false
         }
@@ -209,7 +216,10 @@ fn run_idle() {
             // Re-check under the lock: a stop and a new start may have run since.
             let _write = state::CAMERA.write().unwrap_or_else(|e| e.into_inner());
             let viewers = state::VIEWERS.load(std::sync::atomic::Ordering::SeqCst);
-            if state::state() == CameraState::Streaming && viewers == 0 && state::idle_for() >= IDLE_OFF {
+            if state::state() == CameraState::Streaming
+                && viewers == 0
+                && state::idle_for() >= IDLE_OFF
+            {
                 info!("No viewers for {} s: camera to standby", IDLE_OFF.as_secs());
                 stop_locked();
             }

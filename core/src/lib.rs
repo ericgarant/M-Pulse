@@ -4,8 +4,8 @@
 //! tests on an ordinary computer with `cargo test`.
 
 pub mod actuator;
-pub mod camera;
 pub mod bluetti;
+pub mod camera;
 pub mod clock;
 pub mod eco_guard;
 pub mod filter;

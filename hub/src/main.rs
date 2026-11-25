@@ -136,7 +136,13 @@ fn main() -> anyhow::Result<()> {
     )?;
     cabin::spawn(state.clone())?;
     camera::spawn(state.clone())?;
-    control::spawn(state.clone(), fuel_store, rules_store, thermo_store, camera_store)?;
+    control::spawn(
+        state.clone(),
+        fuel_store,
+        rules_store,
+        thermo_store,
+        camera_store,
+    )?;
     let _server = web::start(state.clone())?;
 
     let timers = EspTaskTimerService::new()?;

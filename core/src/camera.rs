@@ -235,11 +235,19 @@ impl Cameras {
             // its own (nobody watched), unless the hub just told it to stop. On
             // its own, a wish still running would only start it again, so end
             // it. After the hub's stop, a wish is a new Watch and must stay.
-            let hub_stopped = c.stop_sent.is_some_and(|t| now.duration_since(t) < STOP_ECHO);
-            if c.state == CameraState::Streaming && a.state == CameraState::Standby && !hub_stopped {
-                if c.wish.take().is_some() {
-                    info!("Camera \"{}\" went to standby on its own: wish ended", c.name);
-                }
+            let hub_stopped = c
+                .stop_sent
+                .is_some_and(|t| now.duration_since(t) < STOP_ECHO);
+            // The wish is taken only when the first three hold (&& stops early).
+            if c.state == CameraState::Streaming
+                && a.state == CameraState::Standby
+                && !hub_stopped
+                && c.wish.take().is_some()
+            {
+                info!(
+                    "Camera \"{}\" went to standby on its own: wish ended",
+                    c.name
+                );
             }
             if a.state == CameraState::Standby {
                 c.stops_again = 0;
@@ -249,7 +257,10 @@ impl Cameras {
             return video;
         }
         if self.list.len() >= MAX_CAMERAS {
-            warn!("Camera \"{}\" ignored: the hub keeps {MAX_CAMERAS} at most", a.name);
+            warn!(
+                "Camera \"{}\" ignored: the hub keeps {MAX_CAMERAS} at most",
+                a.name
+            );
             return video;
         }
         info!("Camera \"{}\" announced from {ip}", a.name);
@@ -320,21 +331,31 @@ impl Cameras {
         let mut out = Vec::new();
         for c in &mut self.list {
             if c.wish.as_ref().is_some_and(|w| now >= w.until) {
-                info!("Camera \"{}\": no request for a minute, letting it sleep", c.name);
+                info!(
+                    "Camera \"{}\": no request for a minute, letting it sleep",
+                    c.name
+                );
                 c.wish = None;
                 c.stop_due = true;
             }
             let streaming = c.state == CameraState::Streaming;
             // Just after a stop the camera would ignore a start: hold it.
-            let held = c.stop_sent.is_some_and(|t| now.duration_since(t) < START_AFTER_STOP);
+            let held = c
+                .stop_sent
+                .is_some_and(|t| now.duration_since(t) < START_AFTER_STOP);
             if let Some(w) = &mut c.wish {
-                let due = w.last_sent.is_none_or(|t| now.duration_since(t) >= START_AGAIN);
+                let due = w
+                    .last_sent
+                    .is_none_or(|t| now.duration_since(t) >= START_AGAIN);
                 if !streaming && w.tries < MAX_TRIES && due && !held {
                     w.tries += 1;
                     w.last_sent = Some(now);
                     out.push((addr(c.ip), Command::Start));
                     if w.tries == MAX_TRIES {
-                        warn!("Camera \"{}\": no answer to {MAX_TRIES} start commands", c.name);
+                        warn!(
+                            "Camera \"{}\": no answer to {MAX_TRIES} start commands",
+                            c.name
+                        );
                     }
                 }
             }
@@ -342,13 +363,25 @@ impl Cameras {
             // hub restarted while it streamed. Only while it announces.
             let online = now.duration_since(c.last_seen) < Duration::from_secs(OFFLINE_AFTER_S);
             if c.wish.is_none() && c.state != CameraState::Standby && online && !c.stop_due {
-                let every = if c.stops_again < STOP_AGAIN_TRIES { STOP_AGAIN } else { STOP_AGAIN_SLOW };
+                let every = if c.stops_again < STOP_AGAIN_TRIES {
+                    STOP_AGAIN
+                } else {
+                    STOP_AGAIN_SLOW
+                };
                 if c.stop_sent.is_none_or(|t| now.duration_since(t) >= every) {
                     c.stops_again = c.stops_again.saturating_add(1);
                     if c.stops_again == 1 {
-                        info!("Camera \"{}\" is {} with nobody watching: sending stop", c.name, c.state.as_str());
+                        info!(
+                            "Camera \"{}\" is {} with nobody watching: sending stop",
+                            c.name,
+                            c.state.as_str()
+                        );
                     } else if c.stops_again == STOP_AGAIN_TRIES {
-                        warn!("Camera \"{}\" still {}: sending stop every 30 s", c.name, c.state.as_str());
+                        warn!(
+                            "Camera \"{}\" still {}: sending stop every 30 s",
+                            c.name,
+                            c.state.as_str()
+                        );
                     }
                     c.stop_due = true;
                 }
@@ -374,7 +407,9 @@ impl Cameras {
                     return None;
                 }
                 let since = now.duration_since(c.stop_sent?);
-                START_AFTER_STOP.checked_sub(since).filter(|left| !left.is_zero())
+                START_AFTER_STOP
+                    .checked_sub(since)
+                    .filter(|left| !left.is_zero())
             })
             .min()
     }
@@ -397,7 +432,8 @@ impl Cameras {
                 // names the hub no longer hears from, then the oldest entry.
                 if self.rotations.len() >= MAX_CAMERAS {
                     let list = &self.list;
-                    self.rotations.retain(|(n, _)| list.iter().any(|c| &c.name == n));
+                    self.rotations
+                        .retain(|(n, _)| list.iter().any(|c| &c.name == n));
                 }
                 while self.rotations.len() >= MAX_CAMERAS {
                     self.rotations.remove(0);
@@ -492,7 +528,9 @@ impl Saved {
         }
         let version = bytes[0];
         let seq_at = Self::LEN - 8;
-        let word = |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        let word = |at: usize| {
+            u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
+        };
         if fnv1a(&bytes[..seq_at + 4]) != word(seq_at + 4) {
             return None;
         }
@@ -584,7 +622,10 @@ mod tests {
 
     #[test]
     fn commands_round_trip() {
-        assert_eq!(Command::parse(Command::Start.encode().as_bytes()), Some(Command::Start));
+        assert_eq!(
+            Command::parse(Command::Start.encode().as_bytes()),
+            Some(Command::Start)
+        );
         assert_eq!(Command::parse(b"MPC1 stop\n"), Some(Command::Stop));
         assert_eq!(Command::parse(b"MPC1 reboot"), None);
     }
@@ -633,18 +674,29 @@ mod tests {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Standby, t0);
         cams.want("cab", t0, true);
-        assert_eq!(sent(cams.due(t0)), [Command::Start], "the first start goes out at once");
+        assert_eq!(
+            sent(cams.due(t0)),
+            [Command::Start],
+            "the first start goes out at once"
+        );
         assert!(cams.due(t0 + secs(1)).is_empty(), "not again within 3 s");
         assert!(cams.due(t0 + secs(2)).is_empty(), "not again within 3 s");
         assert_eq!(sent(cams.due(t0 + secs(3))), [Command::Start]);
         // The hub works out what to send every second, but resends start only
         // every 3 s: the camera's 2 s gap between starts and a second more.
-        let at: Vec<u64> = (4..=12).filter(|&s| !cams.due(t0 + secs(s)).is_empty()).collect();
+        let at: Vec<u64> = (4..=12)
+            .filter(|&s| !cams.due(t0 + secs(s)).is_empty())
+            .collect();
         assert_eq!(at, [6, 9, 12]);
 
-        cams.announce(heard("cab", CameraState::Streaming), Ipv4Addr::new(192, 168, 71, 2), t0 + secs(13));
+        cams.announce(
+            heard("cab", CameraState::Streaming),
+            Ipv4Addr::new(192, 168, 71, 2),
+            t0 + secs(13),
+        );
         assert!(cams.due(t0 + secs(14)).is_empty());
-        assert!(entry(&cams, t0 + secs(14)).contains("\"stream_url\":\"http://192.168.71.2:81/stream\""));
+        assert!(entry(&cams, t0 + secs(14))
+            .contains("\"stream_url\":\"http://192.168.71.2:81/stream\""));
     }
 
     #[test]
@@ -653,11 +705,20 @@ mod tests {
         // after its last change. After a Stop, the hub's first start can land
         // inside that gap; the next must come well after it, even when power
         // save holds a packet to the next beacon (100-300 ms).
-        assert!(START_AGAIN >= START_GAP + Duration::from_secs(1), "a second of margin");
-        assert!(SEND_EVERY <= Duration::from_secs(1), "the hub checks often enough to keep that pace");
+        assert!(
+            START_AGAIN >= START_GAP + Duration::from_secs(1),
+            "a second of margin"
+        );
+        assert!(
+            SEND_EVERY <= Duration::from_secs(1),
+            "the hub checks often enough to keep that pace"
+        );
         // Giving up takes about 30 s: the last try at (MAX_TRIES - 1) resends.
         let give_up = START_AGAIN * u32::from(MAX_TRIES - 1);
-        assert!(give_up >= Duration::from_secs(25) && give_up <= Duration::from_secs(35), "{give_up:?}");
+        assert!(
+            give_up >= Duration::from_secs(25) && give_up <= Duration::from_secs(35),
+            "{give_up:?}"
+        );
     }
 
     #[test]
@@ -671,13 +732,16 @@ mod tests {
         cams.unwant("cab");
         assert_eq!(sent(cams.due(t0 + secs(1))), [Command::Stop]);
         cams.want("cab", t0 + secs(2), true); // Watch again straight away
-        // The camera obeys the stop. That is not stopping on its own, so the
-        // new wish stays and starts it again, once the camera's gap after the
-        // stop has passed.
+                                              // The camera obeys the stop. That is not stopping on its own, so the
+                                              // new wish stays and starts it again, once the camera's gap after the
+                                              // stop has passed.
         cams.announce(heard("cab", CameraState::Standby), ip, t0 + secs(3));
         assert!(entry(&cams, t0 + secs(3)).contains("\"wanted\":true"));
         assert!(cams.due(t0 + secs(3)).is_empty());
-        assert_eq!(sent(cams.due(t0 + secs(1) + START_AFTER_STOP)), [Command::Start]);
+        assert_eq!(
+            sent(cams.due(t0 + secs(1) + START_AFTER_STOP)),
+            [Command::Start]
+        );
     }
 
     #[test]
@@ -696,13 +760,19 @@ mod tests {
         // holds it, and says how long, instead of spending a try.
         assert!(START_AFTER_STOP > START_GAP);
         assert!(cams.due(t0 + secs(1)).is_empty());
-        assert_eq!(cams.start_held_for(t0 + secs(1)), Some(START_AFTER_STOP - secs(1)));
+        assert_eq!(
+            cams.start_held_for(t0 + secs(1)),
+            Some(START_AFTER_STOP - secs(1))
+        );
         assert!(cams.due(t0 + secs(2)).is_empty());
         assert_eq!(sent(cams.due(t0 + START_AFTER_STOP)), [Command::Start]);
         assert_eq!(cams.start_held_for(t0 + START_AFTER_STOP), None);
         // It was the first try: the rest come START_AGAIN apart as usual.
         assert!(cams.due(t0 + START_AFTER_STOP + secs(2)).is_empty());
-        assert_eq!(sent(cams.due(t0 + START_AFTER_STOP + START_AGAIN)), [Command::Start]);
+        assert_eq!(
+            sent(cams.due(t0 + START_AFTER_STOP + START_AGAIN)),
+            [Command::Start]
+        );
         // No stop for a long time: nothing is held.
         let mut fresh = with_cab(CameraState::Standby, t0);
         fresh.want("cab", t0, true);
@@ -717,7 +787,10 @@ mod tests {
         cams.want("cab", t0, true);
         cams.unwant("cab");
         cams.want("cab", t0, true);
-        assert!(cams.due(t0 + secs(1)).is_empty(), "no stop, and still streaming");
+        assert!(
+            cams.due(t0 + secs(1)).is_empty(),
+            "no stop, and still streaming"
+        );
     }
 
     #[test]
@@ -726,9 +799,16 @@ mod tests {
         let mut cams = with_cab(CameraState::Streaming, t0);
         cams.want("cab", t0, true);
         // No stop from the hub: the camera's own idle timer put it to sleep.
-        cams.announce(heard("cab", CameraState::Standby), Ipv4Addr::new(192, 168, 71, 2), t0 + secs(5));
+        cams.announce(
+            heard("cab", CameraState::Standby),
+            Ipv4Addr::new(192, 168, 71, 2),
+            t0 + secs(5),
+        );
         assert!(entry(&cams, t0 + secs(5)).contains("\"wanted\":false"));
-        assert!(cams.due(t0 + secs(5)).is_empty(), "no start to wake it again");
+        assert!(
+            cams.due(t0 + secs(5)).is_empty(),
+            "no start to wake it again"
+        );
     }
 
     #[test]
@@ -812,7 +892,10 @@ mod tests {
         assert_eq!(sent(cams.due(t0)), [Command::Stop]);
         // The camera keeps streaming: every 3 s for 10 stops, then every 30 s.
         let expected: Vec<u64> = (1..=10).map(|n| n * 3).chain([60, 90]).collect();
-        assert_eq!(stops_while(&mut cams, CameraState::Streaming, t0, 90), expected);
+        assert_eq!(
+            stops_while(&mut cams, CameraState::Streaming, t0, 90),
+            expected
+        );
     }
 
     #[test]
@@ -832,10 +915,16 @@ mod tests {
         let mut cams = with_cab(CameraState::Streaming, t0);
         cams.want("cab", t0, true);
         cams.want("cab", t0 + secs(30), false);
-        assert!(stops_while(&mut cams, CameraState::Streaming, t0, 40).is_empty(), "wanted");
+        assert!(
+            stops_while(&mut cams, CameraState::Streaming, t0, 40).is_empty(),
+            "wanted"
+        );
 
         let mut cams = with_cab(CameraState::Standby, t0);
-        assert!(stops_while(&mut cams, CameraState::Standby, t0, 40).is_empty(), "standby");
+        assert!(
+            stops_while(&mut cams, CameraState::Standby, t0, 40).is_empty(),
+            "standby"
+        );
 
         // A camera that stops announcing is offline after 15 s: no more stops.
         let mut cams = with_cab(CameraState::Streaming, t0);
@@ -849,27 +938,49 @@ mod tests {
     fn stop_resends_start_over_after_standby() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Streaming, t0);
-        assert_eq!(stops_while(&mut cams, CameraState::Streaming, t0, 30).len(), 10);
+        assert_eq!(
+            stops_while(&mut cams, CameraState::Streaming, t0, 30).len(),
+            10
+        );
         // It obeys, then later streams again unwanted: fast resends again.
-        cams.announce(heard("cab", CameraState::Standby), Ipv4Addr::new(192, 168, 71, 2), t0 + secs(31));
+        cams.announce(
+            heard("cab", CameraState::Standby),
+            Ipv4Addr::new(192, 168, 71, 2),
+            t0 + secs(31),
+        );
         assert!(cams.due(t0 + secs(31)).is_empty());
         let later = t0 + secs(100);
-        assert_eq!(stops_while(&mut cams, CameraState::Streaming, later, 6), [1, 4]);
+        assert_eq!(
+            stops_while(&mut cams, CameraState::Streaming, later, 6),
+            [1, 4]
+        );
     }
 
     #[test]
     fn rotation_makes_room_by_dropping_unheard_names() {
         let t0 = Instant::now();
         let mut cams = with_cab(CameraState::Standby, t0);
-        cams.announce(heard("old0", CameraState::Standby), Ipv4Addr::new(192, 168, 71, 3), t0);
+        cams.announce(
+            heard("old0", CameraState::Standby),
+            Ipv4Addr::new(192, 168, 71, 3),
+            t0,
+        );
         // Flash holds MAX_CAMERAS rotations, for names mostly not heard any more.
         cams.restore(&Saved {
             rotations: (0..MAX_CAMERAS).map(|i| (format!("old{i}"), 90)).collect(),
         });
         cams.set_rotation("cab", 180);
         assert_eq!(cams.rotation("cab"), 180);
-        assert_eq!(cams.rotation("old0"), 90, "a camera still heard keeps its rotation");
-        assert_eq!(cams.rotation("old1"), 0, "names no longer heard are dropped");
+        assert_eq!(
+            cams.rotation("old0"),
+            90,
+            "a camera still heard keeps its rotation"
+        );
+        assert_eq!(
+            cams.rotation("old1"),
+            0,
+            "names no longer heard are dropped"
+        );
         assert_eq!(cams.saved().rotations.len(), 2);
 
         cams.set_rotation("nobody", 270);
@@ -913,7 +1024,11 @@ mod tests {
         assert_eq!(seq, 7);
         assert_eq!(
             saved.rotations,
-            vec![("cab".to_string(), 90), ("camper".to_string(), 270), ("van".to_string(), 0)]
+            vec![
+                ("cab".to_string(), 90),
+                ("camper".to_string(), 270),
+                ("van".to_string(), 0)
+            ]
         );
         // Version 1 never wrote other bytes, and a bad checksum is rejected.
         assert_eq!(Saved::decode(&v1_record(&[("cab", 45)], 7)), None);

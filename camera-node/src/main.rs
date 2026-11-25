@@ -53,7 +53,10 @@ fn main() -> anyhow::Result<()> {
     let online = net::start(peripherals.modem, sysloop, nvs)?;
     control::spawn(NAME, online)?;
     let _servers = server::start()?;
-    info!("HTTP up: port 80 (page, still, settings), port {} (stream)", server::STREAM_PORT);
+    info!(
+        "HTTP up: port 80 (page, still, settings), port {} (stream)",
+        server::STREAM_PORT
+    );
 
     // Everything runs on background threads; keep the main task alive.
     loop {

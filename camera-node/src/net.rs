@@ -200,6 +200,9 @@ pub fn set_power_save(on: bool) {
     };
     let ret = unsafe { sys::esp_wifi_set_ps(mode) };
     if ret != sys::ESP_OK {
-        warn!("Could not set Wi-Fi power save {}: {ret}", if on { "on" } else { "off" });
+        warn!(
+            "Could not set Wi-Fi power save {}: {ret}",
+            if on { "on" } else { "off" }
+        );
     }
 }

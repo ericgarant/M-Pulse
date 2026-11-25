@@ -455,14 +455,21 @@ pub fn start(state: Shared) -> anyhow::Result<EspHttpServer<'static>> {
                     "stop" => cameras.unwant(name),
                     _ => false,
                 };
-            if known { cameras.json_entry(name, now) } else { None }
+            if known {
+                cameras.json_entry(name, now)
+            } else {
+                None
+            }
         };
         match entry {
             Some(body) => {
                 // Send what this changed now, not at the sender's next tick.
                 crate::camera::send_now();
                 if action == "start" {
-                    info!("Dashboard asked for camera {name}{}", if watch { " (Watch)" } else { "" });
+                    info!(
+                        "Dashboard asked for camera {name}{}",
+                        if watch { " (Watch)" } else { "" }
+                    );
                 } else {
                     info!("Dashboard let camera {name} sleep");
                 }

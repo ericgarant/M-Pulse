@@ -22,7 +22,8 @@ const CORS: (&str, &str) = ("Access-Control-Allow-Origin", "*");
 /// Most bytes accepted in a `POST /settings` body. The form is about 30 bytes.
 const MAX_BODY: usize = 256;
 
-const INDEX_HTML: &str = "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head>\
+const INDEX_HTML: &str =
+    "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head>\
 <body style=\"font-family:sans-serif\"><h1>M-Pulse camera</h1>\
 <img id=\"v\" style=\"max-width:100%\"><p><a href=\"/still.jpg\">Single still</a></p>\
 <script>v.src=location.protocol+\"//\"+location.hostname+\":81/stream\"</script></body></html>";
@@ -174,7 +175,11 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
                 stats_frames as f32 / elapsed.as_secs_f32(),
                 stats_bytes / stats_frames.max(1) as usize / 1024,
                 (stats_bytes as f32 / elapsed.as_secs_f32() / 1024.0) as u32,
-                if rssi_ok { rssi.to_string() } else { "?".to_string() },
+                if rssi_ok {
+                    rssi.to_string()
+                } else {
+                    "?".to_string()
+                },
                 camera::memory()
             );
             stats_from = std::time::Instant::now();
@@ -307,12 +312,7 @@ fn post_settings(mut req: Request<&mut EspHttpConnection>) -> anyhow::Result<()>
         Ok(applied) => text(req, 200, "OK", &settings_text(applied)),
         Err(err) => {
             log::warn!("Settings change failed: {err:#}");
-            text(
-                req,
-                500,
-                "Internal Server Error",
-                &format!("{err:#}\n"),
-            )
+            text(req, 500, "Internal Server Error", &format!("{err:#}\n"))
         }
     }
 }
