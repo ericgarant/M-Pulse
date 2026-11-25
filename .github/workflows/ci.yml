@@ -39,10 +39,12 @@ jobs:
             chip: esp32s3
           - crate: sensor-node
             chip: esp32
+          - crate: camera-node
+            chip: esp32
     defaults:
       run:
         working-directory: ${{ matrix.crate }}
-    # A release build of the hub refuses to build without the network's
+    # Release builds of the hub and the cameras refuse to build without the network's
     # password. These builds are only checked, never flashed or uploaded, so
     # a placeholder stands in for it.
     env:
