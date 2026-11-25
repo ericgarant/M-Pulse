@@ -545,12 +545,12 @@ footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 1
 .cam-h { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .cam-h h3 { margin: 0; font-size: 17px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cam-view { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; background: #000; overflow: hidden; }
-.cam-view img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.cam-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 /* Turned by the Rotate button. A quarter turn swaps the image's width and height in the 4:3 box. */
-.cam-view img.r180 { transform: rotate(180deg); }
-.cam-view img.r90, .cam-view img.r270 { inset: auto; left: 50%; top: 50%; width: 75%; height: 133.33%; }
-.cam-view img.r90 { transform: translate(-50%, -50%) rotate(90deg); }
-.cam-view img.r270 { transform: translate(-50%, -50%) rotate(270deg); }
+.cam-view canvas.r180 { transform: rotate(180deg); }
+.cam-view canvas.r90, .cam-view canvas.r270 { inset: auto; left: 50%; top: 50%; width: 75%; height: 133.33%; }
+.cam-view canvas.r90 { transform: translate(-50%, -50%) rotate(90deg); }
+.cam-view canvas.r270 { transform: translate(-50%, -50%) rotate(270deg); }
 .cam-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--muted); font-size: 15px; }
 .cam-b { display: flex; gap: 10px; }
 .cam-b .btn { flex: 1; min-width: 0; }
@@ -2402,8 +2402,13 @@ const CAM_REOPEN_MS = 400;
 // A tile off screen this long lets its camera sleep.
 const CAM_OFFSCREEN_MS = 10000;
 // Frames that stop for this long count as a stalled video (Wi-Fi lost, phone
-// asleep). A stalled tile shows "Video paused" and reconnects its video.
-const CAM_STALL_MS = 10000;
+// asleep). A stalled tile shows "Video paused".
+const CAM_STALL_MS = 6000;
+// A stream that brings no bytes for this long is dropped and opened again.
+const CAM_DEAD_MS = 4000;
+// Frames are held about this long before they are shown, so frames that arrive
+// in bursts over Wi-Fi are shown at an even pace (see camTick).
+const CAM_BUFFER_MS = 1500;
 // How often a tile on screen asks a sleeping camera to wake again.
 const CAM_WAKE_MS = 5000;
 const cams = new Map();     // name -> tile state
@@ -2462,7 +2467,9 @@ function camTile(name) {
   const badge = document.createElement("span"); badge.className = "badge";
   head.append(h, badge);
   const view = document.createElement("div"); view.className = "cam-view";
-  const img = document.createElement("img"); img.alt = "Live view from " + name; img.hidden = true;
+  // The video: frames drawn by camTick.
+  const img = document.createElement("canvas"); img.setAttribute("role", "img");
+  img.setAttribute("aria-label", "Live view from " + name); img.hidden = true;
   const msg = document.createElement("div"); msg.className = "cam-msg";
   view.append(img, msg);
   const row = document.createElement("div"); row.className = "cam-b";
@@ -2476,7 +2483,7 @@ function camTile(name) {
   const qsel = document.createElement("select");
   qsel.setAttribute("aria-label", "Quality test setting for " + name);
   qsel.style.cssText = "width:100%;min-width:0;padding:8px;border-radius:10px";
-  [["", "Quality (test)…"], ["VGA,12", "VGA 640×480, q12"], ["SVGA,12", "SVGA 800×600, q12 (default)"],
+  [["", "Quality (test)…"], ["VGA,12", "VGA 640×480, q12 (default)"], ["SVGA,12", "SVGA 800×600, q12"],
    ["XGA,12", "XGA 1024×768, q12"], ["SXGA,12", "SXGA 1280×1024, q12"],
    ["XGA,10", "XGA 1024×768, q10"], ["SXGA,10", "SXGA 1280×1024, q10"]].forEach(([v, t]) => {
     const o = document.createElement("option"); o.value = v; o.textContent = t; qsel.append(o);
@@ -2488,15 +2495,8 @@ function camTile(name) {
   const c = { name, el, img, badge, msg, watch, stop, rotate, photo, qsel, pmsg, want: false, stopping: false, renew: null,
     // Without an observer every tile counts as on screen, as before.
     visible: !camIO, offTimer: null, userStopped: camStopped.has(name), paused: false, conn: 0, qbusy: false,
-    openTimer: null,
+    openTimer: null, player: null, fails: 0,
     shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
-  // Each frame of the MJPEG stream fires a load event; remember when the last one came.
-  img.addEventListener("load", () => { c.lastFrame = Date.now(); });
-  // A stream that fails (the camera answered 503, or the connection broke)
-  // opens again at the next paint, within a poll or two, not at the next
-  // renewal 20 s later. An empty src also fires error in some browsers: not
-  // a stream, so ignored.
-  img.addEventListener("error", () => { if (img.getAttribute("src")) c.shown = null; });
   watch.onclick = () => camWatch(name, true);
   rotate.onclick = () => camRotate(c);
   photo.onclick = () => camPhoto(c);
@@ -2633,27 +2633,165 @@ async function camPhoto(c) {
   }
 }
 
-// Sets the video to the stream only while this page wants the camera and the
-// tile is on screen; anything else closes the connection (src "").
-// While the quality picker works, the video stays closed (c.paused).
-// Each time the video opens it gets a new address (?n=): a browser can keep an
-// MJPEG stream that ended (the camera restarted) as a finished image, and
-// would show its last frame again for the same address instead of connecting.
+// Opens the video only while this page wants the camera and the tile is on
+// screen; anything else closes the connection. While the quality picker works,
+// the video stays closed (c.paused).
 // Moving from one stream to another (a stall, an error, a new camera address)
-// closes the old one first and opens the new one CAM_REOPEN_MS later: the
-// camera serves one viewer and frees its slot only when a write to the old
-// connection fails.
+// closes the old one first and opens the new one CAM_REOPEN_MS later (longer
+// after streams that brought no frame): the camera serves one viewer and frees
+// its slot only when a write to the old connection fails.
 function paintStream(c) {
   const url = camsOn && c.want && c.visible && c.stream && !c.paused ? c.stream : null;
   if (url === c.shown) return;
   c.shown = url;
   clearTimeout(c.openTimer);
   c.openTimer = null;
-  c.img.hidden = !url;
-  const open = () => { c.openTimer = null; c.img.src = url + "?n=" + (++c.conn); };
-  if (!url) c.img.src = "";
-  else if (c.img.getAttribute("src")) { c.img.src = ""; c.openTimer = setTimeout(open, CAM_REOPEN_MS); }
-  else open();
+  const had = !!c.player;
+  camPlayerStop(c);
+  if (!url) { c.img.hidden = true; c.fails = 0; return; }
+  const open = () => { c.openTimer = null; camPlayerStart(c, url + "?n=" + (++c.conn)); };
+  const wait = had || c.fails ? CAM_REOPEN_MS + Math.min(c.fails, 4) * 1000 : 0;
+  if (wait) c.openTimer = setTimeout(open, wait); else open();
+}
+
+// The video player. The page reads the camera's MJPEG stream itself instead of
+// handing it to an <img>, for two reasons. Wi-Fi delivers frames in bursts
+// (several at once, then a gap), which an <img> shows as jerky video; here
+// they wait in a short queue and are drawn at the camera's average pace. And
+// a stream that stalls or ends is noticed within CAM_DEAD_MS and opened again,
+// where an <img> would keep its last frame without telling.
+function camPlayerStart(c, url) {
+  const p = { ctl: new AbortController(), queue: [], seq: 0, drawn: 0,
+    arrivedAt: 0, gap: 100, shownAt: 0, primed: false, bytesAt: Date.now(),
+    frames: 0, raf: 0, dog: 0, closed: false };
+  c.player = p;
+  p.dog = setInterval(() => {
+    if (Date.now() - p.bytesAt > CAM_DEAD_MS) camPlayerEnded(c, p);
+  }, 1000);
+  p.raf = requestAnimationFrame(() => camTick(c, p));
+  camRead(c, p, url);
+}
+
+function camPlayerStop(c) {
+  const p = c.player;
+  if (!p) return;
+  c.player = null;
+  p.closed = true;
+  p.ctl.abort();
+  clearInterval(p.dog);
+  cancelAnimationFrame(p.raf);
+  p.queue = [];
+}
+
+// The stream ended, failed or stalled: open it again, if it is still wanted.
+// A stream that brought no frame counts as a failure and waits longer next time.
+function camPlayerEnded(c, p) {
+  if (p.closed || c.player !== p) return;
+  c.fails = p.frames ? 0 : c.fails + 1;
+  c.shown = null;   // paintStream closes this player and opens the next
+  paintStream(c);
+}
+
+// Index of the first blank line (\r\n\r\n) in a byte array, or -1.
+function camHeadEnd(b) {
+  for (let i = 0; i + 3 < b.length; i++) {
+    if (b[i] === 13 && b[i + 1] === 10 && b[i + 2] === 13 && b[i + 3] === 10) return i;
+  }
+  return -1;
+}
+
+// Reads the stream: each part is a header with Content-Length, then the JPEG.
+async function camRead(c, p, url) {
+  try {
+    const r = await fetch(url, { signal: p.ctl.signal, cache: "no-store" });
+    if (!r.ok || !r.body) throw new Error("status " + r.status);
+    const rd = r.body.getReader();
+    let buf = new Uint8Array(0), need = -1;
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done || p.closed) break;
+      p.bytesAt = Date.now();
+      const joined = new Uint8Array(buf.length + value.length);
+      joined.set(buf);
+      joined.set(value, buf.length);
+      buf = joined;
+      for (;;) {
+        if (need < 0) {
+          const end = camHeadEnd(buf);
+          if (end < 0) break;
+          const m = /content-length:\s*(\d+)/i.exec(new TextDecoder().decode(buf.subarray(0, end)));
+          buf = buf.subarray(end + 4);
+          if (m) need = Number(m[1]);
+          continue;
+        }
+        if (buf.length < need) break;
+        camArrived(c, p, new Blob([buf.slice(0, need)], { type: "image/jpeg" }));
+        buf = buf.subarray(need);
+        need = -1;
+      }
+    }
+  } catch (err) { /* aborted, refused (503) or broken: handled below */ }
+  camPlayerEnded(c, p);
+}
+
+// A whole JPEG arrived: note the pace, decode it and queue it for camTick.
+// Decoding runs one frame at a time so the queue stays in order.
+function camArrived(c, p, blob) {
+  const now = performance.now();
+  // The pace: average gap between arrivals. A stall counts as at most 3 gaps,
+  // so one stall does not slow the video for long after.
+  if (p.arrivedAt) p.gap = p.gap * 0.9 + Math.min(1000, 3 * p.gap, Math.max(15, now - p.arrivedAt)) * 0.1;
+  p.arrivedAt = now;
+  p.frames++;
+  c.fails = 0;
+  c.lastFrame = Date.now();
+  // The queue holds the JPEGs (a few KB each); camTick decodes each one as it
+  // is drawn. Never far behind: past 3 times the target, drop the oldest.
+  p.queue.push(blob);
+  while (p.queue.length > 3 * camTarget(p)) p.queue.shift();
+}
+
+function camDecode(blob) {
+  if (window.createImageBitmap) return createImageBitmap(blob);
+  const url = URL.createObjectURL(blob), im = new Image();
+  im.src = url;
+  return im.decode().then(() => im).finally(() => URL.revokeObjectURL(url));
+}
+
+// Frames to hold: CAM_BUFFER_MS at the current pace, at least 2.
+function camTarget(p) { return Math.min(60, Math.max(2, Math.round(CAM_BUFFER_MS / p.gap))); }
+
+// Draws the next queued frame when its turn comes. Frames are spaced by the
+// average gap between arrivals, stretched up to 30 % while the queue is
+// shorter than its target and shortened while it is longer, so the queue
+// stays near CAM_BUFFER_MS. When Wi-Fi stalls, the queue keeps the picture
+// moving (a little slower) instead of freezing, and builds up again after.
+// The first frame shows at once; the rest wait until half the target is in.
+function camTick(c, p) {
+  if (p.closed) return;
+  p.raf = requestAnimationFrame(() => camTick(c, p));
+  if (!p.queue.length) return;
+  const now = performance.now(), target = camTarget(p), n = p.queue.length;
+  if (p.shownAt && !p.primed) {
+    if (n < target / 2 && now - p.shownAt < CAM_BUFFER_MS) return;
+    p.primed = true;
+  }
+  const gap = p.gap * Math.min(1.3, Math.max(0.7, 1 + 0.3 * (target - n) / target));
+  if (p.shownAt && now - p.shownAt < gap) return;
+  // Keep the even pace from frame to frame; restart it after a gap in the video.
+  p.shownAt = p.shownAt && now - p.shownAt < 2 * gap ? p.shownAt + gap : now;
+  const seq = ++p.seq;
+  camDecode(p.queue.shift()).then(f => {
+    // Decoding is quick but not ordered: skip a frame that a later one beat.
+    if (!p.closed && seq > p.drawn) {
+      p.drawn = seq;
+      const cv = c.img, w = f.width || f.naturalWidth, h = f.height || f.naturalHeight;
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      cv.getContext("2d").drawImage(f, 0, 0);
+      cv.hidden = false;
+    }
+    if (f.close) f.close();
+  }, () => { /* a broken JPEG: skip it */ });
 }
 
 function camPaint(c) {

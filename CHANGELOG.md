@@ -28,9 +28,21 @@
   stream. Wi-Fi power save is off while streaming, and the TCP send buffer
   is 32 KB. The camera logs frame rate, throughput and Wi-Fi signal
   strength (RSSI) every 10 s.
-- **Bluetooth and video (hub)**: while a camera streams, scans for the fridge
-  and the Bluetti wait up to 60 s, because scans took radio time from Wi-Fi
-  and made the video erratic. Heater scans are never held back.
+- **Bluetooth and video (hub)**: while a camera streams, no Bluetooth search
+  starts, for the heater, fridge or Bluetti, because searches took radio time
+  from Wi-Fi and every measured gap in the video fell during one. Connected
+  links keep running; searches resume 15 s after the video stops.
+- **Smoother video (hub, camera node)**: the Cameras page reads the stream
+  itself, holds about 1.5 s of frames and shows them at an even
+  pace, and reopens a stream that stalls within about 4 s (it could stay
+  frozen 10 to 30 s). The stream sends a CORS header for this. The hub's
+  network uses a 20 MHz channel, and the hub and cameras have larger Wi-Fi
+  buffers and Block Ack windows.
+- **VGA by default (camera node)**: the cameras start at VGA (640 by 480),
+  quality 12, instead of SVGA. With two cameras streaming to a phone, VGA
+  ran at about 11 to 19 frames a second each, SVGA at 4 to 6. The TCP timer
+  is 100 ms (default 250), so a lost packet is resent sooner: the video's
+  gaps went from 1.4 to 3 s down to about 1 s.
 - **Camera logs (camera node)**: the reset reason at boot; free memory
   (internal RAM, the largest DMA block, PSRAM) at each start and stop and in
   the 10 s stats line; how long the camera took to start and how long after

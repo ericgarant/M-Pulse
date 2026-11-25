@@ -19,3 +19,11 @@ CONFIG_LWIP_MAX_SOCKETS=16
 # TCP send buffer per connection (default about 5.7 KB). A larger buffer keeps
 # more of each frame in flight, which raises the stream's throughput.
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
+
+# Larger Block Ack window (default 6): more of each frame goes out per burst.
+CONFIG_ESP_WIFI_TX_BA_WIN=12
+
+# TCP timer 100 ms (default 250). The hub passes the video on to the viewer
+# and drops packets in bursts; each loss the camera notices by timeout froze
+# the video 1.3 to 2 s. A finer timer resends sooner.
+CONFIG_LWIP_TCP_TMR_INTERVAL=100

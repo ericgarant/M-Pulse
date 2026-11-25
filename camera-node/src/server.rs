@@ -105,10 +105,15 @@ fn stream(req: Request<&mut EspHttpConnection>) -> anyhow::Result<()> {
         return Ok(());
     };
     log::info!("stream started");
+    // CORS: the hub's page reads the stream with fetch to pace the frames itself.
     let mut resp = req.into_response(
         200,
         Some("OK"),
-        &[("Content-Type", "multipart/x-mixed-replace;boundary=frame")],
+        &[
+            ("Content-Type", "multipart/x-mixed-replace;boundary=frame"),
+            ("Cache-Control", "no-store"),
+            CORS,
+        ],
     )?;
     let conn: &mut EspHttpConnection = resp.connection();
     // A stream with no good frame for this long ends, so a viewer who gets no

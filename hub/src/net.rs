@@ -88,6 +88,18 @@ pub fn start(
     };
 
     wifi.set_configuration(&config)?;
+    // 20 MHz channel instead of 40: a 40 MHz channel also covers channels 7 to
+    // 10, where other networks (a neighbour's, a campground's) collide with the
+    // camera video. The video needs far less than a 20 MHz channel carries.
+    let ret = unsafe {
+        esp_idf_svc::sys::esp_wifi_set_bandwidth(
+            esp_idf_svc::sys::wifi_interface_t_WIFI_IF_AP,
+            esp_idf_svc::sys::wifi_bandwidth_t_WIFI_BW_HT20,
+        )
+    };
+    if ret != esp_idf_svc::sys::ESP_OK {
+        warn!("Could not set the hub network to 20 MHz: error {ret}");
+    }
     wifi.start()?;
     // 192.168.71.1 with esp-idf-svc's default access point settings.
     let ap_ip = wifi.wifi().ap_netif().get_ip_info()?.ip;

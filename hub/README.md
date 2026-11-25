@@ -524,7 +524,7 @@ The Home page has a Cameras tile that shows how many are online.
     file.
   - **Stop** asks the hub to stop that camera.
   - **Quality (test)** sets the camera's frame size and JPEG quality until
-    the camera restarts. The default is SVGA (800 by 600), quality 12. This
+    the camera restarts. The default is VGA (640 by 480), quality 12. This
     picker is for comparing settings and may be removed. A quality change
     applies at once. The camera refuses a new frame size while anyone
     watches, this tile included, so the tile then closes its own video and
@@ -565,13 +565,28 @@ The Home page has a Cameras tile that shows how many are online.
   times, then every 30 s, for as long as the camera keeps announcing.
 - The video is the camera's own stream on port 81, loaded only while its
   tile is on screen. One viewer can watch a camera at a time; a second viewer
-  waits until the first stops. Each time the tile opens the video it adds a
-  new `?n=` to the address, so after the camera restarts the browser connects
-  again instead of showing the last frame of the old stream.
-- While a camera streams, the hub holds back Bluetooth scans for the fridge
-  and the Bluetti for up to 60 s, because a scan takes radio time from
-  Wi-Fi. Scans for the heater are never held back, since the thermostat and
-  the low-battery stop depend on that link.
+  waits until the first stops. The page reads the stream itself (the camera
+  allows this with a CORS header) and draws it on a canvas. Wi-Fi delivers
+  frames in bursts, with gaps of about a second now and then, so the page
+  holds about 1.5 s of frames and draws them at the camera's average pace,
+  a little slower while the queue runs low: the picture is about 1.5 s
+  behind live, and keeps moving through a short gap instead of freezing. A stream that brings nothing for 4 s, or ends,
+  is opened again at once (a little later after attempts that bring no
+  frame), on a new `?n=` address. "Video paused" shows after 6 s without a
+  frame.
+- While a camera streams, the hub starts no Bluetooth search, for the
+  heater, fridge or Bluetti. A scan takes radio time from Wi-Fi: on the
+  bench, with the heater and fridge out of range, every gap in the video
+  longer than 0.6 s fell during a search. Links already connected keep
+  running. The hold ends 15 s after the last camera stops streaming, which
+  happens when you leave the Cameras page, so if the heater's link drops
+  while you watch, it comes back once you leave. Until then the hub cannot
+  switch the heater (thermostat, low-battery stop).
+- The hub's network uses a 20 MHz channel (channel 6), not 40 MHz, which
+  would also cover channels 7 to 10, where other networks collide with the
+  video. The hub has 16 Wi-Fi receive buffers and Block Ack windows of 12
+  (defaults 10, 6 and 6), because it receives each frame from the camera and
+  sends it on to the viewer. The cameras use a Block Ack window of 12 too.
 - Measured on the bench at SVGA quality 12, one camera at a time (medians,
   November 2026): the cab board about 13 frames a second (about 200 KB/s);
   the camper board about 7 (6.8) with bigger frames, and 4.6 on the final
@@ -581,6 +596,13 @@ The Home page has a Cameras tile that shows how many are online.
   differ: one earlier cab board managed only 1 to 2 frames a second with a
   strong signal, and was replaced. Two cameras streaming at once share the
   hub's radio and each gets less. Not yet measured in the camper.
+- Measured on a phone with both cameras streaming at once, after the changes
+  above but with Bluetooth searches still running (November 2026): cab 12.4
+  frames a second, camper 4.9 (its frames were bigger, 22 KB), no
+  reconnects, but 2 to 3 gaps over 2 s per minute per camera, all during
+  searches. Holding the searches, VGA and a 100 ms TCP timer on the
+  camera each helped (see the changelog); about 6 gaps of about 1 s per
+  minute per camera remained, which the 1.5 s queue covers.
 - Names are set when the camera firmware is built, with
   `M_PULSE_CAMERA_NAME` (see [camera-node](../camera-node/README.md)). The
   default is `camper`. The second camera is `cab`.

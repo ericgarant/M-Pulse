@@ -18,7 +18,7 @@ up the photo and settings routes.
 
 | Port | Path | When | Returns |
 | --- | --- | --- | --- |
-| 81 | `/stream` | while streaming | MJPEG, one viewer at a time (a second viewer waits) |
+| 81 | `/stream` | while streaming | MJPEG, one viewer at a time (a second viewer waits), with `Access-Control-Allow-Origin: *` so the hub's page can read it with `fetch` |
 | 80 | `/` | always | a small page with the live view |
 | 80 | `/still.jpg` | while streaming | one JPEG frame, with `Access-Control-Allow-Origin: *` so the hub's page can fetch it from another origin |
 | 80 | `/settings` | always | the active frame size and JPEG quality, as plain text |
@@ -32,7 +32,7 @@ carries the CORS header.
 `GET /settings` returns the active values:
 
 ```
-size=SVGA
+size=VGA
 quality=12
 ```
 
@@ -49,8 +49,10 @@ It replies `200` with the new values in the same format as the GET. It
 replies `400` for bad input, `409` if the camera is not streaming (the
 values can only be applied to a running sensor), and `500` if the sensor
 rejects the change. A `500` leaves the old values in place. The values are
-kept in memory, so the next start uses them. They reset to `SVGA` and
-quality `12` on reboot. A new frame size restarts the camera driver for a
+kept in memory, so the next start uses them. They reset to `VGA` (640 by 480)
+and quality `12` on reboot. VGA is the default because two cameras
+streaming at once through the hub ran at about 11 to 19 frames a second
+each at VGA and 4 to 6 at SVGA. A new frame size restarts the camera driver for a
 moment, because the driver sizes its frame buffers when it starts. So a new
 frame size is refused with `409` (`Someone is watching...`) while a viewer
 has the stream open; close the video first. The quality alone can change
@@ -130,7 +132,9 @@ This board has no power-down pin, so standby stops the camera clock and the
 driver, but the sensor stays on the 3.3 V rail. Wi-Fi power save is on in
 standby and off while streaming, where it cut the frame rate to about a
 third. Each connection has a 32 KB TCP send buffer (the ESP-IDF default is
-about 5.7 KB). The standby current has not
+about 5.7 KB), the Wi-Fi Block Ack window is 12 frames (default 6), and the
+TCP timer runs every 100 ms (default 250), so a lost packet is resent sooner. The
+standby current has not
 been measured yet. See [../hub/README.md](../hub/README.md#cameras).
 
 ## Hardware notes

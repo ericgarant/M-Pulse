@@ -88,9 +88,10 @@ pub const QUALITY_RANGE: RangeInclusive<u8> = 10..=40;
 
 /// Chosen by `POST /settings` and read by `power_up()`, so the next start uses
 /// them. Starts at the values the camera booted with.
-// SVGA q12: sharper than VGA and smoother than XGA in the bench tests.
+// VGA q12: with two cameras streaming to a phone through the hub, VGA ran at
+// about 11 to 19 frames a second each, SVGA at 4 to 6 (November 2026).
 pub static SETTINGS: Mutex<Settings> = Mutex::new(Settings {
-    size: Size::Svga,
+    size: Size::Vga,
     quality: 12,
 });
 

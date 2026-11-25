@@ -19,3 +19,11 @@ CONFIG_HTTPD_MAX_URI_LEN=128
 # Sockets: 10 for the dashboard's web server, 3 it keeps for itself, plus
 # the sensor receiver, SNTP and DHCP.
 CONFIG_LWIP_MAX_SOCKETS=16
+
+# Wi-Fi buffers: the hub passes each camera's video on to the tablet, so it
+# receives and sends every frame. More receive buffers and larger Block Ack
+# windows (default 10, 6 and 6) let it carry bursts without dropping frames.
+# The 6 extra static receive buffers take about 10 KB of RAM.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_RX_BA_WIN=12
+CONFIG_ESP_WIFI_TX_BA_WIN=12
