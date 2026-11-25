@@ -5,11 +5,34 @@
 //! searches and connects, and releases it once connected.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use esp_idf_svc::timer::EspAsyncTimer;
 
 static BUSY: AtomicBool = AtomicBool::new(false);
+
+/// While a camera streams, no search starts: a scan takes radio time from
+/// Wi-Fi, and every gap in the video measured on the bench (over 0.6 s, the
+/// heater and fridge out of range) fell during one. The heater's search waits
+/// too: the video only streams while someone has the Cameras page open, so the
+/// wait ends within VIDEO_HOLD of leaving it. Each streaming announcement
+/// extends the wait by VIDEO_HOLD, so a camera that drops off cannot hold the
+/// radio. Links already connected are not affected.
+static VIDEO_UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
+const VIDEO_HOLD: Duration = Duration::from_secs(15);
+
+/// Called for each camera announcement that says it is streaming.
+pub fn video_seen() {
+    *VIDEO_UNTIL.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now() + VIDEO_HOLD);
+}
+
+fn video_active() -> bool {
+    VIDEO_UNTIL
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .is_some_and(|until| Instant::now() < until)
+}
 
 /// Scan timing, in 0.625 ms units: listen 30 ms out of every 100 ms.
 ///
@@ -30,10 +53,17 @@ impl Drop for Turn {
     }
 }
 
-/// Waits until no other link is searching or connecting, then takes the turn.
+/// Waits until no camera is streaming and no other link is searching or
+/// connecting, then takes the turn.
 pub async fn take(timer: &mut EspAsyncTimer) -> anyhow::Result<Turn> {
+    let mut paused_logged = false;
     loop {
-        if BUSY
+        if video_active() {
+            if !paused_logged {
+                log::info!("Bluetooth search waits: a camera is streaming");
+                paused_logged = true;
+            }
+        } else if BUSY
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
         {

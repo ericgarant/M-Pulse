@@ -5,6 +5,7 @@
 
 pub mod actuator;
 pub mod bluetti;
+pub mod camera;
 pub mod clock;
 pub mod eco_guard;
 pub mod filter;

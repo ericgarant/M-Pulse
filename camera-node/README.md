@@ -1,0 +1,219 @@
+# Camera node (ESP32-WROVER)
+
+Firmware for the Freenove ESP32-WROVER camera board with an OV3660. The
+camera sits in **standby** until the hub asks for video. Then it streams
+MJPEG on the hub's `M-Pulse` network and goes back to standby when the hub
+stops it. As a backup, it also goes to standby when nobody has watched for
+5 minutes.
+
+The hub's dashboard shows each camera on its Cameras page. The protocol is
+in [core/src/camera.rs](../core/src/camera.rs).
+
+## What it serves
+
+Two HTTP servers on the camera's address (the hub's network hands it an
+address). The stream has its own server on port 81, because an ESP-IDF HTTP
+server handles one request at a time: a running stream would otherwise hold
+up the photo and settings routes.
+
+| Port | Path | When | Returns |
+| --- | --- | --- | --- |
+| 81 | `/stream` | while streaming | MJPEG, one viewer at a time (a second viewer waits), with `Access-Control-Allow-Origin: *` so the hub's page can read it with `fetch` |
+| 80 | `/` | always | a small page with the live view |
+| 80 | `/still.jpg` | while streaming | one JPEG frame, with `Access-Control-Allow-Origin: *` so the hub's page can fetch it from another origin |
+| 80 | `/settings` | always | the active frame size and JPEG quality, as plain text |
+| 80 | `/settings` (POST) | while streaming | changes the frame size and quality (see below) |
+
+In standby, the video routes answer `503`. A `503` from `/still.jpg` also
+carries the CORS header.
+
+### Settings
+
+`GET /settings` returns the active values:
+
+```
+size=VGA
+quality=12
+```
+
+`POST /settings` takes a form body (`Content-Type` is not checked, so
+`application/x-www-form-urlencoded` is the usual choice) with two fields:
+
+- `size`: one of `VGA`, `SVGA`, `XGA`, `SXGA`.
+- `quality`: a whole number from 10 to 40. Lower is better quality and a
+  bigger JPEG.
+
+Example: `curl -d "size=SVGA&quality=14" http://<camera>/settings`
+
+It replies `200` with the new values in the same format as the GET. It
+replies `400` for bad input, `409` if the camera is not streaming (the
+values can only be applied to a running sensor), and `500` if the sensor
+rejects the change. A `500` leaves the old values in place. The values are
+kept in memory, so the next start uses them. They reset to `VGA` (640 by 480)
+and quality `12` on reboot. VGA is the default because two cameras
+streaming at once through the hub ran at about 11 to 19 frames a second
+each at VGA and 4 to 6 at SVGA. A new frame size restarts the camera driver for a
+moment, because the driver sizes its frame buffers when it starts. So a new
+frame size is refused with `409` (`Someone is watching...`) while a viewer
+has the stream open; close the video first. The quality alone can change
+while someone watches.
+
+On the bench, one camera at a time, SVGA at quality 12, a phone watching on
+the hub's network (medians of the 10 s stats lines, November 2026):
+
+- cab: about 13 frames a second (14 KB per frame, about 200 KB/s), up from
+  about 5 before the stream stopped pausing 50 ms after each frame and the
+  driver got a third frame buffer;
+- camper: about 7 frames a second with those two changes (6.8), up from
+  about 3.5. Its frames were bigger than the cab's (22 to 28 KB) at a
+  similar 160 to 190 KB/s. The final build, with the faster wake as well,
+  gave 4.6 later on, in poorer light (13 KB per frame) with less getting
+  through (about 60 KB/s).
+
+The frame rate swings a lot from minute to minute (from about 2 to over 25
+frames a second); the cause was not measured. The camera can go faster than
+the link carries (the cab reached about 28 frames a second), so a smaller
+frame should give more frames a second, but the bench could not show it
+through the swings. Frame sizes on camper: SVGA q12 about 13 KB, SVGA q14
+about 12, VGA q12 about 10.5, VGA q14 about 8. Quality 10 made frames only
+about 10% bigger and slower, with no visible gain. Boards differ: one board
+managed only 1 to 2 frames a second with a strong signal and was retired.
+To compare boards, run each alone on the same scene and read the stats line
+below.
+
+## What it sends and receives
+
+- Every 5 s, and at once on a state change, it broadcasts
+  `MPC1 announce <name> <state>` to UDP port 4220 on the hub.
+  The state is `standby`, `starting` or `streaming`.
+- It listens on UDP port 4221 for `MPC1 start` and `MPC1 stop` from the hub.
+  On the hub's `M-Pulse` network it takes them only from the hub (the
+  network's gateway) and ignores any other sender. On your home network the
+  hub has another address, so there it takes them from any sender. When the
+  link drops it takes none until it has joined a network again. If the
+  hub's network ever reports no gateway, it takes them from any sender
+  rather than shut out the hub, and logs `... with no gateway: commands from
+  anyone`. It takes
+  a start only 2 s after it last started or stopped, and a stop at any
+  time. The hub resends start every 3 s, a second more than that gap, so
+  each of its tries reaches the camera. Both use `START_GAP` in
+  [core/src/camera.rs](../core/src/camera.rs).
+
+## Build settings
+
+Set these the same way as the sensor node (see
+[../hub/README.md](../hub/README.md)):
+
+- `M_PULSE_CAMERA_NAME`: the name shown on the dashboard. Use a different
+  name on each camera, for example `camper` or `cab`. Lower-case letters,
+  digits and `-` only, up to 16 characters. It defaults to `camper`.
+- `M_PULSE_WIFI_SSID`, `M_PULSE_WIFI_PASS`, `M_PULSE_AP_PASS`: as for the
+  sensor node. If `M_PULSE_WIFI_SSID` is set, the camera tries that network
+  first and then the hub's `M-Pulse` network, in turns, until one answers.
+- A release build stops with an error if `M_PULSE_AP_PASS` is not set,
+  because the fallback password (`mpulse-heater`) is public in this
+  repository. A debug build (no `--release`) still uses the fallback.
+
+## Build and flash
+
+```sh
+source ../wifi.env
+M_PULSE_CAMERA_NAME=cab cargo build --release
+espflash flash --monitor --partition-table partitions.csv target/xtensa-esp32-espidf/release/m-pulse-camera-node
+```
+
+The camera driver is vendored in `components/esp32_camera` with one local
+change, recorded in
+[components/esp32_camera/M_PULSE_PATCH.md](components/esp32_camera/M_PULSE_PATCH.md).
+
+## Power and Wi-Fi
+
+This board has no power-down pin, so standby stops the camera clock and the
+driver, but the sensor stays on the 3.3 V rail. Wi-Fi power save is on in
+standby and off while streaming, where it cut the frame rate to about a
+third. Each connection has a 32 KB TCP send buffer (the ESP-IDF default is
+about 5.7 KB), the Wi-Fi Block Ack window is 12 frames (default 6), and the
+TCP timer runs every 100 ms (default 250), so a lost packet is resent sooner. The
+standby current has not
+been measured yet. See [../hub/README.md](../hub/README.md#cameras).
+
+## Hardware notes
+
+- Camera pins are the Freenove WROVER layout: XCLK 21, SCCB 26 and 27, the
+  data lines on 4, 5, 18, 19, 36, 39, 34 and 35, VSYNC 25, HREF 23, PCLK 22.
+- The camera must be seated on its ribbon connector with the latch closed.
+- Power from the board's 5 V pin, not only from USB.
+
+## Testing
+
+Bench steps used so far. The camera needs the hub running, or a phone
+joined to the hub's `M-Pulse` network with the dashboard open.
+
+1. Build and flash with the camera's name (see Build settings). The
+   monitor opens after the flash.
+2. Check the boot log, in this order:
+   - `M-Pulse camera node "<name>" starting, camera in standby`
+   - `Reset reason: power on` (see below for the other reasons)
+   - `Joined "M-Pulse" as <address>; commands only from the hub at
+     192.168.71.1` (or `Joined "<your network>" as <address>`, if
+     `M_PULSE_WIFI_SSID` is set and it joins that first)
+   - `HTTP up: port 80 (page, still, settings), port 81 (stream)`
+3. On the hub's network, open the dashboard and go to the Cameras page. The
+   tile for the camera should appear within a few seconds. The hub's log
+   should show `Camera "<name>" announced from <address>`.
+4. Opening the page starts the camera if its tile is on screen, unless you
+   stopped it with Stop on this device (then press Watch). The camera log
+   should show
+   `Start received: powering up the camera`, then
+   `Camera sensor PID 0x3660` (or `0x0026` for the OV2640 board), then
+   `Camera streaming: init took <N> ms` with the free memory. The tile
+   should show the picture, and the log `First frame <N> ms after start`:
+   the time from the hub's start command to the first frame sent.
+5. Press Rotate once to check the picture turns, then leave the page. The
+   camera log should show `Camera in standby` within a few seconds.
+6. Off screen: with the page still open, scroll the camera's tile off
+   screen. After about 10 s the hub's log shows
+   `Dashboard let camera <name> sleep` and the camera log shows
+   `Camera in standby`. Scroll the tile back: the camera starts again. On a
+   phone with two cameras, opening the page should start only the camera
+   whose tile is on screen. The camera's own
+   `No viewers for 300 s: camera to standby` is a backup for a stop that
+   never arrives; you should rarely see it.
+7. Settings: with the camera streaming, `curl -d "size=SVGA&quality=14"
+   http://<camera>/settings` should reply `size=SVGA` and `quality=14`. The
+   camera log shows `Settings: SVGA quality 14`. Check the picture is
+   larger. Then `curl http://<camera>/settings` should show the same values.
+
+Other lines to check in the logs:
+
+- `stream started` and `stream stopped`: a viewer connected and left.
+- `No frames for <N> s: ending the stream`: the sensor gave no frame for
+  10 s (up to about 14 s, as one try can wait 4 s in the driver). The
+  stream ends, so a stalled camera can go to standby instead of staying on
+  for the viewer.
+- `Stream SVGA q12: 9.7 fps, 16 KB per frame, 163 KB/s, RSSI -36 dBm; RAM
+  ... KB free, largest DMA block ... KB, PSRAM ... KB free`: every 10 s
+  while streaming, the frame rate, average frame size, throughput, Wi-Fi
+  signal strength (closer to 0 is stronger) and free memory.
+- `Camera in standby; RAM ... KB free, largest DMA block ... KB, ...`: after
+  each stop. Each start needs one DMA block of up to 32 KB, so if the
+  largest DMA block keeps shrinking over many starts, memory is
+  fragmenting.
+- `Could not start the camera after <N> ms: camera init failed:
+  ESP_ERR_... (0x...)`: the sensor did not start, with the ESP-IDF error
+  name. The camera returns to standby and the hub reports no answer after
+  10 tries (about 30 s).
+- `Reset reason: ...` at boot: `power on` or `reset pin` are normal;
+  `brownout (the supply voltage dropped)` points to the power supply, and
+  `panic` or a watchdog to a firmware fault.
+- `Ignoring a command from <address>: not the hub`: on the hub's network,
+  something other than the hub sent a message to port 4221.
+- `Ignoring a command from <address>`: a message on port 4221 that is not
+  `MPC1 start` or `MPC1 stop`.
+- `Wi-Fi is up but takes nobody's commands: joining again`: should not
+  appear. The link was up while the camera still refused every sender, so
+  it leaves the network and joins again rather than refuse the hub.
+- `Start ignored: under 2 s since the camera last started or stopped`: a
+  start that came too soon after the last change. The hub sends it again,
+  so after a quick Stop then Watch the camera starts about 2 s later.
+- `Announce failed: ...`: the broadcast to the hub did not send.

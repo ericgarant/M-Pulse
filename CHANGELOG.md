@@ -2,6 +2,147 @@
 
 ## Unreleased
 
+- **Cameras (hub)**: keeps a list of up to 8 cameras announced on UDP port
+  4220 and starts them only while a viewer asks. New Cameras page with Watch,
+  Rotate and Stop, a Home tile, and `GET /api/cameras` with `POST
+  /api/cameras/<name>/start` or `/stop`. The access point now takes 8
+  connections, up from 4. See `hub/README.md` (Cameras).
+- **Cameras (camera node)**: new firmware in `camera-node/` for the Freenove
+  ESP32-WROVER with an OV3660. It waits in standby until the hub asks, then
+  streams MJPEG, and returns to standby on stop or, as a backup, after 5
+  minutes with no viewer.
+  Name set with `M_PULSE_CAMERA_NAME`. An OV2640 board has also been tested.
+- **Cameras (core)**: `core/src/camera.rs` holds the UDP messages (announce,
+  start, stop), the camera states and the name rules, with tests.
+- **Camera rotation (hub)**: each camera's picture rotation (0, 90, 180 or
+  270 degrees) is saved on the hub in flash and kept across reboots, set by
+  `POST /api/cameras/<name>/rotation` with the number as the body.
+- **Camera video keeps playing (hub)**: while the Cameras page is open and a
+  tile is on screen, the page keeps renewing the camera, even while the
+  video is paused, until you press Stop or leave the page.
+- **Camera photos (hub)**: a Photo button saves a still JPEG to the device.
+- **Camera quality (camera node)**: default SVGA (800 by 600) at quality 12.
+  `GET` and `POST /settings` read and change the frame size and quality, and
+  a Quality (test) picker on each tile uses it. The stream moved to its own
+  server on port 81, so a photo or a settings change no longer waits for the
+  stream. Wi-Fi power save is off while streaming, and the TCP send buffer
+  is 32 KB. The camera logs frame rate, throughput and Wi-Fi signal
+  strength (RSSI) every 10 s.
+- **Bluetooth and video (hub)**: while a camera streams, no Bluetooth search
+  starts, for the heater, fridge or Bluetti, because searches took radio time
+  from Wi-Fi and every measured gap in the video fell during one. Connected
+  links keep running; searches resume 15 s after the video stops.
+- **Smoother video (hub, camera node)**: the Cameras page reads the stream
+  itself, holds about 1.5 s of frames and shows them at an even
+  pace, and reopens a stream that stalls within about 4 s (it could stay
+  frozen 10 to 30 s). The stream sends a CORS header for this. The hub's
+  network uses a 20 MHz channel, and the hub and cameras have larger Wi-Fi
+  buffers and Block Ack windows.
+- **VGA by default (camera node)**: the cameras start at VGA (640 by 480),
+  quality 12, instead of SVGA. With two cameras streaming to a phone, VGA
+  ran at about 11 to 19 frames a second each, SVGA at 4 to 6. The TCP timer
+  is 100 ms (default 250), so a lost packet is resent sooner: the video's
+  gaps went from 1.4 to 3 s down to about 1 s.
+- **Camera logs (camera node)**: the reset reason at boot; free memory
+  (internal RAM, the largest DMA block, PSRAM) at each start and stop and in
+  the 10 s stats line; how long the camera took to start and how long after
+  the start command the first frame went out. A failed start names the
+  ESP-IDF error.
+- **Cameras wake only on screen (hub)**: the Cameras page asks for a camera
+  only while its tile is on screen, and lets it sleep after its tile has
+  been off screen for 10 s. Before, opening the page woke every camera, and
+  one scrolled past streamed to nobody for about a minute. Stop sticks: a
+  camera stopped with Stop stays asleep on that device until its Watch is
+  pressed, across visits to the page and reloads. The browser remembers it
+  in `localStorage`, and each Stop or Watch changes only its own camera
+  there, so two tabs do not overwrite each other.
+- **Turned photos (hub)**: Photo saves the picture turned to the camera's
+  saved rotation, as the video shows it. Before, the photo kept the
+  camera's own orientation.
+- **Network password required for release builds (hub, camera node)**: a
+  release build stops with an error unless `M_PULSE_AP_PASS` is set,
+  because the fallback password is public in this repository. Debug builds
+  keep the fallback.
+- **Commands only from the hub (camera node)**: on the hub's network a
+  camera takes start and stop only from the hub (its gateway). On a home
+  network it still takes them from any sender, and with no link it takes
+  none, so an old network's hub address never carries over. A link found up
+  while the camera takes nobody's commands is joined again. The README had
+  said other senders were already ignored; they were not.
+- **Camera registry in core, with tests**: the hub's camera list (start
+  and stop wishes, retries, rotations and their flash record) moved from
+  the hub to `core/src/camera.rs`, so it runs under `cargo test`. Tests
+  cover Stop then Watch, wish expiry, making room for a rotation, and
+  loading version 1 rotation records. No change in behavior.
+- **Stop sent again (hub)**: a camera nobody asks for that still says it is
+  starting or streaming gets `stop` again every 3 s, 10 times, then every
+  30 s while it announces. Before, the hub sent one `stop`; if it was lost,
+  or the hub restarted while a camera streamed, the camera streamed to
+  nobody for 5 minutes and Bluetooth scans waited.
+- **No answer stays no answer (hub)**: after 10 unanswered starts, only the
+  Watch button (`start?watch=1`) tries again. Before, the page's renewals
+  and wake-ups reset the count, so "No answer" flickered and the hub kept
+  sending start, and the camera kept retrying its driver, for as long as
+  the page was open. The page no longer wakes a camera that gave no
+  answer.
+- **Stalled stream ends after 10 s (camera node)**: a stream with no frame
+  for 10 s of wall-clock time ends. The limit was 200 tries meant as 10 s,
+  but each try can wait 4 s in the driver, so a stalled sensor kept the
+  stream, and the camera, on for about 13 minutes.
+- **Frame size and an open stream (camera node, hub)**: the camera refuses a
+  new frame size with `409` while a viewer has the stream open, because the
+  driver restart would stall that stream. The quality alone still changes
+  while watching. When the camera refuses a new size, the Quality (test)
+  picker closes its tile's video and tries again, up to 3 times 1 s apart,
+  then opens the video again; a quality change alone does not close it.
+  The picker takes one change at a time per tile.
+- **Starts at most every 2 s (camera node, hub)**: the camera takes a start
+  only 2 s after it last started or stopped, so a flood of commands can no
+  longer cycle the driver and its memory. A stop is never held back, and a
+  start whose init failed does not hold back the next one. The hub resends
+  start every 3 s (was every second), the camera's 2 s gap and a second of
+  margin, so each try reaches the camera even when power save delays a
+  packet; both use `START_GAP` in `core/src/camera.rs`. The hub tries 10
+  times (was 15), so giving up still takes about 30 s. Repeats that change
+  nothing are skipped without waiting on the camera lock. Right after a
+  stop, the hub holds the first start until 2.5 s after the stop and sends
+  it then, so a quick Stop then Watch does not spend a try on the camera's
+  gap.
+- **No pause between frames (camera node)**: the stream no longer sleeps
+  50 ms after each frame; the next grab already waits for the driver's next
+  frame. On the bench (cab, SVGA q12, about 3 to 5 minutes over two runs)
+  the median went from 5.0 to 6.9 frames a second; on its own that is not
+  significant (p = 0.09).
+- **Three frame buffers (camera node)**: three instead of two, so that the
+  driver can keep capturing while one frame is sent and another waits (the
+  reasoning; only the frame rate was measured). The third costs 96 KB of
+  PSRAM at SVGA. Together with the change above, the bench median went
+  from 5.0 to 13.4 frames a second on the cab and from 3.5 to 6.8 on the
+  camper. The camera driver's warnings (`FB-OVF`, `NO-SOI`, each dropping a
+  frame) rose with them: from 1.1 to 4.7 a minute on the cab and from 6.9
+  to 13.2 on the camper. Also measured and not kept: the driver's task on
+  core 1 (no gain, and more warnings) and the CPU at 240 MHz (no gain;
+  `FB-OVF` fell but `NO-SOI` rose).
+- **Faster wake (hub, camera node)**: the hub sends start or stop as soon as
+  the page asks instead of at its next once-a-second check, the camera
+  announces a change of state at once instead of at its next one-second
+  check, and the page polls every 0.5 s instead of 2 s while a camera on
+  screen is waking, from the moment it asks for the camera (it no longer
+  waits out a pending 2 s poll first). On the bench (camper, medians) the
+  first frame now comes about 0.6 s after the camera gets the start (was
+  about 2.3 s), and the whole wake from the camera joining Wi-Fi to the
+  first frame went from about 6.2 s to 2.9 s.
+- **No frozen picture after a camera restart (hub)**: the tile opens the video
+  on a new address (`?n=`) each time. Reusing the same address let the
+  browser show the last frame of a stream that had ended instead of
+  connecting again: on the bench the camper tile stayed frozen after the
+  camera restarted, while the camera streamed to nobody. The "Video paused"
+  reconnect should now really reconnect too; that is not yet confirmed on
+  the phone, as it relies on the browser reporting each frame. A stream
+  that fails to open (a 503, a broken connection) is tried again at the
+  page's next check instead of at the next renewal 20 s later, and moving
+  to a new stream closes the old one 0.4 s before opening the new one.
+
 - **SHT3x cabin sensor**: the hub reads an SHT3x (SHT30/SHT31) breakout
   over I2C, with SDA on GPIO4 and SCL on GPIO5, instead of the DHT11. It
   finds the sensor at 0x44 or 0x45 by itself, checks every reading's CRC,

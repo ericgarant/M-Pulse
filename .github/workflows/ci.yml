@@ -42,6 +42,11 @@ jobs:
     defaults:
       run:
         working-directory: ${{ matrix.crate }}
+    # A release build of the hub refuses to build without the network's
+    # password. These builds are only checked, never flashed or uploaded, so
+    # a placeholder stands in for it.
+    env:
+      M_PULSE_AP_PASS: ci-build-only
     steps:
       - uses: actions/checkout@v4
 

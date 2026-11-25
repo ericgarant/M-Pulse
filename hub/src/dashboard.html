@@ -118,7 +118,7 @@ main { max-width: 1400px; margin: 14px auto 0; display: grid; gap: 14px; grid-te
 main > section { display: none; }
 body[data-page="home"] main > [data-page~="home"], body[data-page="climate"] main > [data-page~="climate"],
 body[data-page="fridge"] main > [data-page~="fridge"], body[data-page="power"] main > [data-page~="power"],
-body[data-page="rules"] main > [data-page~="rules"] { display: block; }
+body[data-page="rules"] main > [data-page~="rules"], body[data-page="cameras"] main > [data-page~="cameras"] { display: block; }
 body:not([data-page="home"]) footer.hub { display: none; }
 @media (min-width: 1100px) {
   body[data-page="climate"] main { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
@@ -142,9 +142,9 @@ body[data-page="power"] .alert[data-p~="power"], body[data-page="rules"] .alert[
 /* ---------- Home: one tile per service ---------- */
 #home { display: none; }
 body[data-page="home"] #home { display: grid; }
-#home { gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cl cl" "fr pw" "fu ru"; }
+#home { gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cl cl" "fr pw" "fu ru" "ca ca"; }
 @media (min-width: 900px) {
-  #home { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cl fr pw" "cl fu ru"; grid-template-rows: 1fr 1fr;
+  #home { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cl fr pw" "cl fu ru" "ca ca ca"; grid-template-rows: 1fr 1fr auto;
     min-height: calc(100vh - 220px); }  /* fill the screen above the tab bar */
   body:has(#alerts > *) #home { min-height: 0; }  /* alerts first, then tiles at their own size */
   .tile { padding: 20px; gap: 10px; }
@@ -169,7 +169,9 @@ body[data-page="home"] #home { display: grid; }
 .tile .bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--go); transition: width 1s var(--ease); }
 .tile .bar.heat i { background: linear-gradient(90deg, var(--heat), var(--heat2)); }
 .tile .bar.low i { background: var(--warn); } .tile .bar.bad i { background: var(--bad); }
-#t-cl { grid-area: cl; } #t-fr { grid-area: fr; } #t-pw { grid-area: pw; } #t-fu { grid-area: fu; } #t-ru { grid-area: ru; }
+#t-cl { grid-area: cl; } #t-fr { grid-area: fr; } #t-pw { grid-area: pw; } #t-fu { grid-area: fu; } #t-ru { grid-area: ru; } #t-ca { grid-area: ca; }
+/* Cameras on Home: the names in a row on a tablet or laptop, a list on a phone. */
+@media (min-width: 900px) { #t-ca #tl-cl { display: flex; flex-wrap: wrap; gap: 10px 28px; } }
 #t-cl .big { font-size: 64px; }
 @media (min-width: 900px) { #t-cl .big { font-size: 96px; margin: 8px 0 4px; } }
 #t-cl .hrow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; background: var(--bg2); font-weight: 650; }
@@ -535,9 +537,27 @@ footer.hub { max-width: 1400px; margin: 16px auto 0; display: flex; flex-wrap: w
 footer.hub b { color: var(--muted); font-weight: 600; }
 footer .btn { height: 36px; font-size: 13.5px; border-radius: 12px; padding: 0 12px; }
 
+/* ---------- Cameras: one tile per camera, the video when it streams ---------- */
+.cams { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .cams { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cam { background: var(--card2); border: 1px solid var(--line); border-radius: 18px; padding: 12px; display: grid; gap: 10px; min-width: 0; transition: opacity .3s, filter .3s; }
+.cam.off { filter: grayscale(.7); opacity: .6; }
+.cam-h { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cam-h h3 { margin: 0; font-size: 17px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam-view { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; background: #000; overflow: hidden; }
+.cam-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Turned by the Rotate button. A quarter turn swaps the image's width and height in the 4:3 box. */
+.cam-view canvas.r180 { transform: rotate(180deg); }
+.cam-view canvas.r90, .cam-view canvas.r270 { inset: auto; left: 50%; top: 50%; width: 75%; height: 133.33%; }
+.cam-view canvas.r90 { transform: translate(-50%, -50%) rotate(90deg); }
+.cam-view canvas.r270 { transform: translate(-50%, -50%) rotate(270deg); }
+.cam-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--muted); font-size: 15px; }
+.cam-b { display: flex; gap: 10px; }
+.cam-b .btn { flex: 1; min-width: 0; }
+
 /* ---------- Tab bar: one tab per page, at every width ---------- */
 body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
-.tabs { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 25; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+.tabs { display: grid; grid-template-columns: repeat(6, 1fr); position: fixed; z-index: 25; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
   max-width: 640px; margin: 0 auto;
   height: 64px; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   border: 1px solid var(--line2); box-shadow: 0 10px 30px #0006; }
@@ -649,6 +669,7 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 2.2-2.4 3.7M12 17.2v.01"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5.5 9.5V20h13V9.5M10 20v-5h4v5"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.5l6-3.5v10l-6-3.5"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5v.01"/></symbol>
 </svg>
 
@@ -707,6 +728,10 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
     <div class="tile" id="t-ru"><a href="#rules" aria-label="Open Rules"></a>
       <div class="th"><div class="ic warn"><svg class="i"><use href="#i-shield"/></svg></div><h2>Rules</h2><svg class="i chev"><use href="#i-chev"/></svg></div>
       <div class="rlist" id="tl-rl"></div>
+    </div>
+    <div class="tile" id="t-ca"><a href="#cameras" aria-label="Open Cameras"></a>
+      <div class="th"><div class="ic go"><svg class="i"><use href="#i-cam"/></svg></div><h2>Cameras</h2><span class="badge" id="tl-camb">--</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+      <div class="rlist" id="tl-cl"></div>
     </div>
   </div>
 
@@ -980,6 +1005,17 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
     </div>
     <p class="note">Levels change in 5 % steps and apply a moment after you stop tapping. The hub keeps them across a restart. The low-battery stop always comes back on.</p>
   </section>
+  <!-- Cameras: a camera wakes while this page is open and sleeps when it is left -->
+  <section class="card" id="cameras" data-page="cameras" aria-labelledby="h-cameras">
+    <div class="card-h">
+      <div class="ic go"><svg class="i"><use href="#i-cam"/></svg></div>
+      <h2 id="h-cameras">Cameras</h2>
+      <span class="badge" id="cm-badge">--</span>
+    </div>
+    <p class="note">A camera wakes while its tile is on screen, and sleeps when you leave this page or scroll its tile away. After Stop it stays asleep on this device until you press Watch.</p>
+    <p class="note" id="cm-none" hidden>No cameras yet. A camera shows up here once it announces itself on the hub's network.</p>
+    <div class="cams" id="cm-list"></div>
+  </section>
 </main>
 
 <footer class="hub">
@@ -997,6 +1033,7 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
   <a href="#fridge" data-p="fridge"><svg class="i"><use href="#i-snow"/></svg>Fridge</a>
   <a href="#power" data-p="power"><svg class="i"><use href="#i-bolt"/></svg>Power</a>
   <a href="#rules" data-p="rules"><svg class="i"><use href="#i-shield"/></svg>Rules</a>
+  <a href="#cameras" data-p="cameras"><svg class="i"><use href="#i-cam"/></svg>Cameras</a>
 </nav>
 
 <div class="sheet" id="sheet" hidden>
@@ -2348,14 +2385,635 @@ loop();
 loadHistory();
 setInterval(() => { if (!document.hidden) loadHistory(); }, 60000);
 
+/* ---------- Cameras ---------- */
+// A camera is started only while its tile is on screen on the Cameras page:
+// a tile that comes on screen asks for its camera, a tile off screen for
+// CAM_OFFSCREEN_MS lets it sleep, and leaving the page asks for a stop. A
+// camera stopped with Stop stays asleep on this device until Watch, even after
+// leaving the page or a reload (camStopped). The hub
+// keeps a wish for a minute, and this page renews it every 20 s while a tile
+// is wanted and on screen, whatever the video is doing. The video is set only
+// while the tile is on screen.
+const CAM_RENEW_MS = 20000, CAM_POLL_MS = 2000;
+// Poll this often while a camera on screen is waking (see camWaking).
+const CAM_FAST_MS = 500;
+// Gap between closing one stream and opening the next (see paintStream).
+const CAM_REOPEN_MS = 400;
+// A tile off screen this long lets its camera sleep.
+const CAM_OFFSCREEN_MS = 10000;
+// Frames that stop for this long count as a stalled video (Wi-Fi lost, phone
+// asleep). A stalled tile shows "Video paused".
+const CAM_STALL_MS = 6000;
+// A stream that brings no bytes for this long is dropped and opened again.
+const CAM_DEAD_MS = 4000;
+// Frames are held about this long before they are shown, so frames that arrive
+// in bursts over Wi-Fi are shown at an even pace (see camTick).
+const CAM_BUFFER_MS = 1500;
+// How often a tile on screen asks a sleeping camera to wake again.
+const CAM_WAKE_MS = 5000;
+const cams = new Map();     // name -> tile state
+let camsOn = false;         // the Cameras page is showing
+let camTimer = null;
+// Names of the cameras stopped with Stop, kept in this browser so they stay
+// asleep across visits and reloads. Only Stop adds a name, only Watch removes it.
+const CAM_STOPPED_KEY = "mpulse-cam-stopped";
+// The stored names, or null if storage cannot be read.
+function camStoppedRead() {
+  try { return new Set(JSON.parse(localStorage.getItem(CAM_STOPPED_KEY) || "[]")); } catch (e) { return null; }
+}
+const camStopped = camStoppedRead() || new Set();
+// Changes one name. The list is read again just before writing, so a Stop or
+// Watch in another tab of this browser is not overwritten by this tab's copy.
+function camSetStopped(c, stopped) {
+  c.userStopped = stopped;
+  if (stopped) camStopped.add(c.name); else camStopped.delete(c.name);
+  const saved = camStoppedRead() || new Set(camStopped);
+  if (stopped) saved.add(c.name); else saved.delete(c.name);
+  try { localStorage.setItem(CAM_STOPPED_KEY, JSON.stringify([...saved])); } catch (e) {}
+}
+const camIO = "IntersectionObserver" in window
+  ? new IntersectionObserver(entries => entries.forEach(e => {
+      const c = cams.get(e.target.dataset.name);
+      if (c) camSeen(c, e.isIntersecting);
+    }))
+  : null;
+
+// A tile came on or off screen. On the Cameras page, a tile on screen wakes
+// its camera unless its Stop was pressed; a tile off screen for
+// CAM_OFFSCREEN_MS lets its camera sleep.
+function camSeen(c, visible) {
+  c.visible = visible;
+  clearTimeout(c.offTimer);
+  c.offTimer = null;
+  if (visible) {
+    if (camsOn && !c.want && !c.userStopped) camWatch(c.name);
+  } else if (camsOn && c.want) {
+    c.offTimer = setTimeout(() => {
+      c.offTimer = null;
+      if (camsOn && c.want && !c.visible) camStop(c.name, false);
+    }, CAM_OFFSCREEN_MS);
+  }
+  camSyncRenew(c);
+  paintStream(c);
+}
+
+function camTile(name) {
+  if (cams.has(name)) return cams.get(name);
+  const el = document.createElement("article");
+  el.className = "cam";
+  el.dataset.name = name;
+  const head = document.createElement("div"); head.className = "cam-h";
+  const h = document.createElement("h3"); h.textContent = name;
+  const badge = document.createElement("span"); badge.className = "badge";
+  head.append(h, badge);
+  const view = document.createElement("div"); view.className = "cam-view";
+  // The video: frames drawn by camTick.
+  const img = document.createElement("canvas"); img.setAttribute("role", "img");
+  img.setAttribute("aria-label", "Live view from " + name); img.hidden = true;
+  const msg = document.createElement("div"); msg.className = "cam-msg";
+  view.append(img, msg);
+  const row = document.createElement("div"); row.className = "cam-b";
+  const watch = document.createElement("button"); watch.className = "btn heat"; watch.textContent = "Watch";
+  const stop = document.createElement("button"); stop.className = "btn"; stop.textContent = "Stop";
+  const rotate = document.createElement("button"); rotate.className = "btn"; rotate.textContent = "Rotate";
+  const photo = document.createElement("button"); photo.className = "btn"; photo.textContent = "Photo";
+  photo.disabled = true;
+  row.append(watch, rotate, photo, stop);
+  // Temporary: picks frame size and JPEG quality on the camera, to compare settings.
+  const qsel = document.createElement("select");
+  qsel.setAttribute("aria-label", "Quality test setting for " + name);
+  qsel.style.cssText = "width:100%;min-width:0;padding:8px;border-radius:10px";
+  [["", "Quality (test)…"], ["VGA,12", "VGA 640×480, q12 (default)"], ["SVGA,12", "SVGA 800×600, q12"],
+   ["XGA,12", "XGA 1024×768, q12"], ["SXGA,12", "SXGA 1280×1024, q12"],
+   ["XGA,10", "XGA 1024×768, q10"], ["SXGA,10", "SXGA 1280×1024, q10"]].forEach(([v, t]) => {
+    const o = document.createElement("option"); o.value = v; o.textContent = t; qsel.append(o);
+  });
+  qsel.disabled = true;
+  const pmsg = document.createElement("p"); pmsg.className = "note"; pmsg.hidden = true;
+  el.append(head, view, row, qsel, pmsg);
+  $("cm-list").append(el);
+  const c = { name, el, img, badge, msg, watch, stop, rotate, photo, qsel, pmsg, want: false, stopping: false, renew: null,
+    // Without an observer every tile counts as on screen, as before.
+    visible: !camIO, offTimer: null, userStopped: camStopped.has(name), paused: false, conn: 0, qbusy: false,
+    openTimer: null, player: null, fails: 0,
+    shown: null, stream: null, last: null, lastFrame: 0, lastWake: 0, rot: 0 };
+  watch.onclick = () => camWatch(name, true);
+  rotate.onclick = () => camRotate(c);
+  photo.onclick = () => camPhoto(c);
+  qsel.onchange = () => camQuality(c);
+  stop.onclick = () => camStop(name);
+  if (camIO) camIO.observe(el);
+  cams.set(name, c);
+  camRotApply(c);
+  return c;
+}
+
+// The rotation is the hub's value (0, 90, 180 or 270). Anything else is 0.
+function camRotOf(e) {
+  const r = Number(e.rotation);
+  return [0, 90, 180, 270].includes(r) ? r : 0;
+}
+function camRotApply(c) {
+  c.img.classList.remove("r90", "r180", "r270");
+  if (c.rot) c.img.classList.add("r" + c.rot);
+}
+
+// Turns the picture to the next angle and saves it on the hub. The hub's answer
+// (or, if the save fails, the value it last sent) decides what is shown.
+async function camRotate(c) {
+  c.rot = (c.rot + 90) % 360;
+  camRotApply(c);
+  try {
+    const r = await fetch("/api/cameras/" + encodeURIComponent(c.name) + "/rotation",
+      { method: "POST", body: String(c.rot) });
+    if (!r.ok) throw new Error(r.status);
+    camShow(await r.json());
+  } catch (err) {
+    c.rot = c.last ? camRotOf(c.last) : 0;
+    camRotApply(c);
+  }
+}
+
+// Temporary: sends the picked size and quality to the camera's /settings and
+// shows its reply. A quality change applies at once. A new size restarts the
+// camera's driver, which the camera refuses while anyone watches, this tile
+// included: then the tile closes its own video and tries again, up to 3 times
+// 1 s apart, and opens the video again after. One change at a time per tile:
+// the picker stays disabled (c.qbusy) until the change and its retries end.
+async function camQuality(c) {
+  const e = c.last;
+  if (!e || !e.ip || !c.qsel.value) return;
+  if (c.qbusy) { c.qsel.value = ""; return; }
+  const [size, quality] = c.qsel.value.split(",");
+  c.qsel.value = "";
+  c.qbusy = true;
+  c.qsel.disabled = true;
+  c.pmsg.hidden = false;
+  c.pmsg.textContent = "Changing to " + size + ", quality " + quality + "...";
+  const post = async () => {
+    const r = await fetch("http://" + e.ip + "/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "size=" + size + "&quality=" + quality,
+    });
+    return { r, t: (await r.text()).trim() };
+  };
+  const watched = a => a.r.status === 409 && a.t.startsWith("Someone is watching");
+  try {
+    let a = await post();
+    if (watched(a)) {
+      c.paused = true;
+      paintStream(c);
+      for (let i = 0; i < 3 && watched(a); i++) {
+        await new Promise(done => setTimeout(done, 1000));
+        a = await post();
+      }
+    }
+    c.pmsg.textContent = (a.r.ok ? "Now " : "Not changed: ") + a.t.replace(/\n/g, ", ");
+  } catch (err) {
+    c.pmsg.textContent = "Could not reach the camera.";
+  }
+  if (c.paused) {
+    c.paused = false;
+    paintStream(c);   // opens the video again, on a new address
+  }
+  c.qbusy = false;
+  c.qsel.disabled = !(c.last && c.last.stream_url);
+}
+
+// Turns a JPEG by a rotation in degrees (clockwise, as the tile shows it) and
+// encodes it again. A rotation of 0 keeps the camera's own file.
+async function camTurnJpeg(blob, rot) {
+  if (!rot) return blob;
+  const src = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const w = img.naturalWidth, h = img.naturalHeight, quarter = rot % 180 !== 0;
+    const cv = document.createElement("canvas");
+    cv.width = quarter ? h : w;
+    cv.height = quarter ? w : h;
+    const g = cv.getContext("2d");
+    g.translate(cv.width / 2, cv.height / 2);
+    g.rotate(rot * Math.PI / 180);
+    g.drawImage(img, -w / 2, -h / 2);
+    const out = await new Promise(done => cv.toBlob(done, "image/jpeg", 0.92));
+    if (!out) throw new Error("encode");
+    return out;
+  } finally {
+    URL.revokeObjectURL(src);
+  }
+}
+
+// Saves a still JPEG of the current frame as a download, turned like the
+// tile's picture. The page does not wait for it; a failure shows as a short
+// message in the tile.
+async function camPhoto(c) {
+  const src = c.last && c.last.still_url;
+  try {
+    if (!src) throw new Error("no still");
+    const r = await fetch(src, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const url = URL.createObjectURL(await camTurnJpeg(await r.blob(), c.rot));
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    const stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = c.name.replace(/[^\w.-]+/g, "_") + "-" + stamp + ".jpg";
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    c.pmsg.textContent = "";
+    c.pmsg.hidden = true;
+  } catch (err) {
+    c.pmsg.textContent = "Photo failed. Try again while the video is playing.";
+    c.pmsg.hidden = false;
+  }
+}
+
+// Opens the video only while this page wants the camera and the tile is on
+// screen; anything else closes the connection. While the quality picker works,
+// the video stays closed (c.paused).
+// Moving from one stream to another (a stall, an error, a new camera address)
+// closes the old one first and opens the new one CAM_REOPEN_MS later (longer
+// after streams that brought no frame): the camera serves one viewer and frees
+// its slot only when a write to the old connection fails.
+function paintStream(c) {
+  const url = camsOn && c.want && c.visible && c.stream && !c.paused ? c.stream : null;
+  if (url === c.shown) return;
+  c.shown = url;
+  clearTimeout(c.openTimer);
+  c.openTimer = null;
+  const had = !!c.player;
+  camPlayerStop(c);
+  if (!url) { c.img.hidden = true; c.fails = 0; return; }
+  const open = () => { c.openTimer = null; camPlayerStart(c, url + "?n=" + (++c.conn)); };
+  const wait = had || c.fails ? CAM_REOPEN_MS + Math.min(c.fails, 4) * 1000 : 0;
+  if (wait) c.openTimer = setTimeout(open, wait); else open();
+}
+
+// The video player. The page reads the camera's MJPEG stream itself instead of
+// handing it to an <img>, for two reasons. Wi-Fi delivers frames in bursts
+// (several at once, then a gap), which an <img> shows as jerky video; here
+// they wait in a short queue and are drawn at the camera's average pace. And
+// a stream that stalls or ends is noticed within CAM_DEAD_MS and opened again,
+// where an <img> would keep its last frame without telling.
+function camPlayerStart(c, url) {
+  const p = { ctl: new AbortController(), queue: [], seq: 0, drawn: 0,
+    arrivedAt: 0, gap: 100, shownAt: 0, primed: false, bytesAt: Date.now(),
+    frames: 0, raf: 0, dog: 0, closed: false };
+  c.player = p;
+  p.dog = setInterval(() => {
+    if (Date.now() - p.bytesAt > CAM_DEAD_MS) camPlayerEnded(c, p);
+  }, 1000);
+  p.raf = requestAnimationFrame(() => camTick(c, p));
+  camRead(c, p, url);
+}
+
+function camPlayerStop(c) {
+  const p = c.player;
+  if (!p) return;
+  c.player = null;
+  p.closed = true;
+  p.ctl.abort();
+  clearInterval(p.dog);
+  cancelAnimationFrame(p.raf);
+  p.queue = [];
+}
+
+// The stream ended, failed or stalled: open it again, if it is still wanted.
+// A stream that brought no frame counts as a failure and waits longer next time.
+function camPlayerEnded(c, p) {
+  if (p.closed || c.player !== p) return;
+  c.fails = p.frames ? 0 : c.fails + 1;
+  c.shown = null;   // paintStream closes this player and opens the next
+  paintStream(c);
+}
+
+// Index of the first blank line (\r\n\r\n) in a byte array, or -1.
+function camHeadEnd(b) {
+  for (let i = 0; i + 3 < b.length; i++) {
+    if (b[i] === 13 && b[i + 1] === 10 && b[i + 2] === 13 && b[i + 3] === 10) return i;
+  }
+  return -1;
+}
+
+// Reads the stream: each part is a header with Content-Length, then the JPEG.
+async function camRead(c, p, url) {
+  try {
+    const r = await fetch(url, { signal: p.ctl.signal, cache: "no-store" });
+    if (!r.ok || !r.body) throw new Error("status " + r.status);
+    const rd = r.body.getReader();
+    let buf = new Uint8Array(0), need = -1;
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done || p.closed) break;
+      p.bytesAt = Date.now();
+      const joined = new Uint8Array(buf.length + value.length);
+      joined.set(buf);
+      joined.set(value, buf.length);
+      buf = joined;
+      for (;;) {
+        if (need < 0) {
+          const end = camHeadEnd(buf);
+          if (end < 0) break;
+          const m = /content-length:\s*(\d+)/i.exec(new TextDecoder().decode(buf.subarray(0, end)));
+          buf = buf.subarray(end + 4);
+          if (m) need = Number(m[1]);
+          continue;
+        }
+        if (buf.length < need) break;
+        camArrived(c, p, new Blob([buf.slice(0, need)], { type: "image/jpeg" }));
+        buf = buf.subarray(need);
+        need = -1;
+      }
+    }
+  } catch (err) { /* aborted, refused (503) or broken: handled below */ }
+  camPlayerEnded(c, p);
+}
+
+// A whole JPEG arrived: note the pace, decode it and queue it for camTick.
+// Decoding runs one frame at a time so the queue stays in order.
+function camArrived(c, p, blob) {
+  const now = performance.now();
+  // The pace: average gap between arrivals. A stall counts as at most 3 gaps,
+  // so one stall does not slow the video for long after.
+  if (p.arrivedAt) p.gap = p.gap * 0.9 + Math.min(1000, 3 * p.gap, Math.max(15, now - p.arrivedAt)) * 0.1;
+  p.arrivedAt = now;
+  p.frames++;
+  c.fails = 0;
+  c.lastFrame = Date.now();
+  // The queue holds the JPEGs (a few KB each); camTick decodes each one as it
+  // is drawn. Never far behind: past 3 times the target, drop the oldest.
+  p.queue.push(blob);
+  while (p.queue.length > 3 * camTarget(p)) p.queue.shift();
+}
+
+function camDecode(blob) {
+  if (window.createImageBitmap) return createImageBitmap(blob);
+  const url = URL.createObjectURL(blob), im = new Image();
+  im.src = url;
+  return im.decode().then(() => im).finally(() => URL.revokeObjectURL(url));
+}
+
+// Frames to hold: CAM_BUFFER_MS at the current pace, at least 2.
+function camTarget(p) { return Math.min(60, Math.max(2, Math.round(CAM_BUFFER_MS / p.gap))); }
+
+// Draws the next queued frame when its turn comes. Frames are spaced by the
+// average gap between arrivals, stretched up to 30 % while the queue is
+// shorter than its target and shortened while it is longer, so the queue
+// stays near CAM_BUFFER_MS. When Wi-Fi stalls, the queue keeps the picture
+// moving (a little slower) instead of freezing, and builds up again after.
+// The first frame shows at once; the rest wait until half the target is in.
+function camTick(c, p) {
+  if (p.closed) return;
+  p.raf = requestAnimationFrame(() => camTick(c, p));
+  if (!p.queue.length) return;
+  const now = performance.now(), target = camTarget(p), n = p.queue.length;
+  if (p.shownAt && !p.primed) {
+    if (n < target / 2 && now - p.shownAt < CAM_BUFFER_MS) return;
+    p.primed = true;
+  }
+  const gap = p.gap * Math.min(1.3, Math.max(0.7, 1 + 0.3 * (target - n) / target));
+  if (p.shownAt && now - p.shownAt < gap) return;
+  // Keep the even pace from frame to frame; restart it after a gap in the video.
+  p.shownAt = p.shownAt && now - p.shownAt < 2 * gap ? p.shownAt + gap : now;
+  const seq = ++p.seq;
+  camDecode(p.queue.shift()).then(f => {
+    // Decoding is quick but not ordered: skip a frame that a later one beat.
+    if (!p.closed && seq > p.drawn) {
+      p.drawn = seq;
+      const cv = c.img, w = f.width || f.naturalWidth, h = f.height || f.naturalHeight;
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      cv.getContext("2d").drawImage(f, 0, 0);
+      cv.hidden = false;
+    }
+    if (f.close) f.close();
+  }, () => { /* a broken JPEG: skip it */ });
+}
+
+function camPaint(c) {
+  const e = c.last;
+  if (!e) return;
+  c.rot = camRotOf(e);
+  camRotApply(c);
+  c.photo.disabled = !e.stream_url;
+  c.qsel.disabled = !e.stream_url || c.qbusy;
+  const streaming = e.online && e.state === "streaming";
+  if (!streaming) c.stopping = false;
+  const [text, cls] = !e.online ? ["Offline", "bad"]
+    : e.state === "streaming" ? ["Streaming", "go"]
+    : e.state === "starting" ? ["Starting", "warn"]
+    : ["Standby", ""];
+  c.badge.textContent = text;
+  c.badge.className = "badge " + cls;
+  let msg = "";
+  if (!e.online) msg = "Camera offline";
+  else if (streaming && !c.want) msg = c.stopping ? "Stopping..." : "Streaming for another viewer.";
+  else if (streaming && c.want && camStalled(c)) msg = "Video paused";
+  else if (streaming) msg = "";
+  else if (c.want && e.note === "no answer") msg = "No answer from the camera. Press Stop, then Watch, to try again.";
+  else if (c.want) msg = "Waking camera...";
+  else msg = "Asleep. Press Watch to wake it.";
+  c.msg.textContent = msg;
+  c.msg.hidden = !msg;
+  c.el.classList.toggle("off", !e.online);
+  c.watch.hidden = c.want;
+  c.stop.hidden = !c.want;
+  // A tile on screen that still wants the camera asks again when the camera has
+  // gone to standby, at most every 5 s, so it does not stay at "Waking camera...".
+  // Not after "No answer": only Watch retries a camera that did not answer.
+  if (c.want && e.online && e.state === "standby" && e.note !== "no answer" && c.visible
+      && Date.now() - c.lastWake > CAM_WAKE_MS) {
+    c.lastWake = Date.now();
+    camPost(c.name, "start");
+  }
+  camSyncRenew(c);
+  c.stream = e.stream_url;
+  paintStream(c);
+}
+
+// Renews the wish every 20 s while the Cameras page is open, the tile is wanted
+// and the tile is on screen. The timer is set or cleared here, and again when
+// the tile scrolls in or out of view.
+function camSyncRenew(c) {
+  const on = camsOn && c.want && c.visible;
+  if (on && !c.renew) c.renew = setInterval(() => camRenew(c), CAM_RENEW_MS);
+  else if (!on && c.renew) { clearInterval(c.renew); c.renew = null; }
+}
+
+// True once frames have been arriving and then stopped for CAM_STALL_MS. A
+// browser that never reports frames is never stalled.
+function camStalled(c) {
+  return c.lastFrame > 0 && Date.now() - c.lastFrame > CAM_STALL_MS;
+}
+
+// Renews the wish whatever the video is doing. A stalled video also drops its
+// connection, so the next paint reopens it (and it only works if the camera is
+// still streaming).
+function camRenew(c) {
+  if (camStalled(c)) c.shown = null;
+  camPost(c.name, "start");
+}
+
+function camShow(e) {
+  const c = camTile(e.name);
+  c.last = e;
+  camPaint(c);
+}
+
+// Sends start or stop and shows the hub's answer. Null if the hub did not answer.
+async function camPost(name, action) {
+  try {
+    const r = await fetch("/api/cameras/" + encodeURIComponent(name) + "/" + action, { method: "POST" });
+    if (!r.ok) return null;
+    const e = await r.json();
+    camShow(e);
+    return e;
+  } catch (err) {
+    return null;
+  }
+}
+
+// byUser: the Watch button, which also asks the hub to try a camera that gave
+// no answer again. Waking a tile that comes on screen is not.
+function camWatch(name, byUser = false) {
+  const c = camTile(name);
+  c.want = true;
+  c.stopping = false;
+  if (byUser) camSetStopped(c, false);
+  camPaint(c);
+  camKick();
+  camPost(name, byUser ? "start?watch=1" : "start").then(e => { if (!e) toast("Could not reach " + name, "bad"); });
+}
+
+// byUser: the Stop button, which keeps the camera asleep on this device until
+// Watch (camSetStopped). Off screen, the page stops a camera itself (byUser
+// false), and the tile wakes it again when it comes back on screen.
+function camStop(name, byUser = true) {
+  const c = camTile(name);
+  c.want = false;
+  c.stopping = true;
+  if (byUser) camSetStopped(c, true);
+  camPaint(c);
+  camPost(name, "stop");
+}
+
+// Asks the hub for a stop when the page is left. A beacon survives the page
+// closing; fetch with keepalive is the fallback.
+function camHubStop(name) {
+  const url = "/api/cameras/" + encodeURIComponent(name) + "/stop";
+  try { if (navigator.sendBeacon && navigator.sendBeacon(url)) return; } catch (err) { /* use fetch */ }
+  fetch(url, { method: "POST", keepalive: true }).catch(() => {});
+}
+
+// Wakes the cameras whose tiles are on screen, except those stopped with Stop.
+// Coming from another page, no tile is on screen yet: the observer wakes each
+// one as the page shows it.
+function camEnter() {
+  camsOn = true;
+  cams.forEach((c, name) => {
+    if (c.visible && !c.want && !c.userStopped) camWatch(name);
+  });
+}
+
+function camLeave() {
+  camsOn = false;
+  cams.forEach((c, name) => {
+    clearTimeout(c.offTimer);
+    c.offTimer = null;
+    if (c.want) { c.want = false; c.stopping = true; camHubStop(name); }
+    camPaint(c);
+  });
+}
+
+function renderCamHome(list) {
+  const box = $("tl-cl");
+  const online = list.filter(e => e.online).length;
+  $("tl-camb").textContent = list.length ? online + " of " + list.length + " online" : "None yet";
+  box.textContent = "";
+  list.forEach(e => {
+    const d = document.createElement("div"), i = document.createElement("i"), sp = document.createElement("span");
+    d.className = !e.online ? "bad" : e.state === "streaming" ? "watch" : e.state === "starting" ? "hold" : "";
+    sp.textContent = e.name;
+    const st = document.createElement("em");
+    st.textContent = !e.online ? "offline" : e.state;
+    sp.append(st);
+    d.append(i, sp);
+    box.append(d);
+  });
+}
+
+function camList(list) {
+  const online = list.filter(e => e.online).length;
+  $("cm-badge").textContent = list.length ? online + " of " + list.length + " online" : "None yet";
+  $("cm-badge").className = "badge " + (list.length && online === list.length ? "go" : "");
+  $("cm-none").hidden = list.length > 0;
+  list.forEach(e => {
+    const fresh = !cams.has(e.name);
+    camShow(e);
+    // A new tile wakes its camera once the observer sees it on screen.
+    if (fresh && camsOn && !camIO && !cams.get(e.name).userStopped) camWatch(e.name);
+  });
+  renderCamHome(list);
+}
+
+// True while a tile on screen wants a camera that is online, has not given
+// "No answer", and is not streaming yet: the page then polls every
+// CAM_FAST_MS, so the video starts as soon as the camera does.
+function camWaking() {
+  for (const c of cams.values()) {
+    const e = c.last;
+    if (camsOn && c.want && c.visible && e && e.online && e.state !== "streaming" && e.note !== "no answer") return true;
+  }
+  return false;
+}
+
+// One poll timer at a time (camTimer). camPolling is true while a poll waits
+// for the hub; that poll sets the next timer itself. camTimerFast says the
+// pending timer is the CAM_FAST_MS one.
+let camPolling = false, camTimerFast = false;
+
+async function camLoop() {
+  camPolling = true;
+  if (!document.hidden) {
+    try {
+      const r = await fetch("/api/cameras", { cache: "no-store" });
+      if (r.ok) camList(await r.json());
+    } catch (err) { /* the next poll tries again */ }
+  }
+  camPolling = false;
+  camTimerFast = camWaking();
+  camTimer = setTimeout(camLoop, camTimerFast ? CAM_FAST_MS : CAM_POLL_MS);
+}
+
+// A camera just started waking (Watch, a tile coming on screen, entering the
+// page): poll after CAM_FAST_MS instead of waiting out a pending 2 s timer.
+// Replaces the one pending timer, so polls never overlap.
+function camKick() {
+  if (camPolling || camTimerFast || !camWaking()) return;
+  clearTimeout(camTimer);
+  camTimerFast = true;
+  camTimer = setTimeout(camLoop, CAM_FAST_MS);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) camLeave();
+  else if (document.body.dataset.page === "cameras") camEnter();
+});
+addEventListener("pagehide", camLeave);
+camLoop();
+
 /* ---------- Pages ---------- */
 // The address picks the page: #home, #climate, #fridge, #power, #rules.
 // A section id that is not a page (#fuel) opens the page that holds it and
 // scrolls to it, so the chips and old bookmarks keep working.
-const PAGES = ["home", "climate", "fridge", "power", "rules"];
-const PAGE_NAME = { home: "Home", climate: "Climate", fridge: "Fridge", power: "Power", rules: "Rules" };
+const PAGES = ["home", "climate", "fridge", "power", "rules", "cameras"];
+const PAGE_NAME = { home: "Home", climate: "Climate", fridge: "Fridge", power: "Power", rules: "Rules", cameras: "Cameras" };
 function route() {
   const id = location.hash.slice(1) || "home";
+  const prev = document.body.dataset.page;
   const target = PAGES.includes(id) ? null : $(id);
   const page = PAGES.includes(id) ? id : target && target.dataset.page ? target.dataset.page.split(" ")[0] : "home";
   const changed = document.body.dataset.page !== page;
@@ -2365,6 +3023,8 @@ function route() {
   if (target) requestAnimationFrame(() => target.scrollIntoView({ block: "start" }));
   else requestAnimationFrame(() => scrollTo(0, 0));   // not to the section's own anchor
   if (changed) drawTrends();   // charts on a hidden page had no width to draw in
+  if (page === "cameras" && prev !== "cameras") camEnter();
+  else if (prev === "cameras" && page !== "cameras") camLeave();
 }
 addEventListener("hashchange", route);
 // A tablet or laptop has room for the details on the Fridge and Power pages.

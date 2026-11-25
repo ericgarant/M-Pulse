@@ -112,8 +112,12 @@ the repository. Git ignores this file, so the password stays on your computer:
 export M_PULSE_AP_PASS="password for the M-Pulse network"   # 8+ characters
 ```
 
-Without it the password is `mpulse-heater`. If you run the sensor node,
-flash it from the same `wifi.env`, or it cannot join.
+A release build (`cargo build --release`) stops with an error without it,
+because the fallback password, `mpulse-heater`, is public in this
+repository. A debug build (no `--release`) still uses that fallback, for the
+bench. Flash the cameras and the sensor node from the same `wifi.env`, or
+they cannot join. If a board ever ran with the fallback, change the
+password: anyone who has read this repository could join.
 
 ### Joining another Wi-Fi (optional, untested)
 
@@ -489,11 +493,151 @@ and back to Max when it is up to the high level again (defaults 30 % and
 - The low level can be 5 to 95 %, and the high level at least 5 points above
   it.
 
+## Cameras
+
+The Cameras page (the last tab) shows one tile per camera on the hub's
+network: its name, whether it is streaming, starting, asleep or offline, and
+its video while it streams. A camera appears once it has announced itself.
+The Home page has a Cameras tile that shows how many are online.
+
+- Each camera announces its name and state to the hub every 5 s on UDP port
+  4220, and the hub takes the camera's address from that packet. A camera
+  with no announcement for 15 s is offline.
+- Cameras sleep until someone asks. On the Cameras page, a camera is asked
+  for while its tile is on screen: opening the page asks for the cameras
+  you can see, and scrolling a tile into view asks for that one. A tile off
+  screen for 10 s lets its camera sleep, so on a phone the camera you
+  scrolled past does not keep streaming. Stop sticks: a camera you stopped
+  stays asleep on that device until you press its Watch, even after you
+  leave the Cameras page, close the browser or reload. The browser keeps
+  the list (`localStorage`, key `mpulse-cam-stopped`), so each phone or
+  tablet has its own, and clearing the browser's site data forgets it.
+  Tabs of the same browser share it: a Stop or Watch in one tab does not
+  undo another tab's.
+  Each tile has four buttons and a picker:
+  - **Watch** asks the hub to start that camera.
+  - **Rotate** turns the picture 90 degrees each time you press it and saves
+    the angle on the hub, so every device shows the same picture.
+  - **Photo** saves a still JPEG of the camera while it streams, turned to
+    the camera's rotation like the video. A turned photo is encoded again
+    by the browser (JPEG quality 0.92); at 0 degrees it is the camera's own
+    file.
+  - **Stop** asks the hub to stop that camera.
+  - **Quality (test)** sets the camera's frame size and JPEG quality until
+    the camera restarts. The default is VGA (640 by 480), quality 12. This
+    picker is for comparing settings and may be removed. A quality change
+    applies at once. The camera refuses a new frame size while anyone
+    watches, this tile included, so the tile then closes its own video and
+    tries again, up to 3 times 1 s apart, and opens the video again after.
+    If another device is watching, the tile says the change was refused.
+    The picker is greyed out until a change and its retries are done.
+- Leaving the page, switching to another browser tab, or closing the browser
+  asks the hub to stop the cameras that page had started. While the page is
+  open and the tile is on screen, the page renews the request every 20 s,
+  even while the video is paused, so the video plays until you press Stop or
+  leave. A request lapses 60 s after its last renewal, so a closed browser
+  cannot keep a camera on for more than a minute.
+- As a backup, a camera that streams with no viewer for 5 minutes goes back
+  to standby on its own. The hub ends that request, and a tile still on
+  screen asks for the camera again within 5 s.
+- If the picture stops for 10 s (Wi-Fi lost, phone asleep), the tile says
+  "Video paused" and reconnects when it can. A stream that fails to open
+  (the camera refused it, or the connection broke) is tried again at the
+  page's next check, within a few seconds. When the tile moves to a new
+  stream it closes the old one first and opens the new one 0.4 s later, as
+  the camera serves one viewer at a time.
+- Waking is quick: the hub sends `start` or `stop` the moment the page asks
+  (not at its next once-a-second check), the camera announces each change of
+  state at once, and the page checks every 0.5 s (instead of 2 s) while a
+  camera on screen is waking, starting from the moment it asks for it.
+- The hub sends `start` every 3 s until the camera says it is streaming, for
+  10 tries (about 30 s) at most. The camera takes a start only 2 s after it
+  last started or stopped, so a second of margin lets each try reach it,
+  even when Wi-Fi power save delays a packet. Right after a stop, the hub
+  holds the first start until 2.5 s after the stop and sends it then, so a
+  quick Stop then Watch does not spend a try on that gap. After the 10 tries
+  the tile says "No answer from the camera" and the page stops asking.
+  Press Stop, then Watch, to try again: only the Watch button starts a fresh
+  round of 10 tries, not the page's renewals.
+- The hub sends `stop` when a request ends. If a camera nobody asks for
+  still says it is starting or streaming (the stop was lost, or the hub
+  restarted while it streamed), the hub sends `stop` again every 3 s, 10
+  times, then every 30 s, for as long as the camera keeps announcing.
+- The video is the camera's own stream on port 81, loaded only while its
+  tile is on screen. One viewer can watch a camera at a time; a second viewer
+  waits until the first stops. The page reads the stream itself (the camera
+  allows this with a CORS header) and draws it on a canvas. Wi-Fi delivers
+  frames in bursts, with gaps of about a second now and then, so the page
+  holds about 1.5 s of frames and draws them at the camera's average pace,
+  a little slower while the queue runs low: the picture is about 1.5 s
+  behind live, and keeps moving through a short gap instead of freezing. A stream that brings nothing for 4 s, or ends,
+  is opened again at once (a little later after attempts that bring no
+  frame), on a new `?n=` address. "Video paused" shows after 6 s without a
+  frame.
+- While a camera streams, the hub starts no Bluetooth search, for the
+  heater, fridge or Bluetti. A scan takes radio time from Wi-Fi: on the
+  bench, with the heater and fridge out of range, every gap in the video
+  longer than 0.6 s fell during a search. Links already connected keep
+  running. The hold ends 15 s after the last camera stops streaming, which
+  happens when you leave the Cameras page, so if the heater's link drops
+  while you watch, it comes back once you leave. Until then the hub cannot
+  switch the heater (thermostat, low-battery stop).
+- The hub's network uses a 20 MHz channel (channel 6), not 40 MHz, which
+  would also cover channels 7 to 10, where other networks collide with the
+  video. The hub has 16 Wi-Fi receive buffers and Block Ack windows of 12
+  (defaults 10, 6 and 6), because it receives each frame from the camera and
+  sends it on to the viewer. The cameras use a Block Ack window of 12 too.
+- Measured on the bench at SVGA quality 12, one camera at a time (medians,
+  November 2026): the cab board about 13 frames a second (about 200 KB/s);
+  the camper board about 7 (6.8) with bigger frames, and 4.6 on the final
+  build later on, with less getting through. They were about 5 and 3.5
+  before the camera firmware's frame-rate changes. The rate swings from
+  about 2 to over 25 within minutes; the cause was not measured. Boards
+  differ: one earlier cab board managed only 1 to 2 frames a second with a
+  strong signal, and was replaced. Two cameras streaming at once share the
+  hub's radio and each gets less. Not yet measured in the camper.
+- Measured on a phone with both cameras streaming at once, after the changes
+  above but with Bluetooth searches still running (November 2026): cab 12.4
+  frames a second, camper 4.9 (its frames were bigger, 22 KB), no
+  reconnects, but 2 to 3 gaps over 2 s per minute per camera, all during
+  searches. Holding the searches, VGA and a 100 ms TCP timer on the
+  camera each helped (see the changelog); about 6 gaps of about 1 s per
+  minute per camera remained, which the 1.5 s queue covers.
+- Names are set when the camera firmware is built, with
+  `M_PULSE_CAMERA_NAME` (see [camera-node](../camera-node/README.md)). The
+  default is `camper`. The second camera is `cab`.
+- The API is `GET /api/cameras` (a JSON array with name, ip, state, online,
+  wanted, rotation, note, stream_url and still_url), and `POST
+  /api/cameras/<name>/start` or `/stop`, which return one entry. An unknown
+  name gets an error. `start?watch=1` is the Watch button: after a no answer
+  it starts a fresh round of tries, which a plain `start` (a renewal) does
+  not.
+- The rotation (0, 90, 180 or 270 degrees, default 0) is kept per camera
+  name in flash, in the same two-copy store as the thermostat settings, and
+  written only when it changes. `POST /api/cameras/<name>/rotation` takes the
+  number as plain text (`90`) and returns the entry; any other value is a 400.
+- The access point takes up to 8 connections (it was 4), for the phone, the
+  tablet, the sensor node and two cameras.
+
+The messages and the hub's registry (when to send start and stop, and the
+saved rotations) are in [`core/src/camera.rs`](../core/src/camera.rs), with
+tests that run with `cargo test` in `core/`. The hub's UDP side is in
+`src/camera.rs`.
+
+Tested: a second camera board with an OV2640 (sensor ID 0x0026) also works.
+The camper's camera (Freenove WROVER with an OV3660, sensor ID 0x3660) still
+needs a test with the current hub.
+
+Not measured: the standby current. The WROVER board has no power-down pin,
+so standby only stops the camera clock and the sensor stays powered. See
+[camera-node](../camera-node/README.md#power).
+
 ## Build and flash
 
 Set up the toolchain first: [../docs/mac-setup.md](../docs/mac-setup.md).
 
-If you have no `wifi.env`, skip the `source` line.
+A release build needs `M_PULSE_AP_PASS` from `wifi.env` (see
+[Networks](#networks)); without it the build stops with an error.
 
 ```sh
 source ../wifi.env
@@ -686,7 +830,7 @@ see `../core/src/rules.rs`). Erasing the flash brings back the defaults.
 - Auto waits the minimum on and off times after any switch, including one
   made with the manual buttons, and gives up after 3 start attempts.
 - Anyone on the `M-Pulse` network can use the dashboard. Set your own
-  `M_PULSE_AP_PASS`.
+  `M_PULSE_AP_PASS` (release builds require it).
 - The hub only sends a command while it has a fresh status from the heater
   (under 10 seconds old).
 - The hub restarts in Monitor mode. After a power cut it will not resume

@@ -6,15 +6,16 @@
 //! two, the other copy is still there. Each copy carries a sequence number
 //! and a checksum, and loading picks the newest good one.
 //!
-//! Three records use it: the fuel gauge (`m_pulse_core::fuel::Saved`), the
-//! battery rules (`m_pulse_core::rules::Saved`) and the thermostat's
-//! comfort band (`m_pulse_core::thermostat::Saved`).
+//! Four records use it: the fuel gauge (`m_pulse_core::fuel::Saved`), the
+//! battery rules (`m_pulse_core::rules::Saved`), the thermostat's
+//! comfort band (`m_pulse_core::thermostat::Saved`) and the camera
+//! rotations (`m_pulse_core::camera::Saved`).
 
 use std::fmt::Debug;
 
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition};
 use log::{info, warn};
-use m_pulse_core::{fuel, rules, thermostat};
+use m_pulse_core::{camera, fuel, rules, thermostat};
 
 /// Something saved by a [`Store`].
 pub trait Record: Sized + Debug {
@@ -63,6 +64,19 @@ impl Record for thermostat::Saved {
     }
     fn decode(bytes: &[u8]) -> Option<(Self, u32)> {
         thermostat::Saved::decode(bytes)
+    }
+}
+
+impl Record for camera::Saved {
+    const NAMESPACE: &'static str = "cameras";
+    const NAME: &'static str = "Camera rotations";
+    const KEYS: [&'static str; 2] = ["rot_a", "rot_b"];
+    const LEN: usize = camera::Saved::LEN;
+    fn encode(&self, seq: u32) -> Vec<u8> {
+        camera::Saved::encode(self, seq)
+    }
+    fn decode(bytes: &[u8]) -> Option<(Self, u32)> {
+        camera::Saved::decode(bytes)
     }
 }
 

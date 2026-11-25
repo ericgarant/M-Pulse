@@ -3,7 +3,8 @@
 //! Owns the BLE links to the BougeRV diesel heater, the BougeRV Rocky 50
 //! fridge and the Bluetti Elite 200 V2 power station, reads the cabin from its
 //! own SHT3x (falling back to the sensor node over Wi-Fi), runs the
-//! thermostat, and serves the dashboard.
+//! thermostat, starts the cameras when a viewer asks, and serves the
+//! dashboard.
 //!
 //! After every restart the hub is in Monitor mode and the thermostat sends
 //! no switch commands. The heater is switched only from the dashboard's On
@@ -17,6 +18,7 @@
 
 mod bluetti;
 mod cabin;
+mod camera;
 mod clock;
 mod control;
 mod fridge;
@@ -103,6 +105,21 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
+    // The camera rotations live in flash too. Without it they go back to 0
+    // after every restart.
+    let camera_store = match store::Store::<m_pulse_core::camera::Saved>::open(nvs.clone()) {
+        Ok((store, saved)) => {
+            if let Some(saved) = saved {
+                state.cameras().restore(&saved);
+            }
+            Some(store)
+        }
+        Err(err) => {
+            warn!("Cameras: flash not available, rotations will not survive a restart: {err}");
+            None
+        }
+    };
+
     net::start(peripherals.modem, sysloop, nvs, state.clone())?;
     // Sets the clock whenever the hub reaches the internet. Kept alive for
     // the life of the firmware.
@@ -118,7 +135,14 @@ fn main() -> anyhow::Result<()> {
         state.clone(),
     )?;
     cabin::spawn(state.clone())?;
-    control::spawn(state.clone(), fuel_store, rules_store, thermo_store)?;
+    camera::spawn(state.clone())?;
+    control::spawn(
+        state.clone(),
+        fuel_store,
+        rules_store,
+        thermo_store,
+        camera_store,
+    )?;
     let _server = web::start(state.clone())?;
 
     let timers = EspTaskTimerService::new()?;
